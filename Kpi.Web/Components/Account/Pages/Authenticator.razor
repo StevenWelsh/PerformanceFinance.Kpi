@@ -35,14 +35,14 @@
             <AntiforgeryToken />
             <label class="login-label" for="code">Code from the app</label>
             <input id="code" name="code" class="acc-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required />
-            <button type="submit" class="login-button">Finish</button>
+            <button type="submit" class="login-button" data-busy-text="Verifying…">Finish</button>
         </form>
     }
 
     @* No Cancel: there is nowhere to go until this is done. Signing out leaves the account as it was. *@
     <form method="post" action="/account/logout">
         <AntiforgeryToken />
-        <button type="submit" class="acc-link acc-link-btn">Sign out</button>
+        <button type="submit" class="acc-link acc-link-btn" data-busy-text="Signing out…">Sign out</button>
     </form>
 </AuthCard>
 

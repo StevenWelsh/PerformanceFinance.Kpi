@@ -64,7 +64,7 @@
                     <Kpi.Web.Components.Account.PasswordInput Id="new" Name="newPassword" Label="New password" Autocomplete="new-password" />
                     <Kpi.Web.Components.Account.PasswordInput Id="confirm" Name="confirmPassword" Label="Confirm new password" Autocomplete="new-password" />
                     <p class="acc-hint">@Kpi.Web.Components.Account.Messages.PasswordRules Your other devices are signed out.</p>
-                    <button type="submit" class="login-button">Change password</button>
+                    <button type="submit" class="login-button" data-busy-text="Changing…">Change password</button>
                 </form>
             </section>
 
@@ -77,7 +77,7 @@
                 <form method="post" action="/account/authenticator/reset" class="acc-form">
                     <AntiforgeryToken />
                     <Kpi.Web.Components.Account.PasswordInput Id="phone-password" Name="currentPassword" />
-                    <button type="submit" class="acc-btn-secondary">Set up a new phone</button>
+                    <button type="submit" class="acc-btn-secondary" data-busy-text="Checking…">Set up a new phone</button>
                 </form>
             </section>
         </div>

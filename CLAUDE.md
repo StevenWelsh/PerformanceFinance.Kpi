@@ -21,8 +21,8 @@ Plan, object by object: `docs/analytics/kpi-database-plan.html` in the CMS repo
 | Project | Role |
 |---|---|
 | `Kpi.Data` | EF Core 8 migrations for `CMS_KPI` (history table `Ref.MigrationsHistory`). The schema is SQL in `migrationBuilder.Sql(...)`, not an EF model: there are no entity classes for the report tables. |
-| `Kpi.Tools` | Run by a person: `migrate [--remote]` (refuses a non-local server without `--remote`), `compare [report]`. |
-| `Kpi.Push` | The copy (net8.0-windows console): `Frequent` every 10 minutes, `Nightly` also refreshes Bad Debt and Exposure. |
+| `Kpi.Tools` | Run by a person: `migrate`, `seed --email --name` (the first System Admin), `grant-site --app --app-id` (a web app's managed identity into `kpi_site`), each with `--azure` for the Azure database (`CmsKpiAzure`; a non-local server is refused without it); `compare [report]`. |
+| `Kpi.Push` | The copy (net8.0-windows console): `Frequent` every 10 minutes, `Nightly` also refreshes Bad Debt and Exposure; `--azure` copies into `CmsKpiAzure` from a developer's machine. |
 | `Kpi.Web` | The site: Blazor Server, CMS.Web's KPI pages copied, reading `CMS_KPI`. |
 | `Local/KPI_Export.sql` | Local stand-in for CMS_Live's `KpiExport` schema (see below). |
 
@@ -67,7 +67,7 @@ Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load
   tools need `Microsoft.EntityFrameworkCore.Tools` in Kpi.Data (the console's commands; Design alone serves only
   `dotnet ef`) and Design in the startup project (Kpi.Web), and the design-time factory opens ONLY the local CMS_KPI
   (`KPI_DEV_SERVER` changes the server) - so a stray Update-Database can never reach Azure, which only
-  `Kpi.Tools migrate --remote` does. Claude never applies DB changes directly, to `CMS_KPI`, `KPI_Export` or any CMS database (read-only
+  `Kpi.Tools migrate --azure` does. Claude never applies DB changes directly, to `CMS_KPI`, `KPI_Export` or any CMS database (read-only
   queries are fine). Once a migration is applied anywhere, fix forward with a new one; don't edit it.
 - **After changing any `Rpt` procedure, run `compare`** against CMS (241 cases, ~4 min, read-only): the site's
   figures must equal CMS.Web's for every filter value. All 241 matched on 15 Oct 2026.
@@ -134,15 +134,32 @@ Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load
   must be a shared persisted ring (storage + Key Vault)** or every restart signs everyone out and the Resend key becomes
   unreadable. Pin `AllowedHosts` in Azure: emailed links are built from the request's host.
 
-## Azure (status Oct 2026)
+## Azure (LIVE for testing, 16 Oct 2026)
 
-Generic shared resources in Performance Finance's subscription: resource group `rg-pf-apps`, SQL server `pf-sql-uk`
-(Entra-only admin: group **PF Database Admins** — Steve, Andy), App Service plan `plan-pf-apps`, UK West; `CMS_KPI`
-the first database, `pf-kpi` the first app. **Not created yet: waiting on PCS/Stacey** to create `rg-pf-apps` (Steve is
-Contributor only on `attachment-dev` / `attachment-prod`). Azure CLI's default subscription is another organisation:
-always pass `--subscription "Azure subscription 1"`. A custom domain needs a CNAME (`kpi` → the app's azurewebsites
-address) and a TXT `asuid.kpi` (the app's Custom Domain Verification ID), both known only once the app exists; test
-domain planned: `kpi.fendra.co.uk`.
+In Performance Finance's subscription ("Azure subscription 1", tenant `5917b69c-...`), resource group **`attachment-prod`**
+(Steve is Contributor there only; `rg-pf-apps` was never created), UK West - generic, so other apps can share them:
+
+- **SQL server `pf-sql-uk`**: Entra-only, admin = group **PF Database Admins** (Steve, Andy). Firewall: the web app's
+  31 possible outbound IPs + developer IPs. **`CMS_KPI`**: Standard S0, CMS_Live's collation. Migrated, seeded and
+  filled with `Kpi.Tools ... --azure` / `Kpi.Push ... --azure` (secrets `ConnectionStrings:CmsKpiAzure`,
+  `Authentication=Active Directory Interactive`).
+- **App Service plan `plan-pf-apps`** (B1 Linux) + **web app `pf-kpi`**: .NET 8, Always On, WebSockets, HTTPS only, system
+  managed identity (app id `61d59e76-...`, a user in `kpi_site` by `grant-site`). App settings: `ASPNETCORE_ENVIRONMENT`
+  Production, `AllowedHosts` (the two kpi domains + `pf-kpi.azurewebsites.net`), `ConnectionStrings__CmsKpi`
+  (`Authentication=Active Directory Managed Identity;Encrypt=Strict`), `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` (Azure
+  ends HTTPS in front of the app; without it the site thinks it is on http and builds http:// links). Container logs to
+  the filesystem (`/home/LogFiles/*_default_docker.log`, through Kudu).
+- **Domains:** `kpi.fendra.co.uk` live (123-reg CNAME `kpi` → `pf-kpi.azurewebsites.net` + TXT `asuid.kpi` = the app's
+  Custom Domain Verification ID; free App Service certificate, SNI, renews itself). `kpi.performancefinance.co.uk`: the
+  same two records, given to PF's DNS people - its old A record (their IIS server) has to go first.
+- **Deploying** (no pipeline yet): `dotnet publish Kpi.Web -c Release`, zip with FORWARD-SLASH paths (Windows
+  PowerShell 5.1's `Compress-Archive` writes backslashes, which Linux unpacks as flat file names), then POST it to
+  `https://pf-kpi.scm.azurewebsites.net/api/publish?type=zip&clean=true&restart=true` with a bearer token from
+  `az account get-access-token --subscription "Azure subscription 1"`. **`clean=true` empties the site first: never upload
+  if the publish failed** - an empty zip took the site down for 10 minutes on 15 Oct.
+- **Still before go-live:** the Data Protection key ring is the App Service default (`/home`, survives restarts, not
+  encrypted at rest) - wrap it with Key Vault; the office server's scheduled `Kpi.Push` (today's figures were pushed by
+  hand from a developer's local `KPI_Export`).
 
 ## Gotchas met building it
 
@@ -159,3 +176,17 @@ domain planned: `kpi.fendra.co.uk`.
 - **The browser preview reads `.claude/launch.json` from the folder the session STARTED in**; a session moved here
   from the CMS repo still sees CMS's. Run the site in a terminal tab and attach the preview by URL
   (`http://localhost:5241`).
+- **The Azure CLI takes the TENANT from its DEFAULT account, not from `--subscription`, in some commands** (Steve's default
+  is another organisation). `az sql server create` / `ad-admin create` saved the Entra admin against the wrong
+  directory, so every sign-in to `pf-sql-uk` went there ("Selected user account does not exist in tenant 'Default
+  Directory'"); `az webapp deploy` got a 403 from Kudu the same way. Set the admin with the PF subscription made the
+  default (`az account set`, then set it back), and deploy with your own token (above). Check
+  `administrators.tenantId` on any new server.
+- **The site's FIRST database connection after a start is slow in App Service (8-32 s; measured inside the container: the
+  first TLS handshake and the first managed identity token, each fast after), and Azure SQL resets a connection that
+  waits that long** - "Connection reset by peer" / "error: 35", the site's "Something went wrong". Ruled out: firewall,
+  encryption mode, driver, network. Handled by retrying a dropped connection (`Kpi.Data.KpiRetryStrategy` for EF,
+  `KpiDb.Open` for Dapper); the start-up `ExpireSetupsTask` run takes the slow one.
+- **Ctrl+C on `dotnet run` can leave the program running** (a seed waiting at `Password:`): its exe then locks
+  `bin/` and every build fails with MSB3027 until it is stopped. Answer the seed's prompts promptly - its Azure sign-in
+  expires.

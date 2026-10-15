@@ -245,3 +245,8 @@
 /* "As at" when the copy from CMS has stopped: amber, with a warning icon and the reason on hover */
 .kpi-asof.kpi-stale, .kpim-bar-dates .kpi-stale { color: var(--warning); font-weight: 600; }
 .kpi-stale i { margin-right: 3px; }
+
+/* A button mid-submit (js/busyForms.js). It swallows further presses, so it must LOOK unavailable too; the words change
+   as well ("Signing in…"), so this never leans on the dimming alone. */
+.login-page .is-busy, .login-page .is-busy:hover,
+.acc-page .is-busy, .acc-page .is-busy:hover { opacity: .65; cursor: progress; }

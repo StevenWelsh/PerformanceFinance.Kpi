@@ -49,9 +49,18 @@ public sealed class KpiDb : IDisposable
 
     public void Dispose() => _connection.Dispose();
 
+    // A connection Azure SQL cut off while its first handshake was slow is tried again (Kpi.Data.KpiRetryStrategy says why).
     private SqlConnection Open()
     {
-        if (_connection.State != ConnectionState.Open) _connection.Open();
+        for (var attempt = 1; _connection.State != ConnectionState.Open; attempt++)
+        {
+            try { _connection.Open(); }
+            catch (SqlException ex) when (attempt < 3 && Kpi.Data.KpiRetryStrategy.IsDroppedConnection(ex))
+            {
+                SqlConnection.ClearPool(_connection);
+                Thread.Sleep(500 * attempt);
+            }
+        }
         return _connection;
     }
 

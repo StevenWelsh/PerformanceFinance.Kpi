@@ -26,7 +26,7 @@ builder.Services.AddDevExpressBlazor(options => options.SizeMode = DevExpress.Bl
 var kpiConnection = builder.Configuration.GetConnectionString("CmsKpi") is { Length: > 0 } cs ? cs
     : throw new InvalidOperationException(
         "ConnectionStrings:CmsKpi is not set. Set it once with:  dotnet user-secrets set \"ConnectionStrings:CmsKpi\" \"...\" --project Kpi.Web");
-builder.Services.AddDbContextFactory<KpiDbContext>(o => o.UseKpi(kpiConnection));
+builder.Services.AddDbContextFactory<KpiDbContext>(o => o.UseKpi(kpiConnection, retryDroppedConnections: true));
 // Identity's stores need a scoped context; one from the factory per scope (a request, or one operation's own scope -
 // never the circuit's: UserAdmin and the auth state provider open their own).
 builder.Services.AddScoped(sp => sp.GetRequiredService<IDbContextFactory<KpiDbContext>>().CreateDbContext());

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Kpi.Data;
 
@@ -100,17 +101,41 @@ public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options) : Ident
 
 public static class KpiDbContextOptions
 {
-    /// <summary>SQL Server with the migrations history in Ref - for the hosts that register the context themselves.</summary>
-    public static DbContextOptionsBuilder UseKpi(this DbContextOptionsBuilder builder, string connectionString) =>
-        builder.UseSqlServer(connectionString, sql => sql
-            .MigrationsHistoryTable("MigrationsHistory", "Ref")
-            .CommandTimeout(600));
+    /// <summary>
+    /// SQL Server with the migrations history in Ref - for the hosts that register the context themselves. The site
+    /// passes <paramref name="retryDroppedConnections"/>: see <see cref="KpiRetryStrategy"/>.
+    /// </summary>
+    public static DbContextOptionsBuilder UseKpi(this DbContextOptionsBuilder builder, string connectionString,
+        bool retryDroppedConnections = false) =>
+        builder.UseSqlServer(connectionString, sql =>
+        {
+            sql.MigrationsHistoryTable("MigrationsHistory", "Ref").CommandTimeout(600);
+            if (retryDroppedConnections) sql.ExecutionStrategy(d => new KpiRetryStrategy(d));
+        });
 
     public static DbContextOptionsBuilder<KpiDbContext> UseKpi(this DbContextOptionsBuilder<KpiDbContext> builder, string connectionString)
     {
         ((DbContextOptionsBuilder)builder).UseKpi(connectionString);
         return builder;
     }
+}
+
+/// <summary>
+/// AZURE SQL DROPS A CONNECTION WHOSE FIRST HANDSHAKE IS SLOW (Oct 2026). In App Service on Linux the site's first secure
+/// connection after a start took 8-32 s (measured inside the container: TLS and the managed identity token, each slow
+/// once and fast after), and Azure SQL's gateway resets a connection left waiting that long - "Connection reset by
+/// peer" / "error: 35", the site's "Something went wrong" on sign-in. Not the firewall, the encryption mode or the
+/// driver (all ruled out). The retry is fast: the slow part is done by then. EF's own transient list does not include a
+/// reset socket, so this adds it to SQL Server's usual transient errors.
+/// </summary>
+public sealed class KpiRetryStrategy(ExecutionStrategyDependencies dependencies)
+    : Microsoft.EntityFrameworkCore.SqlServerRetryingExecutionStrategy(dependencies, maxRetryCount: 3)
+{
+    protected override bool ShouldRetryOn(Exception exception) => base.ShouldRetryOn(exception) || IsDroppedConnection(exception);
+
+    /// <summary>A connection the server cut off (a reset socket under the SqlException) - worth one more try.</summary>
+    public static bool IsDroppedConnection(Exception exception) =>
+        exception is Microsoft.Data.SqlClient.SqlException { InnerException: System.IO.IOException or System.Net.Sockets.SocketException };
 }
 
 /// <summary>

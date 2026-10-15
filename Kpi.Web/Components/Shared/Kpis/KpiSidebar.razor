@@ -16,9 +16,11 @@
         <a href="/kpis" aria-label="KPIs — home" class="kpi-logo-link">
             <img src="img/pf-logo.png" alt="Performance Finance" class="sidebar-logo-img" />
         </a>
+        @* a sidebar-panel icon, not chevrons: beside a page title « read as "back" (Steve) *@
         <button type="button" class="kpi-collapse-btn" @onclick="Toggle"
-                aria-label="@(_collapsed ? "Expand sidebar" : "Collapse sidebar")">
-            <i class="bi @(_collapsed ? "bi-chevron-double-right" : "bi-chevron-double-left")"></i>
+                title="@(_collapsed ? "Show the menu" : "Hide the menu")"
+                aria-label="@(_collapsed ? "Show the menu" : "Hide the menu")">
+            <i class="bi @(_collapsed ? "bi-layout-sidebar" : "bi-layout-sidebar-inset")"></i>
         </button>
     </div>
     @* Favourites / All, as the phone's reports menu (the same choice, kept with the login: KpiFavourites) *@

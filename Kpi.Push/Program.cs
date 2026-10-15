@@ -10,6 +10,9 @@ using Microsoft.Extensions.Configuration;
 // Kpi.Push) or environment variables (ConnectionStrings__Source), never from a committed file.
 
 var scope = args.Length > 0 && args[0].Equals("Nightly", StringComparison.OrdinalIgnoreCase) ? "Nightly" : "Frequent";
+// --azure: copy into the Azure KPI database (ConnectionStrings:CmsKpiAzure) - from a developer's machine while testing;
+// the office server's scheduled copy is configured with CmsKpi pointing at Azure.
+var kpiName = args.Contains("--azure") ? "CmsKpiAzure" : "CmsKpi";
 var config = new ConfigurationBuilder()
     .SetBasePath(AppContext.BaseDirectory)
     .AddJsonFile("appsettings.json", optional: true)
@@ -45,7 +48,7 @@ var publishing = false;      // Stage.spPublish logs its own failure in Ref.Load
 try
 {
     await using var source = new SqlConnection(Required("Source"));
-    await using var kpi    = new SqlConnection(Required("CmsKpi"));
+    await using var kpi    = new SqlConnection(Required(kpiName));
     await source.OpenAsync();
     await kpi.OpenAsync();
 
@@ -115,7 +118,7 @@ async Task RecordFailure(string error)
 {
     try
     {
-        await using var kpi = new SqlConnection(Required("CmsKpi"));
+        await using var kpi = new SqlConnection(Required(kpiName));
         await kpi.OpenAsync();
         await using var cmd = new SqlCommand("Stage.spRecordFailure", kpi) { CommandType = CommandType.StoredProcedure };
         cmd.Parameters.Add("@Scope", SqlDbType.VarChar, 10).Value = scope;

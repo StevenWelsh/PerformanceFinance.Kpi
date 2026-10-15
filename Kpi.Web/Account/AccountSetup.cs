@@ -143,7 +143,10 @@ public sealed class AccountLinks(IDataProtectionProvider protection)
     public static string NewNonce() => AccountSetup.Base64Url(RandomNumberGenerator.GetBytes(18));
 }
 
-/// <summary>Every 15 minutes: closes setup windows nobody finished.</summary>
+/// <summary>
+/// Every 15 minutes: closes setup windows nobody finished. Its first run, as the site starts, is also the site's first
+/// database connection - the slow one in Azure (Kpi.Data.KpiRetryStrategy) - so it is rarely a person signing in who pays.
+/// </summary>
 public sealed class ExpireSetupsTask(IServiceScopeFactory scopes, ILogger<ExpireSetupsTask> log) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
