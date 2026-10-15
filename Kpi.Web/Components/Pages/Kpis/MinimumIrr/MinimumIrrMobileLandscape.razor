@@ -1,0 +1,124 @@
+@using System.Globalization
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Minimum IRR on a phone, landscape: Period and Division, then the full view's table for that
+   period - the nine columns in the proc's order with its Total row, figures and formats as the full view. *@
+
+<div class="kpim-compact">
+    <KpiMobileFilters Compact="true">
+        <div class="kpim-filters" style="--kpim-cols:4">
+            <KpiField Caption="Period" Value="@Period" ValueChanged="PeriodChanged" Options="PeriodOptions" />
+            <KpiField Caption="Division" Value="@DivisionId.ToString(CultureInfo.InvariantCulture)"
+                      ValueChanged="DivisionChanged" Options="DivisionOptions" />
+        </div>
+    </KpiMobileFilters>
+</div>
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else
+{
+    var rows = Rows;
+    var total = rows.FirstOrDefault(x => x.IsTotal);
+    <section class="kpim-mi-wrap kpim-fill">
+        <table class="kpim-mi-table">
+            <thead>
+                <tr>
+                    <th scope="col" class="kpim-mi-l">Division</th>
+                    <th scope="col" class="kpim-mi-l">Salesperson</th>
+                    <th scope="col">Transactions</th>
+                    <th scope="col">AF</th>
+                    <th scope="col">Average IRR</th>
+                    <th scope="col">T Under Min</th>
+                    <th scope="col">AF Under Min</th>
+                    <th scope="col">% T Under Min</th>
+                    <th scope="col">% AF Under Min</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in rows.Where(x => !x.IsTotal))
+                {
+                    <tr>
+                        <td class="kpim-mi-l">@r.SalesDivision</td>
+                        <td class="kpim-mi-l">@r.Salesperson</td>
+                        <td>@r.TransactionsTotal.ToString("N0")</td>
+                        <td>@Cur(r.AFTotal)</td>
+                        <td>@Pct(r.IRRAverage)</td>
+                        <td>@r.TransactionsUnderMinIRR.ToString("N0")</td>
+                        <td>@Cur(r.AFUnderMinIRR)</td>
+                        <td>@Pct0(r.PercentTransactionsUnderMinIRR)</td>
+                        <td>@Pct0(r.PercentAFUnderMinIRR)</td>
+                    </tr>
+                }
+            </tbody>
+            @if (total is not null)
+            {
+                <tfoot>
+                    <tr>
+                        <td class="kpim-mi-l">-</td>
+                        <td class="kpim-mi-l">Total</td>
+                        <td>@total.TransactionsTotal.ToString("N0")</td>
+                        <td>@Cur(total.AFTotal)</td>
+                        <td>@Pct(total.IRRAverage)</td>
+                        <td>@total.TransactionsUnderMinIRR.ToString("N0")</td>
+                        <td>@Cur(total.AFUnderMinIRR)</td>
+                        <td>@Pct0(total.PercentTransactionsUnderMinIRR)</td>
+                        <td>@Pct0(total.PercentAFUnderMinIRR)</td>
+                    </tr>
+                </tfoot>
+            }
+        </table>
+        @if (!rows.Any(x => !x.IsTotal))
+        {
+            <div class="kpim-empty">@EmptyNote(Period, DivisionName)</div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public List<MinIRRRow> Month { get; set; } = new();
+    [Parameter] public List<MinIRRRow> Quarter { get; set; } = new();
+    [Parameter] public List<MinIRRRow> Year { get; set; } = new();
+    [Parameter] public List<(int Id, string Name)>? Divisions { get; set; }
+    [Parameter] public int DivisionId { get; set; } = -1;
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<string> DivisionChanged { get; set; }
+
+    /// <summary>Month, Quarter or Year - shared with the portrait view, so turning the phone keeps it.</summary>
+    [Parameter] public string Period { get; set; } = "Year";
+    [Parameter] public EventCallback<string> PeriodChanged { get; set; }
+
+    /// <summary>The three periods the full view stacks, one at a time on the phone.</summary>
+    internal static readonly IReadOnlyList<KpiOption> PeriodOptions = new[]
+    {
+        new KpiOption("Month", "This month"),
+        new KpiOption("Quarter", "This quarter"),
+        new KpiOption("Year", "This year")
+    };
+
+    internal static string PeriodName(string period) =>
+        PeriodOptions.FirstOrDefault(o => o.Value == period)?.Text ?? "This year";
+
+    internal static string EmptyNote(string period, string? division) =>
+        $"No own-book deals paid out {PeriodName(period).ToLowerInvariant()}{(division is null ? "" : $" in {division}")}.";
+
+    private List<MinIRRRow> Rows => Period switch { "Month" => Month, "Quarter" => Quarter, _ => Year };
+
+    private string? DivisionName => Divisions?.Where(d => d.Id == DivisionId).Select(d => d.Name).FirstOrDefault();
+
+    private IReadOnlyList<KpiOption> DivisionOptions =>
+        new[] { new KpiOption("-1", "All") }
+            .Concat((Divisions ?? new()).Select(d => new KpiOption(d.Id.ToString(CultureInfo.InvariantCulture), d.Name)))
+            .ToList();
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+    private static string Pct0(decimal fraction) => Math.Round(fraction * 100m).ToString("0") + "%";
+}

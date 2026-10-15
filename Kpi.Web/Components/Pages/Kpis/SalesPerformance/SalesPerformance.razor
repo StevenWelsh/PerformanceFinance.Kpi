@@ -1,0 +1,740 @@
+@page "/kpis/sales-performance"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiScripts Scripts
+@inject IJSRuntime JS
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@inject Kpi.Web.Data.Kpis.ReportDateProvider ReportDate
+@implements IAsyncDisposable
+@using Kpi.Web.Reports
+@using Kpi.Web.Components.Shared.Kpis
+
+@* Sales Performance — per year (the report year on top; below it any year from 2020, picked in that row's
+   league table header, the year before by default) a league table of the reportable salespeople
+   ranked by AF or TFI, paired with a Sales Target Performance panel: one bar per salesperson with a
+   dotted YTD-target line and a solid year-target line. Targets are live data from
+   CMS.SalesTargetYear (maintained in the desktop), prorated to YTD by working days
+   (WebKPI.spSalesTargets) — where a measure has no target for a year (2025 TFI today) the lines are
+   simply omitted. The league card's header carries a small timelapse button opening the animated
+   week-by-week bar race, which shows the same two target lines with a key under its standings.
+   The AF/TFI toggle at the top drives tables, target panels and races alike.
+   Both years fit one page: no card footer, the race button lives in the header.
+   Each (measure, year) loads and caches on its own, the first time a view shows it. *@
+
+<PageTitle>Sales Performance — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="sales-performance" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Sales Performance" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+            <div class="kpi-filters kpi-sp-filters">
+                <KpiField Caption="Measure" Value="@_measure" Options="MeasureOptions"
+                          ValueChanged="@(v => OnMeasure(new ChangeEventArgs { Value = v }))" />
+            </div>
+
+            @if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+            else
+            {
+                @* one ROW per year: league table (left) + target performance (right); the second row's year is picked *@
+                @foreach (var (yr, pick) in new[] { (_reportYear, false), (CompareYear, true) })
+                {
+                    var loaded = _league.ContainsKey(yr);
+                    var allRows = _league.TryGetValue(yr, out var r) ? r : new();
+                    // the proc returns every salesperson flagged IsCore. Rank the core rows;
+                    // roll the non-core (with any value) into an "Other" total whose button opens
+                    // a per-person breakdown popup. core + non-core = the full-year total.
+                    var core = allRows.Where(x => x.IsCore).ToList();
+                    var nonCore = allRows.Where(x => !x.IsCore && x.MeasureValue != 0)
+                                         .OrderByDescending(x => x.MeasureValue).ToList();
+                    var otherTotal = nonCore.Sum(x => x.MeasureValue);
+                    var total = core.Sum(x => x.MeasureValue) + otherTotal;
+
+                    var targets = _targets.TryGetValue(yr, out var t) ? t : new();
+
+                    <div class="slt-yearrow @(pick ? "slt-yearrow-pick" : "")">
+                        <div class="ss-card slt-tablecard">
+                            <div class="ss-card-head slt-head">
+                                @if (pick)
+                                {
+                                    <span class="slt-head-pick">
+                                        <span class="slt-yearfield kpim-compact">
+                                            <KpiField Caption="Year" Value="@yr.ToString(Inv)" ValueChanged="OnCompareYear" Options="YearOptions" />
+                                        </span>
+                                        <span>Sales League Table</span>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span>@yr - Sales League Table</span>
+                                }
+                                @* timelapse demoted to a small header button — the old full-width
+                                   card footer is gone so both years fit one page *@
+                                <button type="button" class="kpi-btn" title="@($"Play {yr} timelapse")" disabled="@(!loaded)"
+                                        @onclick="() => OpenRace(yr)">
+                                    <i class="bi bi-play-circle-fill" aria-hidden="true"></i> Timelapse
+                                </button>
+                            </div>
+                            @if (!loaded)
+                            {
+                                <div class="ss-loading"><span class="ss-spinner"></span> Loading @yr…</div>
+                            }
+                            else
+                            {
+                            <table class="slt-table">
+                                <thead>
+                                    <tr><th class="slt-rank"></th><th class="slt-name">Salesperson</th><th class="slt-val">@_measure</th></tr>
+                                </thead>
+                                <tbody>
+                                    @{ var rank = 0; }
+                                    @foreach (var p in core)
+                                    {
+                                        rank++;
+                                        <tr>
+                                            <td class="slt-rank">@rank</td>
+                                            <td class="slt-name">@p.Salesperson</td>
+                                            <td class="slt-val">@Cur(p.MeasureValue)</td>
+                                        </tr>
+                                    }
+                                    @* pad shorter years with blank rows ABOVE the Other row, so all
+                                       cards stay the same height regardless of roster size *@
+                                    @for (var i = core.Count; i < _maxRankedRows; i++)
+                                    {
+                                        <tr class="slt-blankrow"><td class="slt-rank"></td><td class="slt-name"></td><td class="slt-val"></td></tr>
+                                    }
+                                    @* "Other" = the non-core salespeople summed for the current measure.
+                                       The row slot ALWAYS renders (so tables don't grow/shrink), but the
+                                       clickable "Other" button + its value only appear when there IS a
+                                       non-zero Other for this measure — e.g. present under AF, absent
+                                       under TFI when the only non-core has £0 TFI. *@
+                                    <tr class="slt-otherrow">
+                                        <td class="slt-rank">@(nonCore.Count > 0 ? "–" : "")</td>
+                                        <td class="slt-name">
+                                            @if (nonCore.Count > 0)
+                                            {
+                                                <button type="button" class="slt-otherbtn" @onclick="() => OpenOther(yr)">Other</button>
+                                            }
+                                        </td>
+                                        <td class="slt-val">@(nonCore.Count > 0 ? Cur(otherTotal) : "")</td>
+                                    </tr>
+                                </tbody>
+                                <tfoot>
+                                    <tr><td class="slt-rank"></td><td class="slt-name"></td><td class="slt-val">@Cur(total)</td></tr>
+                                </tfoot>
+                            </table>
+                            }
+                        </div>
+
+                        @* ---- Sales Target Performance: column per salesperson + target lines ---- *@
+                        @{
+                            // Bars are the ACTUAL values for the core salespeople; the target lines come
+                            // from CMS.SalesTargetYear. A person with no target row (or a zero target for
+                            // this measure) simply gets no lines.
+                            var tgtById = targets.ToDictionary(x => x.SalesId);
+                            var bars = core
+                                .Select(p => new
+                                {
+                                    p.SalesId,
+                                    p.Salesperson,
+                                    Actual = p.MeasureValue,
+                                    Year = tgtById.TryGetValue(p.SalesId, out var tg) ? tg.YearTarget : 0m,
+                                    Ytd = tgtById.TryGetValue(p.SalesId, out var tg2) ? tg2.YtdTarget : 0m
+                                })
+                                .ToList();
+                            // shared scale — covers the tallest YEAR target too, so the year line is
+                            // always on-chart (part-year bars sit lower by design).
+                            var scale = new[] { bars.Select(b => b.Actual).DefaultIfEmpty(0).Max(),
+                                                bars.Select(b => b.Year).DefaultIfEmpty(0).Max() }
+                                        .Max();
+                            if (scale <= 0) scale = 1;
+                            var anyTarget = bars.Any(b => b.Year > 0);
+                        }
+                        <div class="ss-card slt-targetcard">
+                            <div class="ss-card-head slt-head">
+                                <span>@yr - Sales Target Performance</span>
+                                @* key lives in the header (Formed-style), only when this year has targets *@
+                                @if (anyTarget)
+                                {
+                                    <span class="slt-key">
+                                        <span class="slt-key-item"><i class="slt-key-ytd"></i> YTD target</span>
+                                        <span class="slt-key-item"><i class="slt-key-year"></i> Year target</span>
+                                    </span>
+                                }
+                            </div>
+
+                            @if (!loaded)
+                            {
+                                <div class="ss-loading"><span class="ss-spinner"></span> Loading @yr…</div>
+                            }
+                            else if (bars.Count == 0)
+                            {
+                                <div class="slt-tgt-empty">No salespeople for @yr.</div>
+                            }
+                            else
+                            {
+                                @* Formed-style VERTICAL column chart (server-rendered SVG): one column
+                                   per salesperson (largest→smallest), a £ Y-axis with gridlines, uniform
+                                   brand columns, and YTD (dotted) + year (solid) target lines across each
+                                   column. Performance is read from the line position, not the bar colour. *@
+                                @BuildTargetChart(bars.Select(b => (b.Salesperson, b.Actual, b.Year, b.Ytd)).ToList(), scale, _measure)
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </KpiPanel>
+    </main>
+</div>
+
+@* the phone view (KpiMobile): one year at a time, the league table, the target chart and the timelapse *@
+<SalesPerformanceMobile AsAt="_asOf"
+                        Measure="@_measure" MeasureChanged="@(v => OnMeasure(new ChangeEventArgs { Value = v }))"
+                        Years="YearList" Year="PhoneYear" YearChanged="OnPhoneYear"
+                        League="_league" Targets="_targets" Loading="@(_error is null && (_loading || !_league.ContainsKey(PhoneYear)))" Error="@_error"
+                        LoadRace="yr => BuildRace(yr, true)"
+                        AxisLabel="AxisLabel" NiceStep="NiceStep" FirstName="FirstName" />
+
+@* ---- timelapse race popup (one, reused per chosen year) ---- *@
+<DxPopup Visible="@_raceOpen"
+         VisibleChanged="OnRaceVisibleChanged"
+         HeaderText="@($"{_raceYear} - {_measure} Timelapse")"
+         Width="min(1100px, 94vw)"
+         CloseOnOutsideClick="true"
+         ShowCloseButton="true">
+    <div class="slt-race">
+        @if (_raceLoading)
+        {
+            <div class="ss-loading"><span class="ss-spinner"></span> Gathering @_raceYear weekly data…</div>
+        }
+        else if (_raceError is not null)
+        {
+            <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_raceError</div>
+        }
+        else
+        {
+            @* Elements are addressed by STABLE ID (not @ref). DxPopup keeps its body in the tree
+               between opens and a reused ElementReference resolves to the previous, now-detached
+               element — init then builds the race into a dead node and the popup shows blank on the
+               2nd open. getElementById in JS always finds the live element, so re-open works. The id
+               suffix (_raceOpenSeq) also guarantees a fresh node per open. *@
+            <div class="slt-race-body">
+                @* Bar / Graph mode toggle — HIDDEN for now (graph mode is built but parked for
+                   more tinkering later). The full graph renderer lives in SalesPerformance.razor.js
+                   (setRaceMode / layoutGraph / buildGraph) and its CSS in app.css (.slt-graph*),
+                   all intact and compiling. To bring it back, just un-comment this block.
+                <div class="slt-race-modebar">
+                    <div class="slt-modetoggle">
+                        <button type="button" class="slt-modebtn @(_raceMode == "bar" ? "active" : "")"
+                                @onclick="@(() => SetRaceMode("bar"))">Bar</button>
+                        <button type="button" class="slt-modebtn @(_raceMode == "graph" ? "active" : "")"
+                                @onclick="@(() => SetRaceMode("graph"))">Graph</button>
+                    </div>
+                </div>
+                *@
+                @* full-width bar race — the standings table is gone; each bar now trails its own
+                   running £ value and a "Weeks @ #1: n" tally, so there's more vertical room to play out *@
+                <div class="slt-racehost" id="@RaceHostId"></div>
+                @* key: only the moving YTD-target line is shown in the race (the year target is
+                   deliberately omitted). Shown only when this year+measure has targets. *@
+                @if (_raceHasTargets)
+                {
+                    <div class="slt-key slt-race-key">
+                        <span class="slt-key-item"><i class="slt-key-ytd"></i> YTD target (as at week)</span>
+                    </div>
+                }
+                <div class="slt-racefoot">
+                    <button class="slt-ctrl" title="Play / pause" @onclick="TogglePlay" id="@RacePlayId"><i class="bi bi-play-fill"></i></button>
+                    @* the running week/date floats above the scrubber thumb and follows it (positioned in JS) *@
+                    <div class="slt-scrubwrap">
+                        <span class="slt-date" id="@RaceDateId"></span>
+                        <input type="range" class="slt-scrub" id="@RaceScrubId" />
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</DxPopup>
+
+@* ---- "Other" breakdown popup: the non-core salespeople for the chosen year ---- *@
+<DxPopup Visible="@_otherOpen"
+         VisibleChanged="@(v => { if (!v) _otherOpen = false; })"
+         HeaderText="@($"Other — {_otherYear}")"
+         Width="380px"
+         CloseOnOutsideClick="true"
+         ShowCloseButton="true">
+    <div class="slt-otherpop">
+        <table class="slt-ottable">
+            <thead>
+                <tr><th class="slt-ot-name">Salesperson</th><th class="slt-ot-val">@_measure</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var p in _otherRows)
+                {
+                    <tr>
+                        <td class="slt-ot-name">@p.Salesperson</td>
+                        <td class="slt-ot-val">@Cur(p.MeasureValue)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr><td class="slt-ot-name">Other total</td><td class="slt-ot-val">@Cur(_otherRows.Sum(x => x.MeasureValue))</td></tr>
+            </tfoot>
+        </table>
+    </div>
+</DxPopup>
+
+@code {
+    private string _measure = "TFI";
+    private static readonly KpiOption[] MeasureOptions = { new("TFI", "TFI"), new("AF", "AF") };
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    // One year's league + targets for the measure: the cacheable unit (per measure + year).
+    private sealed record YearData(List<SalesLeagueRow> League, List<SalesTargetRow> Targets);
+
+    private const int FirstYear = 2020;   // the earliest year either view offers
+    private int _reportYear;              // the report date's year: the top row, and the phone's default
+    private int? _compareYear;            // the full view's second row; none = the year before the report year
+    private int? _phoneYear;              // the phone's year; none = the report year
+    private int CompareYear => _compareYear ?? _reportYear - 1;
+    private int PhoneYear => _phoneYear ?? _reportYear;
+
+    // 2020 to the report year, oldest first - the Year choice on both views
+    private List<int> YearList => _reportYear < FirstYear ? new()
+        : Enumerable.Range(FirstYear, _reportYear - FirstYear + 1).ToList();
+    private List<KpiOption> YearOptions => YearList.Select(y => new KpiOption(y.ToString(Inv), y.ToString(Inv))).ToList();
+
+    // every year loaded for the current measure, by year
+    private Dictionary<int, List<SalesLeagueRow>> _league = new();
+    private Dictionary<int, List<SalesTargetRow>> _targets = new();
+    private int _loadSeq;                 // bumped by each full load, so a superseded one stops writing
+
+    // tallest RANKED roster (excl. Other) of the two years on screen — the shorter table pads to this
+    private int _maxRankedRows => new[] { _reportYear, CompareYear }
+        .Select(y => _league.TryGetValue(y, out var rows) ? rows.Count(x => x.IsCore) : 0).Max();
+
+    // the years some view is showing
+    private IEnumerable<int> WantedYears() => new[] { _reportYear, CompareYear, PhoneYear }.Distinct();
+
+    // ---- "Other" breakdown popup ----
+    private bool _otherOpen;
+    private int _otherYear;
+    private List<SalesLeagueRow> _otherRows = new();
+
+    private IJSObjectReference? _module;
+
+    // ---- race popup state ----
+    private bool _raceOpen;
+    private bool _raceLoading;
+    private string? _raceError;
+    private int _raceYear;
+    private bool _raceHasTargets;   // drives the key under the standings
+    private object? _pendingRace;   // payload waiting for the popup body to render
+    private int _raceOpenSeq;       // bumped each open → unique element ids per open (fresh nodes)
+    private string _raceMode = "bar";   // "bar" (horizontal race) | "graph" (cumulative line chart)
+
+    // stable element ids (suffixed per open) — JS resolves them by getElementById, immune to the
+    // stale-ElementReference problem that blanked the popup on re-open.
+    private string RaceHostId => $"slt-host-{_raceOpenSeq}";
+    private string RaceScrubId => $"slt-scrub-{_raceOpenSeq}";
+    private string RaceDateId => $"slt-date-{_raceOpenSeq}";
+    private string RacePlayId => $"slt-play-{_raceOpenSeq}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) { await Load(); return; }
+
+        // wire the target-chart column tooltips (shared styled popup, same as Business Analysis).
+        // Idempotent in JS, so it's safe to call after every render (re-runs when the data changes).
+        if (!_loading && _error is null)
+        {
+            try
+            {
+                _module ??= await JS.InvokeAsync<IJSObjectReference>(
+                    "import", Scripts.Url("./Components/Pages/Kpis/SalesPerformance/SalesPerformance.razor.js"));
+                await _module.InvokeVoidAsync("initTargetCharts");
+            }
+            catch (JSDisconnectedException) { }
+        }
+
+        // DxPopup renders its body LAZILY on show, so on a re-open this after-render can fire before
+        // the race elements are in the DOM. initRace returns false in that case; we keep _pendingRace
+        // and retry until it's placed (a short delay lets DxPopup finish mounting). The payload is
+        // only cleared on success, so it can never be lost to an early render.
+        if (_pendingRace is not null && _module is not null && !_raceLoading)
+        {
+            var payload = _pendingRace;
+            try
+            {
+                var ok = await _module.InvokeAsync<bool>("initRace",
+                    RaceHostId, RaceScrubId, RaceDateId, RacePlayId, payload);
+                if (ok)
+                {
+                    _pendingRace = null;
+                }
+                else
+                {
+                    // element not mounted yet — wait a beat and re-render to trigger another attempt
+                    await Task.Delay(50);
+                    if (_pendingRace is not null && _raceOpen) StateHasChanged();
+                }
+            }
+            catch (JSDisconnectedException) { }
+        }
+    }
+
+    // Every year a view is showing, for the measure. Starts empty, so each row says Loading until its year arrives.
+    private async Task Load()
+    {
+        var seq = ++_loadSeq;
+        _loading = true; _error = null; _league = new(); _targets = new(); StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            _reportYear = ReportDate.Get().Year;
+            // a year picked while this runs is wanted too, so keep going until none is missing
+            while (seq == _loadSeq && WantedYears().Where(y => !_league.ContainsKey(y)).Cast<int?>().FirstOrDefault() is int yr)
+                await LoadYear(yr, seq);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally
+        {
+            if (seq == _loadSeq) { _loading = false; StateHasChanged(); }
+        }
+    }
+
+    // One year through the cache (per measure + year + report date): instant on a repeat, one DB hit the
+    // first time; GetOrLoad is single-flight, so concurrent viewers load once. Writes only for the current load.
+    private async Task LoadYear(int yr, int seq)
+    {
+        var measure = _measure;
+        var entry = await KpiCache.GetOrLoad(KpiCache.Key("SalesPerformance", measure, yr), () => LoadYearData(yr, measure));
+        if (seq != _loadSeq) return;
+        _league[yr] = entry.Data.League;
+        _targets[yr] = entry.Data.Targets;
+        if (yr == _reportYear) { _asOf = entry.AsAt; _refreshedOn = entry.LoadedAtUtc; }
+    }
+
+    // Pure loader: opens a one-shot session, runs the procs for the year, returns its data + the as-at.
+    // No component-field mutation here, so the cache can call this off the render path during a refresh.
+    private async Task<(YearData, DateTime)> LoadYearData(int yr, string measure)
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var svc = new SalesLeagueTableService(cms.Db);
+        return (new YearData(svc.GetLeague(yr, measure), svc.GetTargets(yr, measure)), asAt);
+    }
+
+    // A year picked on either view: shown at once when loaded (the cache still answers, as other viewers may have
+    // refreshed it), else Loading in its place until it arrives. During a full load, the load picks it up.
+    private async Task ShowYear(int yr)
+    {
+        if (_loading) return;
+        var seq = _loadSeq;
+        try { await LoadYear(yr, seq); }
+        catch (Exception ex) { _error = ex.Message; }
+        StateHasChanged();
+    }
+
+    private Task OnCompareYear(string value)
+    {
+        if (!int.TryParse(value, System.Globalization.NumberStyles.Integer, Inv, out var y)) return Task.CompletedTask;
+        _compareYear = y;
+        StateHasChanged();
+        return ShowYear(y);
+    }
+
+    private Task OnPhoneYear(int y)
+    {
+        _phoneYear = y;
+        StateHasChanged();
+        return ShowYear(y);
+    }
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view. Re-run the years on screen through the
+    // cache; if any changed, refresh the fields and fade the chart; otherwise just tick "Refreshed on".
+    private async Task OnRefreshRequested()
+    {
+        if (_loading) return;
+        try
+        {
+            var measure = _measure;
+            var seq = _loadSeq;
+            var changed = false;
+            foreach (var yr in WantedYears().ToList())
+            {
+                var (entry, ch) = await KpiCache.RefreshAsync(
+                    KpiCache.Key("SalesPerformance", measure, yr), () => LoadYearData(yr, measure));
+                if (seq != _loadSeq) return;
+                _league[yr] = entry.Data.League;
+                _targets[yr] = entry.Data.Targets;
+                if (yr == _reportYear) _refreshedOn = entry.LoadedAtUtc;
+                changed |= ch;
+            }
+            if (changed)
+            {
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();  // gentle chart fade
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task OnMeasure(ChangeEventArgs e)
+    {
+        _measure = e.Value?.ToString() ?? "TFI";
+        // a measure change invalidates a running race — close it (it was built on the old measure)
+        await CloseRace();
+        await Load();
+    }
+
+    // ---- "Other" breakdown ----
+    // The rows are already loaded (GetLeague returns every salesperson); just pick this year's
+    // non-core ones with a value, ranked high→low, for the popup.
+    private void OpenOther(int yr)
+    {
+        _otherYear = yr;
+        _otherRows = (_league.TryGetValue(yr, out var r) ? r : new())
+            .Where(x => !x.IsCore && x.MeasureValue != 0)
+            .OrderByDescending(x => x.MeasureValue)
+            .ToList();
+        _otherOpen = true;
+    }
+
+    // ---- timelapse race ----
+    private async Task OpenRace(int yr)
+    {
+        _raceYear = yr;
+        _raceOpen = true;
+        _raceLoading = true;
+        _raceError = null;
+        _raceOpenSeq++;            // force a fresh popup-body mount (new @ref elements) for this open
+        StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            var (payload, hasTargets) = await BuildRace(yr, false);
+            _raceHasTargets = hasTargets;
+            _module ??= await JS.InvokeAsync<IJSObjectReference>(
+                "import", Scripts.Url("./Components/Pages/Kpis/SalesPerformance/SalesPerformance.razor.js"));
+            _raceLoading = false;
+            _pendingRace = payload;   // init after the control bar renders (refs must exist)
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _raceLoading = false; _raceError = ex.Message; StateHasChanged();
+        }
+    }
+
+    // The race for a year and the current measure - the popup's, and the phone's (compact: its shorter rows).
+    // HasTargets drives the key under it.
+    private async Task<(object Payload, bool HasTargets)> BuildRace(int yr, bool compact)
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var svc = new SalesLeagueTableService(cms.Db);
+        var weeks = svc.GetTimelapse(yr, _measure);
+        // targets for the race's lines — already loaded for the page, reused here. Only the
+        // people actually IN the race matter, and only non-zero targets draw a line.
+        var raceIds = weeks.Select(w => w.SalesId).Distinct().ToHashSet();
+        var tgts = (_targets.TryGetValue(yr, out var t) ? t : new())
+            .Where(x => raceIds.Contains(x.SalesId) && x.YearTarget > 0)
+            .ToList();
+        var payload = new
+        {
+            year = yr,
+            measure = _measure,
+            compact,
+            people = weeks.Select(w => w.SalesId).Distinct().ToList(),
+            names = weeks.GroupBy(w => w.SalesId).ToDictionary(g => g.Key.ToString(), g => g.First().Salesperson),
+            weeks = weeks.Select(w => new { id = w.SalesId, wk = w.WeekNo, end = w.WeekEnd.ToString("dd MMM yyyy"), val = (double)w.WeekValue }),
+            // keyed by salesperson id so the JS can draw each person's own two lines
+            targets = tgts.ToDictionary(
+                x => x.SalesId.ToString(),
+                x => new { year = (double)x.YearTarget, ytd = (double)x.YtdTarget })
+        };
+        return (payload, tgts.Count > 0);
+    }
+
+    private async Task CloseRace()
+    {
+        if (!_raceOpen) return;
+        _raceOpen = false;
+        _pendingRace = null;
+        if (_module is not null) { try { await _module.InvokeVoidAsync("disposeRace", RaceHostId); } catch { } }
+        StateHasChanged();
+    }
+
+    private async Task OnRaceVisibleChanged(bool visible)
+    {
+        if (!visible) await CloseRace();
+    }
+
+    private async Task TogglePlay() { if (_module is not null) await _module.InvokeVoidAsync("togglePlay", RaceHostId); }
+
+    private async Task SetRaceMode(string mode)
+    {
+        _raceMode = mode;
+        if (_module is not null) await _module.InvokeVoidAsync("setRaceMode", RaceHostId, mode);
+    }
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+
+    /// <summary>CSS length for a chart percentage, clamped and invariant (never a comma decimal).</summary>
+    private static string Pct(double v) =>
+        Math.Max(0d, Math.Min(100d, v)).ToString("0.####", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+    private static string N(double v) => v.ToString("0.##", Inv);
+
+    // £ axis label — compact k/m so the Y axis stays narrow (e.g. 22,000,000 -> "£22m", 750,000 -> "£750k")
+    private static string AxisLabel(double v)
+    {
+        if (v >= 1_000_000d) return "£" + (v / 1_000_000d).ToString("0.##", Inv) + "m";
+        if (v >= 1_000d) return "£" + (v / 1_000d).ToString("0.#", Inv) + "k";
+        return "£" + v.ToString("0", Inv);
+    }
+
+    // a "nice" round gridline step that gives ~4 lines up to the max (1/2/5 × 10^n)
+    private static double NiceStep(double max, int target = 4)
+    {
+        if (max <= 0) return 1;
+        var raw = max / target;
+        var mag = Math.Pow(10, Math.Floor(Math.Log10(raw)));
+        var norm = raw / mag;
+        var step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+        return step * mag;
+    }
+
+    /// <summary>
+    /// Server-rendered vertical column chart (Formed layout, our colours): a column per salesperson
+    /// (already largest→smallest), a £ Y-axis with gridlines, uniform brand bars, and YTD (dotted) +
+    /// year (solid) target ticks across each column. Bars/lines share the given scale so they're
+    /// comparable and no line falls off-chart.
+    /// </summary>
+    private MarkupString BuildTargetChart(
+        List<(string Name, decimal Actual, decimal Year, decimal Ytd)> bars, decimal scaleDec, string measure)
+    {
+        // viewBox coordinate space. Its aspect ratio (~3.1:1) matches the card, and the SVG scales
+        // with preserveAspectRatio="xMidYMid meet" (uniform — NO stretch), so text/columns keep
+        // their shape at any card width. Proportions follow the Formed layout: roomy bottom for
+        // names, chunky columns, prominent target lines.
+        const double W = 1000, H = 320;
+        const double padL = 64, padR = 16, padT = 22, padB = 46;
+        double plotW = W - padL - padR, plotH = H - padT - padB;
+
+        double scale = (double)scaleDec;
+        double step = NiceStep(scale, 5);
+        double niceMax = Math.Max(step, Math.Ceiling(scale / step) * step);
+        double Y(double v) => padT + (1 - Math.Min(v, niceMax) / niceMax) * plotH;
+        double baseY = Y(0);
+
+        // Fixed slot from the tallest roster across the years (_maxRankedRows), so every column is the
+        // SAME width and — crucially — LEFT-ALIGNED at the same x each year. A shorter year just stops
+        // one slot short, so column positions line up between years (Susan @2026 pos-1 sits directly
+        // above Pete @2025 pos-1, etc). No centring offset.
+        int n = bars.Count;
+        int slots = Math.Max(n, Math.Max(1, _maxRankedRows));
+        double slot = plotW / slots;
+        double colW = Math.Max(16, Math.Min(90, slot * 0.46));   // Formed: chunky columns
+        const double xOffset = 0;                                // left-aligned so years line up
+
+        var sb = new System.Text.StringBuilder();
+        // uniform scaling (meet) — never stretched; overflow visible so a target line sitting at the
+        // very top edge isn't clipped.
+        sb.Append($"<svg class=\"slt-tgtsvg\" viewBox=\"0 0 {N(W)} {N(H)}\" preserveAspectRatio=\"xMidYMid meet\" role=\"img\">");
+
+        // horizontal gridlines + £ axis labels
+        for (double g = 0; g <= niceMax + step / 2; g += step)
+        {
+            double gy = Y(g);
+            sb.Append($"<line class=\"slt-gl\" x1=\"{N(padL)}\" y1=\"{N(gy)}\" x2=\"{N(W - padR)}\" y2=\"{N(gy)}\"/>");
+            sb.Append($"<text class=\"slt-ax\" x=\"{N(padL - 8)}\" y=\"{N(gy + 4)}\" text-anchor=\"end\">{AxisLabel(g)}</text>");
+        }
+
+        // target line spans a touch wider than the column (Formed), so it clearly reads as a marker
+        double half = Math.Min(slot * 0.44, colW / 2 + 12);
+
+        for (var i = 0; i < bars.Count; i++)
+        {
+            var b = bars[i];
+            double cx = padL + xOffset + (i + 0.5) * slot;
+            double top = Y((double)b.Actual);
+
+            // full-height transparent hit area carrying the hover detail in data-tip; the collocated
+            // JS wires it to the shared styled tooltip (js/kpiTooltip.js), matching Business Analysis.
+            sb.Append($"<rect class=\"slt-hit\" x=\"{N(cx - slot / 2)}\" y=\"{N(padT)}\" width=\"{N(slot)}\" height=\"{N(plotH)}\" fill=\"transparent\" data-tip=\"{HoverText(b.Name, b.Actual, b.Year, b.Ytd, measure)}\"/>");
+
+            // the column (uniform brand colour — performance is read from the lines, not the fill)
+            sb.Append($"<rect class=\"slt-col\" x=\"{N(cx - colW / 2)}\" y=\"{N(top)}\" width=\"{N(colW)}\" height=\"{N(Math.Max(0, baseY - top))}\" rx=\"3\" pointer-events=\"none\"/>");
+
+            // target lines across the column: YTD dotted, year solid. Omitted when no target exists.
+            if (b.Year > 0)
+            {
+                double yy = Y((double)b.Year);
+                sb.Append($"<line class=\"slt-tick-year\" x1=\"{N(cx - half)}\" y1=\"{N(yy)}\" x2=\"{N(cx + half)}\" y2=\"{N(yy)}\" pointer-events=\"none\"/>");
+            }
+            if (b.Ytd > 0)
+            {
+                double yy = Y((double)b.Ytd);
+                sb.Append($"<line class=\"slt-tick-ytd\" x1=\"{N(cx - half)}\" y1=\"{N(yy)}\" x2=\"{N(cx + half)}\" y2=\"{N(yy)}\" pointer-events=\"none\"/>");
+            }
+
+            // actual value above the column, name below the axis
+            sb.Append($"<text class=\"slt-colval\" x=\"{N(cx)}\" y=\"{N(Math.Max(padT + 12, top - 7))}\" text-anchor=\"middle\" pointer-events=\"none\">{AxisLabel((double)b.Actual)}</text>");
+            sb.Append($"<text class=\"slt-colname\" x=\"{N(cx)}\" y=\"{N(H - padB + 22)}\" text-anchor=\"middle\" pointer-events=\"none\">{System.Net.WebUtility.HtmlEncode(FirstName(b.Name))}</text>");
+        }
+
+        sb.Append("</svg>");
+        return new MarkupString(sb.ToString());
+    }
+
+    // hover detail carried in the hit-rect's data-tip: salesperson, actual (+ % of year), year
+    // target, YTD target (+ % achieved). Newlines are real "\n" (rendered as lines by .kpi-tip's
+    // white-space); HtmlEncode makes it safe as an attribute value.
+    private static string HoverText(string name, decimal actual, decimal year, decimal ytd, string measure)
+    {
+        var lines = new List<string> { name, $"{measure}: {Cur(actual)}" };
+        if (year > 0)
+        {
+            // YTD target above the year target (it's the "am I on pace?" line)
+            if (ytd > 0)
+                lines.Add($"YTD target: {Cur(ytd)}  ({(actual / ytd * 100m):0}%)");
+            lines.Add($"Year target: {Cur(year)}  ({(actual / year * 100m):0}%)");
+        }
+        else
+        {
+            lines.Add("No target set");
+        }
+        return System.Net.WebUtility.HtmlEncode(string.Join("\n", lines));
+    }
+
+    // columns are narrow — show the first name (or "Own Book") so labels don't collide
+    private static string FirstName(string full)
+    {
+        if (string.IsNullOrWhiteSpace(full)) return "";
+        var sp = full.Split(' ');
+        return sp.Length > 1 && !full.StartsWith("Own", StringComparison.OrdinalIgnoreCase) ? sp[0] : full;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("disposeAll"); await _module.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        }
+    }
+}

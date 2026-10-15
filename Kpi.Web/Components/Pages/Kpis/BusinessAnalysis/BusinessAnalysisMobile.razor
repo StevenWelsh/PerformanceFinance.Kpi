@@ -1,0 +1,380 @@
+@using System.Globalization
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
+
+@* Business Analysis on a phone (portrait only): Sales Office (on a row of its own), Dimension, Measure, Year
+   and Quarter, then - KpiOfficeEmpty in their place for an office with no figures -
+   • a dimension: the year's donut (each value's full total, as the full view's pie) with its change
+     against the year before to date, and one row per value - amount, share, change - that opens to
+     its 8-year trend;
+   • Lender: one of the full view's four year cards, picked with the Year field - the top lenders
+     with a bar and the change, Others and the total.
+   Sales Office, Dimension, Measure, Quarter and the dimension Year call the page's own handlers, so they
+   reload exactly as the full view's fields do; the lender Year only picks which loaded card shows. Donut
+   and bars are drawn here (SVG / sized markup) - BusinessAnalysis.razor.js is the full view's. *@
+
+<KpiMobileFilters>
+    <div class="kpim-filters" style="--kpim-cols:2">
+        <div class="kpim-ba-office"><KpiOfficeField Changed="OfficeChanged" /></div>
+        <KpiField Caption="Dimension" Value="@Dimension" ValueChanged="PickDimension" Options="DimensionOptions" />
+        <KpiField Caption="Measure" Value="@Measure" ValueChanged="MeasureChanged" Options="MeasureOptions" />
+        @* one Year field for both views, so it keeps its place in the folded summary *@
+        <KpiField Caption="Year" Value="@ShownYear.ToString()" ValueChanged="PickYear"
+                  Options="@(IsLender ? LenderYearOptions : YearOptions)" Text="@(ShownYear > 0 ? null : "")" />
+        <KpiField Caption="Quarter" Value="@Quarter.ToString()" ValueChanged="QuarterChanged" Options="QuarterOptions" />
+    </div>
+</KpiMobileFilters>
+
+@if (!Office.ShowsData)
+{
+    <KpiOfficeEmpty />
+}
+else if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else if (IsLender)
+{
+    var l = BuildLenders();
+    if (l is null)
+    {
+        <div class="kpim-card kpim-empty">No figures</div>
+    }
+    else
+    {
+        <section class="kpim-card kpim-ba-lenders">
+            <div class="kpim-ba-lhead">
+                <h2>@Measure by lender · @l.YearLabel</h2>
+                <span>@l.Vs</span>
+            </div>
+            @foreach (var r in l.Top)
+            {
+                <div class="kpim-ba-lrow">
+                    <span class="kpim-ba-rank">@r.Rank</span>
+                    <div class="kpim-ba-lmain">
+                        <span class="kpim-ba-lname">@r.Name</span>
+                        <div class="kpim-ba-track"><div class="kpim-ba-fill" style="width:@r.Width%"></div></div>
+                    </div>
+                    <span class="kpim-ba-value">@Money(r.Value)</span>
+                    @Pill(r.Change, "kpim-ba-chip", 8)
+                </div>
+            }
+            @if (l.HasOthers)
+            {
+                <div class="kpim-ba-lrow kpim-ba-others">
+                    <span class="kpim-ba-rank"></span>
+                    <span class="kpim-ba-lname">Others</span>
+                    <span class="kpim-ba-value">@Money(l.Others)</span>
+                    <span class="kpim-ba-gap"></span>
+                </div>
+            }
+            <div class="kpim-ba-ltotal"><span>Total</span><span>@l.Total</span></div>
+        </section>
+    }
+}
+else
+{
+    var d = BuildDimensions();
+    if (d is null)
+    {
+        <div class="kpim-card kpim-empty">No figures</div>
+    }
+    else
+    {
+        <section class="kpim-card kpim-ba-summary">
+            <div class="kpim-ba-donut">
+                <svg viewBox="0 0 124 124" width="124" height="124" aria-hidden="true">
+                    @if (d.Slices.Count == 0)
+                    {
+                        <circle cx="62" cy="62" r="51" class="kpim-ba-ring kpim-ba-ring-empty"></circle>
+                    }
+                    @foreach (var s in d.Slices)
+                    {
+                        <circle cx="62" cy="62" r="51" class="kpim-ba-ring kpim-ba-c@(s.Colour)"
+                                stroke-dasharray="@s.Dash" stroke-dashoffset="@s.Offset" transform="rotate(-90 62 62)"></circle>
+                    }
+                </svg>
+                <div class="kpim-ba-centre">
+                    <span class="kpim-ba-centre-total">@Money(d.Total)</span>
+                    <span class="kpim-ba-centre-label">@d.CentreLabel</span>
+                </div>
+            </div>
+            <div class="kpim-ba-sumtext">
+                <span class="kpim-ba-caption">@Measure by @Dimension.ToLowerInvariant()</span>
+                <span class="kpim-ba-against">@d.Against</span>
+                @Pill(d.Change, "kpim-ba-big", 10)
+            </div>
+        </section>
+
+        <section class="kpim-card kpim-ba-list">
+            @foreach (var it in d.Items)
+            {
+                var isOpen = it.Name == d.OpenName;
+                <div class="kpim-ba-item @(isOpen ? "kpim-ba-open" : "")">
+                    <button type="button" class="kpim-ba-row" aria-expanded="@(isOpen ? "true" : "false")"
+                            @onclick="() => Toggle(it.Name, isOpen)">
+                        <span class="kpim-ba-swatch kpim-ba-c@(it.Colour)"></span>
+                        <span class="kpim-ba-name">@it.Name</span>
+                        <span class="kpim-ba-value">@Money(it.Now)</span>
+                        <span class="kpim-ba-share">@it.Share%</span>
+                        @Pill(it.Change, "kpim-ba-chip", 8)
+                    </button>
+                    @if (isOpen)
+                    {
+                        <div class="kpim-ba-detail">
+                            <div class="kpim-ba-trendhead"><span>8-year trend</span><span>peak @Money(it.Peak)</span></div>
+                            <div class="kpim-ba-bars">
+                                @foreach (var b in it.Bars)
+                                {
+                                    <div class="kpim-ba-bar @(b.Part ? "kpim-ba-bar-part" : "")" style="height:@(b.Height)%"></div>
+                                }
+                            </div>
+                            <div class="kpim-ba-years">
+                                @foreach (var b in it.Bars)
+                                {
+                                    <span>@b.Label</span>
+                                }
+                            </div>
+                            <span class="kpim-ba-detailtext">@it.Detail</span>
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+    }
+}
+
+@code {
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string Dimension { get; set; } = "Profession";
+    [Parameter] public string Measure { get; set; } = "AF";
+    [Parameter] public int Year { get; set; }
+    [Parameter] public int Quarter { get; set; }     // 0 = all
+
+    /// <summary>The dimension view's years, newest first (the full view's Year list).</summary>
+    [Parameter] public IReadOnlyList<int> Years { get; set; } = Array.Empty<int>();
+    [Parameter] public IReadOnlyList<BusinessAnalysisRow> Rows { get; set; } = Array.Empty<BusinessAnalysisRow>();
+
+    /// <summary>The dimension values in the full view's table order.</summary>
+    [Parameter] public IReadOnlyList<string> Dims { get; set; } = Array.Empty<string>();
+
+    [Parameter] public IReadOnlyList<BusinessAnalysisLenderRow> LenderRows { get; set; } = Array.Empty<BusinessAnalysisLenderRow>();
+
+    /// <summary>The full view's four lender cards, oldest first.</summary>
+    [Parameter] public IReadOnlyList<int> LenderYears { get; set; } = Array.Empty<int>();
+
+    /// <summary>Lenders listed by name on a card; the rest are Others (the full view's row slots).</summary>
+    [Parameter] public int TopLenders { get; set; } = 15;
+
+    /// <summary>The business date the figures run to (WebKPI.fnReportDate).</summary>
+    [Parameter] public DateTime? ReportDate { get; set; }
+
+    /// <summary>The Sales Office was changed here - the page's handler, so the page re-renders too.</summary>
+    [Parameter] public EventCallback OfficeChanged { get; set; }
+
+    [Parameter] public EventCallback<string> DimensionChanged { get; set; }
+    [Parameter] public EventCallback<string> MeasureChanged { get; set; }
+    [Parameter] public EventCallback<string> YearChanged { get; set; }
+    [Parameter] public EventCallback<string> QuarterChanged { get; set; }
+
+    private string? _open;      // the dimension row opened to its trend: null = the first, "" = none
+    private int? _lenderYear;   // the lender card shown: null = the latest
+
+    private const string LenderDimension = "Lender";
+    private bool IsLender => Dimension == LenderDimension;
+
+    private static readonly KpiOption[] DimensionOptions =
+    {
+        new("Profession", "Profession"), new("Facility", "Facility"), new("Arrangement", "Arrangement"),
+        new("Division", "Division"), new(LenderDimension, LenderDimension)
+    };
+    private static readonly KpiOption[] MeasureOptions = { new("AF", "AF"), new("TFI", "TFI") };
+    private static readonly KpiOption[] QuarterOptions =
+    {
+        new("0", "All"), new("1", "Q1"), new("2", "Q2"), new("3", "Q3"), new("4", "Q4")
+    };
+
+    // The chosen year is listed even when the quarter's data has none, so the picker shows it.
+    private List<KpiOption> YearOptions =>
+        Years.Concat(Year > 0 ? new[] { Year } : Array.Empty<int>())
+             .Distinct().OrderByDescending(y => y)
+             .Select(y => new KpiOption(y.ToString(), y.ToString())).ToList();
+
+    private int LenderYear =>
+        _lenderYear is int y && LenderYears.Contains(y) ? y : LenderYears.LastOrDefault();
+
+    private List<KpiOption> LenderYearOptions =>
+        LenderYears.Reverse().Select(y => new KpiOption(y.ToString(), y.ToString())).ToList();
+
+    private async Task PickDimension(string value)
+    {
+        _open = null;
+        await DimensionChanged.InvokeAsync(value);
+    }
+
+    // The Year field: the lender card shown, or the dimension view's year (the page's handler)
+    private int ShownYear => IsLender ? LenderYear : Year;
+
+    private async Task PickYear(string value)
+    {
+        if (!IsLender) { await YearChanged.InvokeAsync(value); return; }
+        if (int.TryParse(value, out var y)) _lenderYear = y;
+    }
+
+    private void Toggle(string name, bool isOpen) => _open = isOpen ? "" : name;
+
+    // ---- the report date: the current year runs only to it ----
+    private DateTime AsAt => ReportDate ?? DateTime.Today;
+    private int ReportYear => AsAt.Year;
+    // a quarter before the report date's is complete, so its "to date" figure is the whole quarter
+    private bool Partial => Quarter == 0 || Quarter == (AsAt.Month + 2) / 3;
+    private string Per(int y) => Quarter > 0 ? $"Q{Quarter} {y}" : y.ToString();
+    private static readonly string[] MonthNames =
+        { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+    private string AsAtShort => $"{AsAt.Day} {MonthNames[AsAt.Month - 1]}";
+
+    // ---- a dimension ----
+    private sealed record Slice(int Colour, string Dash, string Offset);
+    private sealed record TrendBar(string Label, int Height, bool Part);
+    private sealed record DimItem(string Name, int Colour, decimal Now, int Share, Change Change,
+                                  decimal Peak, List<TrendBar> Bars, string Detail);
+    private sealed record DimView(List<DimItem> Items, string? OpenName, List<Slice> Slices, decimal Total,
+                                  string CentreLabel, string Against, Change Change);
+
+    private const int SeriesColours = 8;     // kpim-ba-c0 .. c7
+    private const double Ring = 2 * Math.PI * 51;
+
+    private DimView? BuildDimensions()
+    {
+        if (Dims.Count == 0) return null;
+
+        var cell = new Dictionary<(int, string), BusinessAnalysisRow>();
+        foreach (var r in Rows) cell.TryAdd((r.Yr, r.DimValue), r);
+        decimal Full(int y, string dim) => cell.TryGetValue((y, dim), out var r) ? r.FullTotal : 0m;
+        decimal Ytd(int y, string dim) => cell.TryGetValue((y, dim), out var r) ? r.YtdTotal : 0m;
+
+        var current = Year == ReportYear;
+        var paler = current && Partial;            // the report year's trend bar while it is part way
+        var trendYears = Enumerable.Range(Year - 7, 8).ToList();
+        var total = Dims.Select(dim => Full(Year, dim)).Where(v => v > 0).Sum();
+
+        // donut: each value's full total for the year, clockwise from the top, coloured as its row
+        var slices = new List<Slice>();
+        double from = 0;
+        for (var i = 0; i < Dims.Count; i++)
+        {
+            var now = Full(Year, Dims[i]);
+            if (now <= 0) continue;
+            var len = (double)(now / total) * Ring;
+            slices.Add(new Slice(i % SeriesColours, Num(len) + " " + Num(Ring), Num(-from)));
+            from += len;
+        }
+
+        var items = Dims.Select((dim, i) =>
+        {
+            var now = Full(Year, dim);
+            var trend = trendYears.Select(y => Full(y, dim)).ToList();
+            var peak = Math.Max(trend.Max(), 0.01m);
+            var prevAll = $"All of {Per(Year - 1)} {Money(Full(Year - 1, dim))}";
+            var detail = !Partial ? prevAll
+                : current ? $"{prevAll} · {Per(Year - 1)} to this date {Money(Ytd(Year - 1, dim))}"
+                : $"{prevAll} · {Per(Year - 1)} to {AsAtShort} {Money(Ytd(Year - 1, dim))} · {Per(Year)} to {AsAtShort} {Money(Ytd(Year, dim))}";
+            return new DimItem(
+                dim, i % SeriesColours, now,
+                total == 0 ? 0 : (int)Math.Round(100m * now / total),
+                Versus(Ytd(Year - 1, dim), Ytd(Year, dim)),
+                peak,
+                trend.Select((v, j) => new TrendBar(
+                    "’" + (trendYears[j] % 100).ToString("00"),
+                    Math.Max(2, (int)Math.Round(v / peak * 100m, MidpointRounding.AwayFromZero)),
+                    j == 7 && paler)).ToList(),
+                detail);
+        }).ToList();
+
+        var centre = current
+            ? (Quarter > 0 ? (Partial ? $"Q{Quarter} to date" : Per(Year)) : $"{Year} to date")
+            : (Quarter > 0 ? Per(Year) : $"All of {Year}");
+
+        return new DimView(
+            items, _open ?? items[0].Name, slices, total, centre,
+            "vs " + Per(Year - 1) + (Partial ? " YTD" : ""),
+            Versus(Dims.Sum(dim => Ytd(Year - 1, dim)), Dims.Sum(dim => Ytd(Year, dim))));
+    }
+
+    // ---- Lender ----
+    private sealed record LenderLine(int Rank, string Name, decimal Value, string Width, Change Change);
+    private sealed record LenderView(string YearLabel, string Vs, List<LenderLine> Top, bool HasOthers,
+                                     decimal Others, string Total);
+
+    private LenderView? BuildLenders()
+    {
+        if (LenderYears.Count == 0) return null;
+        var yr = LenderYear;
+
+        var list = LenderRows.Where(r => r.Yr == yr).OrderByDescending(r => r.Value).ToList();
+        var top = list.Take(TopLenders).ToList();
+        var rest = list.Skip(TopLenders).ToList();
+        var max = top.Count > 0 ? top[0].Value : 0m;
+        var sum = list.Sum(r => r.Value);
+
+        return new LenderView(
+            Per(yr),
+            "vs " + Per(yr - 1) + (yr == ReportYear && Partial ? " YTD" : ""),
+            top.Select((r, i) => new LenderLine(
+                i + 1, r.Lender, r.Value,
+                Num(max > 0 ? Math.Max(1d, (double)(r.Value / max) * 100) : 1d, "0.0"),
+                // no row the year before: a new lender; rows but none by this date: a dash
+                r.PrevValue is null ? NewChange : r.PrevValue == 0m ? NoChange : Versus(r.PrevValue.Value, r.Value)))
+               .ToList(),
+            rest.Count > 0,
+            rest.Sum(r => r.Value),
+            (sum < 0 ? "−" : "") + "£" + Math.Round(Math.Abs(sum), MidpointRounding.AwayFromZero).ToString("N0"));
+    }
+
+    // ---- change pills ----
+    private sealed record Change(string Text, bool Up, bool Down);
+    private static readonly Change NewChange = new("New", false, false);
+    private static readonly Change NoChange = new("–", false, false);
+
+    // The % change, whole numbers (as the full view's lender column); nothing to compare = "New".
+    private static Change Versus(decimal prev, decimal now)
+    {
+        if (prev == 0m) return NewChange;
+        var pct = (now - prev) / Math.Abs(prev) * 100m;
+        var up = pct >= 0;
+        return new Change((up ? "+" : "−") + Math.Round(Math.Abs(pct), MidpointRounding.AwayFromZero).ToString("0") + "%", up, !up);
+    }
+
+    private RenderFragment Pill(Change c, string size, int arrow) => __builder =>
+    {
+        <span class="kpim-pill @size @(c.Up ? "kpim-up" : c.Down ? "kpim-down" : "kpim-ba-flat")">
+            @if (c.Up)
+            {
+                <svg width="@arrow" height="@arrow" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1.5 9 8.5H1z" fill="currentColor"></path></svg>
+            }
+            @if (c.Down)
+            {
+                <svg width="@arrow" height="@arrow" viewBox="0 0 10 10" aria-hidden="true"><path d="M1 1.5h8L5 8.5z" fill="currentColor"></path></svg>
+            }
+            @c.Text
+        </span>
+    };
+
+    // ---- formats ----
+    // Short money for a phone line: £48.2m, £257k, £950; a negative leads with a minus.
+    private static string Money(decimal v)
+    {
+        var a = Math.Abs(v);
+        var sign = v < 0 ? "−" : "";
+        if (a >= 1_000_000m) return sign + "£" + (a / 1_000_000m).ToString("0.0", CultureInfo.InvariantCulture) + "m";
+        if (a >= 1_000m) return sign + "£" + Math.Round(a / 1_000m, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture) + "k";
+        return sign + "£" + Math.Round(a, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture);
+    }
+
+    private static string Num(double v, string format = "0.###") => v.ToString(format, CultureInfo.InvariantCulture);
+}

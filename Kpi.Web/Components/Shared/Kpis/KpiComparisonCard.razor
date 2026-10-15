@@ -1,0 +1,99 @@
+@* Generic KPI comparison card: a titled card with a table of labelled rows across N period
+   columns (e.g. years), each value optionally carrying an up/down mark vs the previous column.
+   Presentation only — the caller supplies the columns and rows already computed. Used by
+   Sales Productivity (a card per salesperson, four year columns); designed to be reused by other
+   "metric × period" comparison screens.
+
+   The marks are the phone's: a small triangle after the figure, pointing up (blue) or down (amber),
+   nothing when unchanged - the triangle's direction carries the change, colour only reinforces it.
+   Badge puts a short mark in a disc before the title (a salesperson's initials); HighlightLast shades
+   the last column, the newest period. *@
+
+<div class="ss-card kcc-card @CardCssClass">
+    <div class="ss-card-head @(Badge is null ? "" : "kcc-head-badged")">
+        @if (Badge is not null)
+        {
+            <span class="kcc-badge" aria-hidden="true">@Badge</span>
+        }
+        <span>@Title</span>
+    </div>
+    <table class="kcc-table">
+        <thead>
+            <tr>
+                <th class="kcc-lbl">@HeaderLabel</th>
+                @for (var i = 0; i < Columns.Count; i++)
+                {
+                    <th class="kcc-num @(IsNow(i) ? "kcc-now" : "")">@Columns[i]</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Rows)
+            {
+                if (row.IsSpacer)
+                {
+                    <tr class="kcc-spacer"><td colspan="@(Columns.Count + 1)"></td></tr>
+                    continue;
+                }
+                <tr class="@(row.Strong ? "kcc-headrow" : "")">
+                    <td class="kcc-lbl @(row.Indent ? "kcc-indent" : "") @(row.Muted ? "kcc-muted" : "")">@row.Label</td>
+                    @for (var i = 0; i < Columns.Count; i++)
+                    {
+                        var v = i < row.Cells.Count ? row.Cells[i] : null;
+                        var prev = i > 0 && (i - 1) < row.Cells.Count ? row.Cells[i - 1] : null;
+                        <td class="kcc-num @(row.Strong ? "kcc-strong" : "") @(row.Muted ? "kcc-muted" : "") @(IsNow(i) ? "kcc-now" : "")">@(v?.Text ?? "")@(row.ShowTrend ? Mark(v, prev) : null)</td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    /// <summary>A single cell: the display Text, and an optional numeric Trend used to compare
+    /// against the previous column for the mark (leave null on rows that shouldn't show a trend).</summary>
+    public sealed record Cell(string Text, decimal? Trend = null);
+
+    /// <summary>A row of the card. Spacer rows draw a gap; Strong rows are the bold section headers;
+    /// Indent/Muted style the label; ShowTrend turns on the per-cell marks vs the previous column.</summary>
+    public sealed class Row
+    {
+        public string Label { get; init; } = "";
+        public List<Cell> Cells { get; init; } = new();
+        public bool ShowTrend { get; init; }
+        public bool Strong { get; init; }
+        public bool Indent { get; init; }
+        public bool Muted { get; init; }
+        public bool IsSpacer { get; init; }
+
+        public static Row Spacer() => new() { IsSpacer = true };
+    }
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string HeaderLabel { get; set; } = "";
+    [Parameter, EditorRequired] public List<string> Columns { get; set; } = new();
+    [Parameter, EditorRequired] public List<Row> Rows { get; set; } = new();
+    [Parameter] public string? CardCssClass { get; set; }
+
+    /// <summary>A short mark shown in a disc before the title (e.g. a salesperson's initials).</summary>
+    [Parameter] public string? Badge { get; set; }
+
+    /// <summary>Shade the last column - the newest period - as the phone views do.</summary>
+    [Parameter] public bool HighlightLast { get; set; }
+
+    private bool IsNow(int i) => HighlightLast && i == Columns.Count - 1;
+
+    // the up / down triangle after a figure; nothing when either side is missing or they are equal
+    private static RenderFragment Mark(Cell? v, Cell? prev) => __builder =>
+    {
+        if (v?.Trend is not decimal now || prev?.Trend is not decimal before || now == before) return;
+        if (now > before)
+        {
+            <svg class="kcc-tri kcc-up" width="8" height="8" viewBox="0 0 10 10" role="img" aria-label="up on the period before"><path d="M5 1.5 9 8.5H1z" fill="currentColor"></path></svg>
+        }
+        else
+        {
+            <svg class="kcc-tri kcc-down" width="8" height="8" viewBox="0 0 10 10" role="img" aria-label="down on the period before"><path d="M1 1.5h8L5 8.5z" fill="currentColor"></path></svg>
+        }
+    };
+}

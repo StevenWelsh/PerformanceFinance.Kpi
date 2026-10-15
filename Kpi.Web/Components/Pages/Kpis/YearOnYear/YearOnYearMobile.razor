@@ -1,0 +1,295 @@
+@using System.Globalization
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
+
+@* Year on Year on a phone, from the page's own rows, filters and load. Portrait: the year-to-date summary,
+   then the periods and the total for the page's current filters (the filters are in landscape).
+   Landscape: the Sales Office and the five filters, folding away, then the table as the full view builds
+   it - the periods, Total OB and Total Brokered, the grand total, the year-on-year % row and the YTD
+   column - its header fixed while the rows scroll under it. Both show the last four years. A sales office with no
+   figures shows KpiOfficeEmpty in their place (portrait has no filters and follows the choice). *@
+
+@if (Landscape)
+{
+    @* a row of its own, so the folding box fills the width (not the height) of the landscape column *@
+    <div class="kpim-yoy-fbar">
+        <KpiMobileFilters Compact="true">
+            <div class="kpim-filters kpim-compact" style="--kpim-cols:6">
+                <KpiOfficeField Changed="OfficeChanged" />
+                <KpiField Caption="Division" Value="@DivisionId.ToString(Inv)" ValueChanged="DivisionChanged" Options="_divisionOptions" />
+                <KpiField Caption="Salesperson" Value="@SalespersonId.ToString(Inv)" ValueChanged="SalespersonChanged" Options="_salespersonOptions" />
+                <KpiField Caption="Measure" Value="@Measure" ValueChanged="MeasureChanged" Options="MeasureOptions" />
+                <KpiField Caption="Interval" Value="@Interval" ValueChanged="IntervalChanged" Options="IntervalOptions" />
+                <KpiField Caption="Arrangement" Value="@(Arrangement ?? "")" ValueChanged="ArrangementChanged" Options="_arrangementOptions" />
+            </div>
+        </KpiMobileFilters>
+    </div>
+
+    @if (!Office.ShowsData)
+    {
+        <KpiOfficeEmpty />
+    }
+    else if (Error is not null)
+    {
+        <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+    }
+    else if (Years.Count == 0 && Loading)
+    {
+        <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+    }
+    else
+    {
+        <section class="kpim-card kpim-fill kpim-yoy-land @Busy" aria-label="Year on Year Comparison - @Measure">
+            @if (Years.Count == 0)
+            {
+                <div class="kpim-yoy-empty">No business for these filters.</div>
+            }
+            else
+            {
+                <div class="kpim-yoy-scroll">
+                    <table class="kpim-yoy-table">
+                        @HeadRow($"{_cur} vs {_cur - 1} YTD")
+                        <tbody>
+                            @PeriodRows()
+                            <tr class="kpim-yoy-sub">
+                                <th scope="row">Total OB</th>
+                                @foreach (var y in _shown)
+                                {
+                                    <td class="@CurCss(y)">@Cur(Sum(y, r => r.TotalOB))</td>
+                                }
+                                <td>–</td>
+                            </tr>
+                            <tr class="kpim-yoy-sub">
+                                <th scope="row">Total Brokered</th>
+                                @foreach (var y in _shown)
+                                {
+                                    <td class="@CurCss(y)">@Cur(Sum(y, r => r.TotalBrokered))</td>
+                                }
+                                <td>–</td>
+                            </tr>
+                            <tr class="kpim-yoy-grand">
+                                <th scope="row">Total (OB + Brokered)</th>
+                                @foreach (var y in _shown)
+                                {
+                                    <td class="@CurCss(y)">@Cur(YearTotal(y))</td>
+                                }
+                                @ChangeCell(_priorMatched, _curTotal, "")
+                            </tr>
+                            <tr class="kpim-yoy-pct">
+                                <th scope="row"></th>
+                                @foreach (var y in _shown)
+                                {
+                                    @ChangeCell(YearTotal(y - 1), YearTotal(y), CurCss(y))
+                                }
+                                <td></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    }
+}
+else
+{
+    @if (!Office.ShowsData)
+    {
+        <KpiOfficeEmpty />
+    }
+    else if (Error is not null)
+    {
+        <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+    }
+    else if (Years.Count == 0 && Loading)
+    {
+        <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+    }
+    else
+    {
+        <section class="kpim-card kpim-yoy-hero @Busy">
+            <div class="kpim-yoy-hero-head">
+                <h2>@(Years.Count > 0 ? $"{Measure} {_cur} to date" : $"{Measure} to date")</h2>
+                @if (Years.Count > 0 && Change(_priorMatched, _curTotal) is Delta d)
+                {
+                    <span class="kpim-pill kpim-yoy-pill @(d.Up ? "kpim-up" : "kpim-down")">
+                        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                            <path d="@(d.Up ? "M5 1.5 9 8.5H1z" : "M1 1.5h8L5 8.5z")" fill="currentColor"></path>
+                        </svg>
+                        @d.Text
+                    </span>
+                }
+            </div>
+            @if (Years.Count > 0)
+            {
+                <div class="kpim-yoy-now">@Cur(_curTotal)</div>
+                @if (_hasCurPeriods)
+                {
+                    <div class="kpim-yoy-prev">@(_cur - 1) YTD: @Cur(_priorMatched)</div>
+                }
+            }
+            else
+            {
+                <div class="kpim-yoy-none">No business for these filters.</div>
+            }
+        </section>
+
+        @if (Years.Count > 0)
+        {
+            <section class="kpim-card kpim-yoy-tablecard @Busy">
+                <h2 class="kpim-yoy-title">@Measure by @(_quarter ? "quarter" : "month")</h2>
+                <div class="kpim-yoy-xscroll">
+                    <table class="kpim-yoy-table">
+                        @HeadRow($"vs {_cur - 1} YTD")
+                        <tbody>
+                            @PeriodRows()
+                            <tr class="kpim-yoy-total">
+                                <th scope="row">Total</th>
+                                @foreach (var y in _shown)
+                                {
+                                    <td class="@CurCss(y)">@Cur(YearTotal(y))</td>
+                                }
+                                @ChangeCell(_priorMatched, _curTotal, "")
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+    }
+}
+
+@code {
+    /// <summary>Renders the landscape view (filters and the full table) in place of the portrait summary.</summary>
+    [Parameter] public bool Landscape { get; set; }
+
+    [Parameter] public string Measure { get; set; } = "AF";
+    [Parameter] public IReadOnlyList<YearOnYearRow> Rows { get; set; } = Array.Empty<YearOnYearRow>();
+    [Parameter] public IReadOnlyList<int> Years { get; set; } = Array.Empty<int>();
+    [Parameter] public IReadOnlyList<int> Periods { get; set; } = Array.Empty<int>();
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    // The landscape filters: the page's own state, and its own handlers (each reloads as the full view's select does).
+    [Parameter] public int DivisionId { get; set; } = -1;
+    [Parameter] public int SalespersonId { get; set; } = -1;
+    [Parameter] public string Interval { get; set; } = "Month";
+    [Parameter] public string? Arrangement { get; set; }
+    [Parameter] public IReadOnlyList<(int Id, string Name)> Divisions { get; set; } = Array.Empty<(int, string)>();
+    [Parameter] public IReadOnlyList<(int Id, string Name)> Salespeople { get; set; } = Array.Empty<(int, string)>();
+    [Parameter] public IReadOnlyList<string> Arrangements { get; set; } = Array.Empty<string>();
+    [Parameter] public EventCallback<string> DivisionChanged { get; set; }
+    [Parameter] public EventCallback<string> SalespersonChanged { get; set; }
+    [Parameter] public EventCallback<string> MeasureChanged { get; set; }
+    [Parameter] public EventCallback<string> IntervalChanged { get; set; }
+    [Parameter] public EventCallback<string> ArrangementChanged { get; set; }
+
+    /// <summary>After a Sales Office choice on the landscape filters: the page re-renders (full view and phone).</summary>
+    [Parameter] public EventCallback OfficeChanged { get; set; }
+
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    private static readonly KpiOption[] MeasureOptions = { new("AF", "AF"), new("TFI", "TFI") };
+    private static readonly KpiOption[] IntervalOptions = { new("Month", "Month"), new("Quarter", "Quarter") };
+    private static readonly string[] Months =
+        { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
+
+    private List<KpiOption> _divisionOptions = new();
+    private List<KpiOption> _salespersonOptions = new();
+    private List<KpiOption> _arrangementOptions = new();
+
+    private int _cur;                  // the current year: the latest year in the rows, as the full view
+    private List<int> _shown = new();  // the last four years
+    private bool _quarter;
+    private decimal _curTotal;
+    private decimal _priorMatched;     // the prior year over the periods the current year has figures for
+    private bool _hasCurPeriods;
+
+    private string Busy => Loading && Years.Count > 0 ? "kpim-yoy-busy" : "";
+
+    protected override void OnParametersSet()
+    {
+        _divisionOptions = Divisions.Select(d => new KpiOption(d.Id.ToString(Inv), d.Name))
+            .Prepend(new KpiOption("-1", "All")).ToList();
+        _salespersonOptions = Salespeople.Select(s => new KpiOption(s.Id.ToString(Inv), s.Name))
+            .Prepend(new KpiOption("-1", "All")).ToList();
+        _arrangementOptions = Arrangements.Select(a => new KpiOption(a, a))
+            .Prepend(new KpiOption("", "All")).ToList();
+
+        _quarter = Periods.Count == 4;
+        _shown = Years.Skip(Math.Max(0, Years.Count - 4)).ToList();
+        _cur = Years.Count > 0 ? Years.Max() : 0;
+
+        // as the full view's GrandYtdDelta
+        var curPeriods = Rows.Where(r => r.Year == _cur && r.Total != 0m).Select(r => r.Period).ToHashSet();
+        _curTotal = Rows.Where(r => r.Year == _cur).Sum(r => r.Total);
+        _priorMatched = Rows.Where(r => r.Year == _cur - 1 && curPeriods.Contains(r.Period)).Sum(r => r.Total);
+        _hasCurPeriods = curPeriods.Count > 0;
+    }
+
+    private decimal Cell(int year, int period)
+        => Rows.FirstOrDefault(r => r.Year == year && r.Period == period)?.Total ?? 0m;
+
+    private decimal YearTotal(int year) => Rows.Where(r => r.Year == year).Sum(r => r.Total);
+
+    private decimal Sum(int year, Func<YearOnYearRow, decimal> pick) => Rows.Where(r => r.Year == year).Sum(pick);
+
+    private string CurCss(int year) => year == _cur ? "kpim-yoy-cur" : "";
+
+    private string PeriodName(int p) => _quarter ? $"Q{p}" : Months[p - 1];
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+
+    private readonly record struct Delta(string Text, bool Up);
+
+    // (now - prior) / |prior| x 100 to 2dp, as the full view's DeltaCell; none when either is zero.
+    // Signed on the phone: + for up, − for down.
+    private static Delta? Change(decimal prior, decimal now)
+    {
+        if (prior == 0m || now == 0m) return null;
+        var pct = (now - prior) / Math.Abs(prior) * 100m;
+        var up = pct >= 0;
+        var digits = Math.Abs(pct).ToString("N2");
+        return new Delta((up ? "+" : digits == "0.00" ? "" : "−") + digits + "%", up);
+    }
+
+    private RenderFragment ChangeCell(decimal prior, decimal now, string css) => __builder =>
+    {
+        if (Change(prior, now) is Delta d)
+        {
+            <td class="@css kpim-yoy-chg @(d.Up ? "kpim-up" : "kpim-down")">@d.Text @(d.Up ? "▲" : "▼")</td>
+        }
+        else
+        {
+            <td class="@css">–</td>
+        }
+    };
+
+    private RenderFragment HeadRow(string ytdHead) => __builder =>
+    {
+        <thead>
+            <tr>
+                <th scope="col">@(_quarter ? "Quarter" : "Month")</th>
+                @foreach (var y in _shown)
+                {
+                    <th scope="col" class="@CurCss(y)">@y</th>
+                }
+                <th scope="col">@ytdHead</th>
+            </tr>
+        </thead>
+    };
+
+    // a row per period; its YTD compares it with the same period a year earlier (the full view's YtdDelta)
+    private RenderFragment PeriodRows() => __builder =>
+    {
+        foreach (var p in Periods)
+        {
+            <tr>
+                <th scope="row">@PeriodName(p)</th>
+                @foreach (var y in _shown)
+                {
+                    <td class="@CurCss(y)">@Cur(Cell(y, p))</td>
+                }
+                @ChangeCell(Cell(_cur - 1, p), Cell(_cur, p), "")
+            </tr>
+        }
+    };
+}

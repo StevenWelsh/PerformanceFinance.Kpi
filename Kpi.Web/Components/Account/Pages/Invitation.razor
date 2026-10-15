@@ -1,0 +1,52 @@
+@page "/account/invitation"
+@layout EmptyLayout
+@using Kpi.Data.Auth
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<KpiUser> Users
+@inject Kpi.Web.Account.AccountLinks Links
+
+<PageTitle>Accept your invitation — Performance Finance KPIs</PageTitle>
+
+@* Opening the link only LOOKS (mail scanners open links first); the form does it. *@
+<AuthCard Title="Welcome">
+    @if (_user is null)
+    {
+        <Messages Notice="This link can't be used: it may have expired, been used, or been replaced by a newer one. Ask your System Admin to send the invitation again." />
+    }
+    else
+    {
+        <Messages Error="@ErrorText" />
+        <p class="acc-text">Hello @_user.DisplayName. Choose a password for <b>@_user.Email</b>; next you'll set up an authenticator app on your phone.</p>
+        <form method="post" action="/account/invitation">
+            <AntiforgeryToken />
+            <input type="hidden" name="userId" value="@UserId" />
+            <input type="hidden" name="code" value="@Code" />
+            <PasswordInput Id="password" Name="password" Label="New password" Autocomplete="new-password" />
+            <PasswordInput Id="confirm" Name="confirmPassword" Label="Confirm password" Autocomplete="new-password" />
+            <p class="acc-hint">@Messages.PasswordRules</p>
+            <button type="submit" class="login-button">Continue</button>
+        </form>
+    }
+</AuthCard>
+
+@code {
+    [SupplyParameterFromQuery] public string? UserId { get; set; }
+    [SupplyParameterFromQuery] public string? Code { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+
+    private KpiUser? _user;
+
+    private string? ErrorText => Error switch
+    {
+        "match" => "Those passwords don't match.",
+        "rules" => "That password isn't strong enough. " + Messages.PasswordRules,
+        _ => null
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(UserId)) return;
+        var user = await Users.FindByIdAsync(UserId);
+        if (user is not null && Kpi.Web.Account.AccountEndpoints.InvitationUsable(user, Code, Links)) _user = user;
+    }
+}

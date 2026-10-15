@@ -1,0 +1,214 @@
+@using Microsoft.AspNetCore.Hosting
+@implements IAsyncDisposable
+@inject IWebHostEnvironment Env
+@inject Kpi.Web.Data.Kpis.KpiScripts Scripts
+@inject IJSRuntime JS
+@inject Kpi.Web.Data.Kpis.KpiRefreshStatus RefreshStatus
+@inject Kpi.Web.Data.Kpis.KpiFavourites Favourites
+@inject Kpi.Web.Data.Kpis.KpiDataStatus DataStatus
+
+@* The PHONE view of a KPI report. Every KPI page renders it beside its full view (.kpi-shell);
+   wwwroot/css/kpi.css shows exactly one of the two, so a tablet or desktop is untouched and
+   turning the phone swaps ChildContent (portrait) for Landscape with no round trip. The page keeps
+   loading and refreshing its data exactly as before - the full view's KpiPanel stays in the tree,
+   hidden - and hands the same fields to its phone markup.
+
+   The stylesheet is linked from here, so only KPI screens ever load it - and as every KPI page renders this,
+   it also carries the full view's KPI look (its "Full view" section). The inline display:none keeps
+   this hidden until the sheet arrives (the sheet's phone rule overrides it with !important).
+
+   Whether the phone view is showing is cascaded as "KpiPhone" (KpiMobile.razor.js watches the same
+   media query as the sheet), so a phone part that loads its own figures does so only on a phone and a
+   desktop never pays for the hidden view. *@
+
+<HeadContent>
+    <link rel="stylesheet" href="css/kpi.css?v=@CssVersion" />
+</HeadContent>
+
+<CascadingValue Name="KpiPhone" Value="_isPhone">
+<div class="kpim @(Landscape is null ? "" : "kpim-has-land")" style="display: none">
+    @if (MenuPage)
+    {
+        <KpiMobileMenu AsPage="true" />
+    }
+    else
+    {
+        <header class="kpim-bar">
+            <button type="button" class="kpim-bar-btn" aria-label="Reports menu" @onclick="() => _menuOpen = true">
+                <i class="bi bi-list" aria-hidden="true"></i>
+            </button>
+            <h1>@Title</h1>
+            @if (Favourites.Loaded && !string.IsNullOrEmpty(Active))
+            {
+                @* adds or removes the report on screen from the menu's favourites *@
+                var fav = Favourites.Contains(Active);
+                <button type="button" class="kpim-bar-btn kpim-bar-star @(fav ? "kpim-on" : "")" aria-pressed="@(fav ? "true" : "false")"
+                        aria-label="@(fav ? $"Remove {Title} from favourites" : $"Add {Title} to favourites")"
+                        @onclick="() => Favourites.ToggleAsync(Active)">
+                    <i class="bi @(fav ? "bi-star-fill" : "bi-star")" aria-hidden="true"></i>
+                </button>
+            }
+            @* top right, as the full view's date line: the business date, then when the figures were fetched -
+               a spinner while they load or refresh (KpiPanel's 10-minute refresh, through KpiRefreshStatus) *@
+            <div class="kpim-bar-dates">
+                @if (AsAt is not null)
+                {
+                    var status = DataStatus.Get();
+                    var stale = Kpi.Web.Data.Kpis.KpiDataStatus.StaleNote(status);
+                    <span class="@(stale is null ? "" : "kpi-stale")" title="@stale">
+                        @if (stale is not null) { <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> }
+                        As at @Kpi.Web.Data.Kpis.KpiDataStatus.AsAtText(AsAt.Value, status)
+                    </span>
+                }
+                <span class="kpim-refreshed" aria-live="polite">
+                    @if (RefreshStatus.Busy)
+                    {
+                        <span class="kpim-mini-spinner" aria-hidden="true"></span>
+                        <span>@(RefreshStatus.Refreshing ? "Refreshing…" : "Loading…")</span>
+                    }
+                    else if (RefreshStatus.RefreshedOnUtc is DateTime fetched)
+                    {
+                        <span>Refreshed @RefreshedText(fetched)</span>
+                    }
+                </span>
+            </div>
+        </header>
+
+        <div class="kpim-body">
+            <div class="kpim-port">
+                @if (Hint != KpiMobileHint.None)
+                {
+                    <div class="kpim-hint" role="note">
+                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <g class="kpim-lh-phone">
+                                <rect x="8.5" y="2.5" width="7" height="19" rx="1.6"></rect>
+                                <line x1="10.7" y1="18.8" x2="13.3" y2="18.8"></line>
+                            </g>
+                        </svg>
+                        <span>@HintText</span>
+                    </div>
+                }
+                @if (Landscape is null)
+                {
+                    @* a portrait report held sideways: the same strip in reverse (shown by kpi.css in landscape only) *@
+                    <div class="kpim-hint kpim-hint-up" role="note">
+                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <g class="kpim-lh-phone-up">
+                                <rect x="8.5" y="2.5" width="7" height="19" rx="1.6"></rect>
+                                <line x1="10.7" y1="18.8" x2="13.3" y2="18.8"></line>
+                            </g>
+                        </svg>
+                        <span>Best viewed in portrait – turn your phone upright</span>
+                    </div>
+                }
+                @ChildContent
+            </div>
+            @if (Landscape is not null)
+            {
+                <div class="kpim-land">@Landscape</div>
+            }
+        </div>
+
+        @if (_menuOpen)
+        {
+            <button type="button" class="kpim-menu-backdrop" aria-label="Close menu" @onclick="() => _menuOpen = false"></button>
+            <KpiMobileMenu Active="@Active" OnClose="() => _menuOpen = false" />
+        }
+    }
+</div>
+</CascadingValue>
+
+@code {
+    /// <summary>The report's name, as on its full view.</summary>
+    [Parameter] public string Title { get; set; } = "";
+
+    /// <summary>The report's slug, to mark it in the menu (as KpiSidebar's Active).</summary>
+    [Parameter] public string Active { get; set; } = "";
+
+    /// <summary>The business date the figures run to (the page's own as-at).</summary>
+    [Parameter] public DateTime? AsAt { get; set; }
+
+    /// <summary>The landscape hint shown first in portrait, when the report has a landscape view.</summary>
+    [Parameter] public KpiMobileHint Hint { get; set; } = KpiMobileHint.None;
+
+    /// <summary>Portrait content: filters first, then the report.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Landscape content. When set, turning the phone shows this in place of the portrait content.</summary>
+    [Parameter] public RenderFragment? Landscape { get; set; }
+
+    /// <summary>The KPI home: the phone shows the reports menu as the page itself.</summary>
+    [Parameter] public bool MenuPage { get; set; }
+
+    private bool _menuOpen;
+
+    private string HintText => Hint switch
+    {
+        KpiMobileHint.SummaryInPortrait => "Summary in portrait – detail in landscape",
+        KpiMobileHint.LandscapeOnly => "Best viewed in landscape – turn your phone sideways",
+        KpiMobileHint.ChartAndTable => "Turn sideways for the chart and table",
+        _ => ""
+    };
+
+    private bool _isPhone;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<KpiMobile>? _selfRef;
+    private readonly string _id = Guid.NewGuid().ToString("N");
+
+    protected override void OnInitialized()
+    {
+        RefreshStatus.Changed += OnRefreshStatus;
+        Favourites.Changed += OnRefreshStatus;
+    }
+
+    private void OnRefreshStatus() => _ = InvokeAsync(StateHasChanged);
+
+    // "20:39" today, else "12 Oct 20:39" - local time, as the full view's "Refreshed on".
+    private static string RefreshedText(DateTime fetchedUtc)
+    {
+        var local = fetchedUtc.ToLocalTime();
+        return local.Date == DateTime.Now.Date ? local.ToString("HH:mm") : local.ToString("dd MMM HH:mm");
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _module = await JS.InvokeAsync<IJSObjectReference>(
+            "import", Scripts.Url("./Components/Shared/Kpis/Mobile/KpiMobile.razor.js"));
+        _selfRef = DotNetObjectReference.Create(this);
+        SetPhone(await _module.InvokeAsync<bool>("watch", _id, _selfRef));
+    }
+
+    /// <summary>The phone view started or stopped showing (first check, a rotation, a window resize).</summary>
+    [JSInvokable]
+    public void SetPhone(bool isPhone)
+    {
+        if (isPhone == _isPhone) return;
+        _isPhone = isPhone;
+        if (isPhone) _ = Favourites.EnsureLoadedAsync();   // for the bar's star - only a phone shows it
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        RefreshStatus.Changed -= OnRefreshStatus;
+        Favourites.Changed -= OnRefreshStatus;
+        try
+        {
+            if (_module is not null)
+            {
+                await _module.InvokeVoidAsync("unwatch", _id);
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException) { }   // the circuit has gone; nothing left to unhook
+        _selfRef?.Dispose();
+    }
+
+    // The file's write time versions the URL, as App.razor does for app.css.
+    private static string? _cssVersion;
+    private string CssVersion => _cssVersion ??= System.IO.File.GetLastWriteTimeUtc(
+        System.IO.Path.Combine(Env.WebRootPath, "css", "kpi.css")).Ticks.ToString();
+}

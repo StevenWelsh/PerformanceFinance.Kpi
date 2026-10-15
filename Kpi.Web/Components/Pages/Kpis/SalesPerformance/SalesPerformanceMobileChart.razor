@@ -1,0 +1,161 @@
+@using System.Globalization
+
+@* The Sales Target Performance chart on a phone (landscape), for one year: a column per core salesperson
+   with its amount above and the first name (or "Own Book") below, the year target solid and the YTD
+   target dashed across it, on the full view's BuildTargetChart rules - one scale covering the tallest
+   year target too, its nice gridline steps and axis labels (the page's own AxisLabel, NiceStep and
+   FirstName). Tap or hover a column for its detail. The drawing scales to fit the card, the labels keep
+   their size. *@
+
+@if (Bars.Count == 0)
+{
+    <div class="kpim-empty">No salespeople for @Year.</div>
+}
+else
+{
+    <div class="kpim-sp-plot">
+        <div class="kpim-sp-chart">
+            <svg viewBox="0 0 @N(W) @N(H)" role="img" aria-label="@Year - Sales Target Performance">
+                @foreach (var g in _grid)
+                {
+                    <line class="kpim-sp-gl" x1="@N(PadL)" y1="@N(g.Y)" x2="@N(W - PadR)" y2="@N(g.Y)" />
+                }
+                @for (var i = 0; i < _cols.Count; i++)
+                {
+                    var c = _cols[i];
+                    var idx = i;
+                    <rect class="kpim-sp-col @(_tip == i ? "kpim-on" : "")" x="@N(c.Cx - _colW / 2)" y="@N(c.Top)"
+                          width="@N(_colW)" height="@N(Math.Max(0, _baseY - c.Top))" rx="3" pointer-events="none" />
+                    @if (c.YearY is double yearY)
+                    {
+                        <line class="kpim-sp-tick-year" x1="@N(c.Cx - _half)" y1="@N(yearY)" x2="@N(c.Cx + _half)" y2="@N(yearY)" pointer-events="none" />
+                    }
+                    @if (c.YtdY is double ytdY)
+                    {
+                        <line class="kpim-sp-tick-ytd" x1="@N(c.Cx - _half)" y1="@N(ytdY)" x2="@N(c.Cx + _half)" y2="@N(ytdY)" pointer-events="none" />
+                    }
+                    <rect class="kpim-sp-hit" x="@N(c.Cx - _slot / 2)" y="@N(PadT)" width="@N(_slot)" height="@N(PlotH)"
+                          @onclick="() => Pick(idx)" @onmouseenter="() => Pick(idx)" @onmouseleave="HideTip" />
+                }
+            </svg>
+
+            @* labels as text over the chart: the axis amounts, each column's amount above it and the name below *@
+            @foreach (var g in _grid)
+            {
+                <div class="kpim-sp-ax" style="width:@PctX(PadL - 8);top:@PctY(g.Y)">@g.Label</div>
+            }
+            @foreach (var c in _cols)
+            {
+                <div class="kpim-sp-val" style="left:@PctX(c.Cx - _slot / 2);width:@PctX(_slot);top:@PctY(Math.Max(PadT + 12, c.Top - 7) + 3)">@c.Value</div>
+                <div class="kpim-sp-name" style="left:@PctX(c.Cx - _slot / 2);width:@PctX(_slot);top:@PctY(H - PadB + 6)">@c.Name</div>
+            }
+
+            @if (_tip >= 0 && _tip < _cols.Count)
+            {
+                var t = _cols[_tip];
+                var lines = TipLines(Bars[_tip]);
+                var tipH = lines.Count * 18 + 12;
+                var top = Math.Max(4, Math.Min(Y((double)Math.Max(t.Bar.Actual, Math.Max(t.Bar.Year, t.Bar.Ytd))) - 6, H - PadB - tipH));
+                // beside the column: to its right in the left half of the chart, to its left after that
+                var side = t.Cx < W / 2
+                    ? $"left:{PctX(t.Cx + _colW / 2 + 10)}"
+                    : $"right:{PctX(W - (t.Cx - _colW / 2 - 10))}";
+                <div class="kpim-tip" role="tooltip" style="@side;top:@PctY(top)">
+                    @foreach (var l in lines)
+                    {
+                        <div>@l</div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>A column per core salesperson, in league order: the actual and the year / YTD targets (0 = none).</summary>
+    [Parameter] public IReadOnlyList<(string Name, decimal Actual, decimal Year, decimal Ytd)> Bars { get; set; }
+        = Array.Empty<(string, decimal, decimal, decimal)>();
+    [Parameter] public string Measure { get; set; } = "TFI";
+    [Parameter] public int Year { get; set; }
+
+    // the full view's chart rules (SalesPerformance.razor)
+    [Parameter, EditorRequired] public Func<double, string> AxisLabel { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<double, int, double> NiceStep { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<string, string> FirstName { get; set; } = default!;
+
+    // the drawing space, laid out for the phone's landscape card (810 x 230 on an 844 x 390 screen)
+    private const double W = 810, H = 230, PadL = 58, PadR = 14, PadT = 24, PadB = 28;
+    private const double PlotH = H - PadT - PadB;
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+
+    private sealed record GridLine(double Y, string Label);
+    private sealed record Col(double Cx, double Top, double? YearY, double? YtdY, string Value, string Name,
+        (string Name, decimal Actual, decimal Year, decimal Ytd) Bar);
+
+    private List<GridLine> _grid = new();
+    private List<Col> _cols = new();
+    private double _niceMax = 1, _baseY, _slot, _colW, _half;
+    private int _tip = -1;
+    private string _shownFor = "";
+
+    protected override void OnParametersSet()
+    {
+        // a different year or measure closes the tooltip
+        var key = $"{Year}|{Measure}";
+        if (key != _shownFor) { _tip = -1; _shownFor = key; }
+
+        // one scale for columns and lines: it covers the tallest YEAR target too, so no line falls off the chart
+        var scale = (double)Math.Max(Bars.Select(b => b.Actual).DefaultIfEmpty(0).Max(),
+                                     Bars.Select(b => b.Year).DefaultIfEmpty(0).Max());
+        if (scale <= 0) scale = 1;
+        var step = NiceStep(scale, 5);
+        _niceMax = Math.Max(step, Math.Ceiling(scale / step) * step);
+        _baseY = Y(0);
+
+        _grid = new();
+        for (double g = 0; g <= _niceMax + step / 2; g += step)
+            _grid.Add(new GridLine(Y(g), AxisLabel(g)));
+
+        _slot = (W - PadL - PadR) / Math.Max(1, Bars.Count);
+        _colW = Math.Max(16, Math.Min(90, _slot * 0.46));
+        _half = Math.Min(_slot * 0.44, _colW / 2 + 12);
+
+        _cols = Bars.Select((b, i) => new Col(
+            Cx: PadL + (i + 0.5) * _slot,
+            Top: Y((double)b.Actual),
+            YearY: b.Year > 0 ? Y((double)b.Year) : null,
+            YtdY: b.Ytd > 0 ? Y((double)b.Ytd) : null,
+            Value: AxisLabel((double)b.Actual),
+            Name: FirstName(b.Name),
+            Bar: b)).ToList();
+
+        if (_tip >= _cols.Count) _tip = -1;
+    }
+
+    private double Y(double v) => PadT + (1 - Math.Min(v, _niceMax) / _niceMax) * PlotH;
+
+    private void Pick(int i) { if (_tip != i) _tip = i; }
+
+    private void HideTip() => _tip = -1;
+
+    // name, the measure, then the YTD and year targets with the share reached (as the full view's hover)
+    private List<string> TipLines((string Name, decimal Actual, decimal Year, decimal Ytd) b)
+    {
+        var lines = new List<string> { b.Name, $"{Measure}: {Cur(b.Actual)}" };
+        if (b.Year > 0)
+        {
+            if (b.Ytd > 0) lines.Add($"YTD target: {Cur(b.Ytd)} ({(b.Actual / b.Ytd * 100m):0}%)");
+            lines.Add($"Year target: {Cur(b.Year)} ({(b.Actual / b.Year * 100m):0}%)");
+        }
+        else
+        {
+            lines.Add("No target set");
+        }
+        return lines;
+    }
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+    private static string N(double v) => v.ToString("0.##", Inv);
+    private static string PctX(double v) => (v / W * 100).ToString("0.###", Inv) + "%";
+    private static string PctY(double v) => (v / H * 100).ToString("0.###", Inv) + "%";
+}

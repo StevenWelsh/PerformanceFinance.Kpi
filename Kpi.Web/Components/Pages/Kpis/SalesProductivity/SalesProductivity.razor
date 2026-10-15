@@ -1,0 +1,190 @@
+@page "/kpis/sales-productivity"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@using Kpi.Web.Reports
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Sales Productivity — one card per salesperson (the four current: Pete, Susan, Ryan, Stuart),
+   the last four years across columns. Each card shows the lead-to-sale funnel: leads in (AF
+   volume, lead count, HQ+Other count, % self-generated) and the conversion percentages
+   (lead→approval, lead→activation, approval→activation), each with an up/down mark vs the prior
+   year, the newest year shaded and the person's initials by the name, as on the phone. Cards are
+   the shared KpiComparisonCard. Data from WebKPI.spSalesProductivity (verified to the screenshot).
+   Two cards per row (one where two would not fit). *@
+
+<PageTitle>Sales Productivity — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="sales-productivity" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Sales Productivity" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+            <div class="kpi-spr-page">
+                @if (_loading)
+                {
+                    <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+                }
+                else
+                {
+                    <div class="sp-grid">
+                        @foreach (var person in _people)
+                        {
+                            <KpiComparisonCard Title="@person.Name"
+                                               Badge="@SalespersonMobilePicker.InitialsOf(person.Name)"
+                                               HeaderLabel="Leads In"
+                                               Columns="@person.YearLabels"
+                                               Rows="@person.CardRows"
+                                               HighlightLast="true"
+                                               CardCssClass="sp-card" />
+                        }
+                    </div>
+                }
+            </div>
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Sales Productivity" Active="sales-productivity" AsAt="_asOf">
+    <SalesProductivityMobile People="_people" AsAt="_asOf" Loading="_loading" Error="@_error" />
+</KpiMobile>
+
+@code {
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    // display order matches the screenshot; the proc returns them, this pins the sequence
+    private static readonly int[] Order = { 68, 74, 73, 82 };   // Pete, Susan, Ryan, Stuart
+
+    public class Person
+    {
+        public string Name { get; init; } = "";
+        public List<string> YearLabels { get; init; } = new();
+        public List<KpiComparisonCard.Row> CardRows { get; init; } = new();
+        public List<SalesProductivityRow> Rows { get; init; } = new();   // the proc's rows, for the phone view
+    }
+
+    // The result the page renders, as one cacheable payload (the per-salesperson cards).
+    private sealed record Payload(List<Person> People);
+
+    private List<Person> _people = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            // Cached per report date (no page params): instant on a repeat open / tab-flick, one DB
+            // hit the first time. GetOrLoad is single-flight, so concurrent viewers load once.
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("SalesProductivity"),
+                LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    // Pure loader: opens a one-shot session, runs the proc, returns the payload + its as-at.
+    // No component-field mutation here — that's Apply()'s job, so the cache can call this off
+    // the render path during a background refresh.
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var rows = new SalesProductivityService(cms.Db).GetProductivity();
+
+        var people = rows
+            .GroupBy(r => new { r.SalesId, r.Salesperson })
+            .OrderBy(g => Array.IndexOf(Order, g.Key.SalesId) is var ix && ix >= 0 ? ix : int.MaxValue)
+            .ThenBy(g => g.Key.Salesperson)
+            .Select(g => BuildCard(g.Key.Salesperson, g.ToList()))
+            .ToList();
+
+        return (new Payload(people), asAt);
+    }
+
+    // Push a payload into the fields the markup renders. (_asOf comes from the cache entry's AsAt,
+    // set by the caller, not from the payload.)
+    private void Apply(Payload p)
+    {
+        _people = p.People;
+    }
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view. Re-run through the cache;
+    // if the data changed, refresh the fields and fade the chart; otherwise just tick "Refreshed on".
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(
+                KpiCache.Key("SalesProductivity"),
+                LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();  // gentle chart fade
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static Person BuildCard(string name, List<SalesProductivityRow> personRows)
+    {
+        // last four years, oldest → newest (columns read left to right like the original)
+        var years = personRows.Select(x => x.Year).Distinct().OrderBy(y => y).TakeLast(4).ToList();
+        var byYear = personRows.ToDictionary(r => r.Year);
+
+        SalesProductivityRow? R(int y) => byYear.TryGetValue(y, out var r) ? r : null;
+
+        // a value cell: display text + the numeric used for the trend arrow
+        KpiComparisonCard.Cell Money(int y) => new((R(y)?.TotalLead_AF ?? 0).ToString("C0"), R(y)?.TotalLead_AF);
+        KpiComparisonCard.Cell Count(int y) => new((R(y)?.TotalLead_Count ?? 0).ToString("N0"), R(y)?.TotalLead_Count);
+        KpiComparisonCard.Cell HqOther(int y)
+        {
+            var r = R(y);
+            var n = r is null ? 0 : r.HQLead_Count + r.Self_OtherSales_Count;
+            return new(n.ToString("N0"), n);
+        }
+        KpiComparisonCard.Cell Pct(int y, Func<SalesProductivityRow, decimal> pick)
+        {
+            var r = R(y);
+            decimal? val = r is null ? null : pick(r);
+            return new(val is null ? "" : Math.Round(val.Value * 100).ToString("N0") + "%", val);
+        }
+
+        var rows = new List<KpiComparisonCard.Row>
+        {
+            new() { Label = "AF Volume", Cells = years.Select(Money).ToList() },
+            new() { Label = "Leads",      Cells = years.Select(Count).ToList() },
+            new() { Label = "HQ + Other", Cells = years.Select(HqOther).ToList() },
+            new() { Label = "% Self Gen", ShowTrend = true, Cells = years.Select(y => Pct(y, r => r.SelfGen_Percent_Count)).ToList() },
+            KpiComparisonCard.Row.Spacer(),
+            new() { Label = "Lead To Activation", Strong = true, ShowTrend = true, Cells = years.Select(y => Pct(y, r => r.L_ACT_Percent_Count)).ToList() },
+            new() { Label = "Lead To Approval", Indent = true, ShowTrend = true, Cells = years.Select(y => Pct(y, r => r.L_APR_Percent_Count)).ToList() },
+            new() { Label = "Approval To Activation", Indent = true, ShowTrend = true, Cells = years.Select(y => Pct(y, r => r.APR_ACT_Percent_Count)).ToList() },
+        };
+
+        return new Person { Name = name, YearLabels = years.Select(y => y.ToString()).ToList(), CardRows = rows, Rows = personRows };
+    }
+}

@@ -1,0 +1,169 @@
+@using Kpi.Web.Reports
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+
+@* One Record Performances table. Loads its grain's records, then shows either the
+   best record per year (BestPerYear) or the all-time top 10 (Top10). In Top10 a
+   current-year record is shaded and trophy-marked (it's a new all-time entry) - the
+   phone's shade and trophy (kpi.css, Record Performances).
+   Params: Grain (Transaction|Month|Quarter|Annual), Mode, Heading, DivisionId. *@
+
+<div class="ss-card rec-card">
+    <div class="ss-card-head">@Heading</div>
+
+    @if (_loading)
+    {
+        <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+    }
+    else if (_error is not null)
+    {
+        <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+    }
+    else
+    {
+        <table class="rec-table">
+            <thead>
+                @if (Mode == RecordMode.Top10)
+                {
+                    <tr>
+                        <th class="rec-first">@FirstColHeading</th>
+                        <th class="rec-sales">Sales</th>
+                        <th class="rec-trophycol"></th>
+                        <th class="rec-tfi">TFI</th>
+                    </tr>
+                }
+                else
+                {
+                    <tr>
+                        <th class="rec-first">@FirstColHeading</th>
+                        <th class="rec-sales">Sales</th>
+                        <th class="rec-tfi">TFI</th>
+                    </tr>
+                }
+            </thead>
+            <tbody>
+                @if (Mode == RecordMode.Top10)
+                {
+                    var rank = 0;
+                    foreach (var r in _rows)
+                    {
+                        rank++;
+                        var current = r.Yr == _curYear;
+                        <tr class="@(current ? "rec-current" : "")">
+                            <td class="rec-first"><span class="rec-rank">@rank</span> @r.Period</td>
+                            <td class="rec-sales">@r.Salesperson</td>
+                            <td class="rec-trophycol">@(current ? Trophy : null)</td>
+                            <td class="rec-tfi">@Cur(r.TFI)</td>
+                        </tr>
+                    }
+                }
+                else
+                {
+                    @* "Best in year" tables: no current-year highlight, no trophy *@
+                    foreach (var r in _rows)
+                    {
+                        <tr>
+                            <td class="rec-first">@r.Yr</td>
+                            <td class="rec-sales">@r.Salesperson</td>
+                            <td class="rec-tfi">@Cur(r.TFI)</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    public enum RecordMode { BestPerYear, Top10 }
+
+    [Parameter] public string Grain { get; set; } = "Transaction";
+    [Parameter] public RecordMode Mode { get; set; } = RecordMode.BestPerYear;
+    [Parameter] public string Heading { get; set; } = "";
+    [Parameter] public int DivisionId { get; set; } = -1;
+    /// <summary>Raised (with this table's id) once its data has loaded.</summary>
+    [Parameter] public EventCallback<RecordTable> OnLoaded { get; set; }
+
+    private bool _loading = true;
+    private string? _error;
+    private int _curYear;
+    private List<RecordRow> _rows = new();
+    private bool _waggle;   // set true by the parent (via Waggle()) once all tables are loaded
+
+    private string FirstColHeading => Mode == RecordMode.Top10 ? "Period" : "Year";
+
+    // Pure loader — runs the proc, returns all records for this grain/division + the report date.
+    // No field mutation; Mode-based shaping happens in OnAfterRenderAsync off this result.
+    private async Task<(List<RecordRow>, DateTime)> LoadRecords()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var all = new RecordPerformancesService(cms.Db).GetRecords(Grain, DivisionId);
+        return (all, asAt);
+    }
+
+    /// <summary>True if any shown row is a current-year record (has a trophy).</summary>
+    public bool HasTrophy => _rows.Any(r => r.Yr == _curYear) && Mode == RecordMode.Top10;
+
+    /// <summary>Parent calls this to start the trophy waggle after all tables load.</summary>
+    public void Waggle()
+    {
+        _waggle = true;
+        StateHasChanged();
+    }
+
+    // the phone's trophy: a gold cup, outlined
+    private RenderFragment Trophy => __builder =>
+    {
+        <svg class="rec-trophy @(_waggle ? "rec-waggle" : "")" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="New record this year">
+            <title>New record this year</title>
+            <path class="rec-trophy-cup" d="M8 4h8v5a4 4 0 0 1-8 0z"></path>
+            <path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M10 17h4"></path>
+        </svg>
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            // Cached per (grain + division + report date): with 8 of these tiling the Record
+            // Performances page, this makes a repeat open / tab-flick instant. Both modes (Top10 /
+            // BestPerYear) derive from the same GetRecords fetch, so the key omits Mode and the
+            // in-memory shaping below stays per-component.
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("RecordTable", Grain, DivisionId),
+                LoadRecords);
+            _curYear = entry.AsAt.Year;
+            var all = entry.Data;
+
+            if (Mode == RecordMode.Top10)
+            {
+                _rows = all.OrderByDescending(r => r.TFI).Take(10).ToList();
+            }
+            else
+            {
+                // best record per year, most recent year first (last 10 years, like Klipfolio)
+                _rows = all
+                    .GroupBy(r => r.Yr)
+                    .Select(g => g.OrderByDescending(r => r.TFI).First())
+                    .OrderByDescending(g => g.Yr)
+                    .Take(10)
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+            if (OnLoaded.HasDelegate) await OnLoaded.InvokeAsync(this);
+        }
+    }
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+}

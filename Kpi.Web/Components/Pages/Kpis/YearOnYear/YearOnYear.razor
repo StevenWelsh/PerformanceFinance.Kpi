@@ -1,0 +1,385 @@
+@page "/kpis/year-on-year"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
+@using System.Globalization
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Year on Year Comparison — months (or quarters) down, years across, measure
+   AF/TFI. Total / Total OB / Total Brokered rows, a grand total, a per-year YoY %
+   row and a per-period current-vs-prior YTD column. Nine years at a time (the latest
+   nine first, with Earlier / Later years in the card header when there are more).
+   The Sales Office is the first filter; an office with no figures shows KpiOfficeEmpty
+   in place of the card. UNVERIFIED beyond spot totals. *@
+
+<PageTitle>Year on Year — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="year-on-year" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Year on Year" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+        <div class="yoy-body">
+            <div class="kpi-filters kpi-yoy-filters">
+                <KpiOfficeField Changed="StateHasChanged" />
+                <KpiField Caption="Division" Value="@_divisionId.ToString(Inv)" Options="_divisionOptions"
+                          ValueChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" />
+                <KpiField Caption="Salesperson" Value="@_salespersonId.ToString(Inv)" Options="_salespersonOptions"
+                          ValueChanged="@(v => OnSalesperson(new ChangeEventArgs { Value = v }))" />
+                <KpiField Caption="Measure" Value="@_measure" Options="MeasureOptions"
+                          ValueChanged="@(v => OnMeasure(new ChangeEventArgs { Value = v }))" />
+                <KpiField Caption="Interval" Value="@_interval" Options="IntervalOptions"
+                          ValueChanged="@(v => OnInterval(new ChangeEventArgs { Value = v }))" />
+                <KpiField Caption="Arrangement" Value="@(_arrangement ?? "")" Options="_arrangementOptions"
+                          ValueChanged="@(v => OnArrangement(new ChangeEventArgs { Value = v }))" />
+            </div>
+
+            @if (!Office.ShowsData)
+            {
+                <KpiOfficeEmpty />
+            }
+            else
+            {
+            <div class="ss-card yoy-card">
+                <div class="ss-card-head kpi-yoy-head">
+                    <span class="kpi-yoy-title">Year on Year Comparison — @_measure</span>
+                    @if (MaxBack > 0)
+                    {
+                        @* more years than the nine shown: step the window a year at a time *@
+                        <span class="kpi-yoy-steps">
+                            <button type="button" class="kpi-btn" title="Show an earlier year"
+                                    disabled="@(_back >= MaxBack)" @onclick="Earlier"><i class="bi bi-chevron-left" aria-hidden="true"></i>Earlier years</button>
+                            <button type="button" class="kpi-btn" title="Show a later year"
+                                    disabled="@(_back <= 0)" @onclick="Later">Later years<i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+                        </span>
+                    }
+                </div>
+
+                @if (_error is not null)
+                {
+                    <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+                }
+                else if (_years.Count == 0 && _loading)
+                {
+                    <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+                }
+                else if (_years.Count > 0)
+                {
+                    var curYear = _years.Max();
+                    <div class="yoy-scroll @(_loading ? "yoy-refreshing" : "")">
+                        @if (_loading)
+                        {
+                            <div class="yoy-overlay"><span class="ss-spinner"></span> Loading…</div>
+                        }
+                        <table class="yoy-table">
+                            <thead>
+                                <tr>
+                                    <th class="yoy-rowlabel">@(_interval == "Quarter" ? "Quarter" : "Month")</th>
+                                    @foreach (var y in _shown)
+                                    {
+                                        <th class="@(y == curYear ? "yoy-cur" : "")">@y</th>
+                                    }
+                                    <th>@curYear vs @(curYear - 1) YTD</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in _periods)
+                                {
+                                    <tr>
+                                        <td class="yoy-rowlabel">@PeriodName(p)</td>
+                                        @foreach (var y in _shown)
+                                        {
+                                            <td class="@(y == curYear ? "yoy-cur" : "")">@Cur(Cell(y, p))</td>
+                                        }
+                                        <td>@YtdDelta(p, curYear)</td>
+                                    </tr>
+                                }
+                                @TotalRow("Total OB", r => r.TotalOB, curYear)
+                                @TotalRow("Total Brokered", r => r.TotalBrokered, curYear)
+                                <tr class="yoy-grand">
+                                    <td class="yoy-rowlabel">Total (OB + Brokered)</td>
+                                    @foreach (var y in _shown)
+                                    {
+                                        <td class="@(y == curYear ? "yoy-cur" : "")">@Cur(YearTotal(y))</td>
+                                    }
+                                    <td>@GrandYtdDelta(curYear)</td>
+                                </tr>
+                                @* each year against the one before it - for the leftmost, a year outside the window *@
+                                <tr class="yoy-yoy">
+                                    <td class="yoy-rowlabel"></td>
+                                    @foreach (var y in _shown)
+                                    {
+                                        <td class="@(y == curYear ? "yoy-cur" : "")">@YearDelta(y)</td>
+                                    }
+                                    <td></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+            }
+        </div>
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Year on Year" Active="year-on-year" AsAt="_asOf" Hint="KpiMobileHint.LandscapeOnly">
+    <ChildContent>
+        <YearOnYearMobile Measure="@_measure" Rows="_rows" Years="_years" Periods="_periods"
+                          Loading="_loading" Error="@_error" />
+    </ChildContent>
+    <Landscape>
+        <YearOnYearMobile Landscape="true" Measure="@_measure" Rows="_rows" Years="_years" Periods="_periods"
+                          Loading="_loading" Error="@_error" OfficeChanged="StateHasChanged"
+                          DivisionId="_divisionId" SalespersonId="_salespersonId" Interval="@_interval" Arrangement="@_arrangement"
+                          Divisions="_divisions" Salespeople="_salespeople" Arrangements="_arrangements"
+                          DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))"
+                          SalespersonChanged="@(v => OnSalesperson(new ChangeEventArgs { Value = v }))"
+                          MeasureChanged="@(v => OnMeasure(new ChangeEventArgs { Value = v }))"
+                          IntervalChanged="@(v => OnInterval(new ChangeEventArgs { Value = v }))"
+                          ArrangementChanged="@(v => OnArrangement(new ChangeEventArgs { Value = v }))" />
+    </Landscape>
+</KpiMobile>
+
+@code {
+    private string _measure = "AF";
+    private string _interval = "Month";
+    private int _divisionId = -1;
+    private int _salespersonId = -1;
+    private string? _arrangement;
+
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    // The result the page renders, as one cacheable payload (rows + the derived year/period axes).
+    private sealed record Payload(
+        List<YearOnYearRow> Rows,
+        List<int> Years,
+        List<int> Periods);
+
+    private List<YearOnYearRow> _rows = new();
+    private List<int> _years = new();     // every year the procedure returns (the last ten), oldest first
+    private List<int> _periods = new();
+    private List<int> _shown = new();     // the nine the full view shows
+    private int _back;                    // years the window has stepped back from the latest
+
+    private List<(int Id, string Name)> _divisions = new();
+    private List<(int Id, string Name)> _salespeople = new();
+    private List<string> _arrangements = new();
+
+    // the full view's filter choices (the phone builds its own from the lists above)
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    private static readonly KpiOption[] MeasureOptions = { new("AF", "AF"), new("TFI", "TFI") };
+    private static readonly KpiOption[] IntervalOptions = { new("Month", "Month"), new("Quarter", "Quarter") };
+    private List<KpiOption> _divisionOptions = new() { new("-1", "All") };
+    private List<KpiOption> _salespersonOptions = new() { new("-1", "All") };
+    private List<KpiOption> _arrangementOptions = new() { new("", "All") };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadFilters();
+        await Load();
+    }
+
+    // One-time bootstrap: fills the filter dropdowns. Kept OUT of the cached payload — these
+    // options don't change per (measure/interval/…), and _asOf now flows from the cache entry.
+    private async Task LoadFilters()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+
+        _divisions = cms.Db.Report<OptRow>("Rpt.spFilterOptions", new { List = "Divisions" })
+            .ToList().OrderBy(d => d.Name).Select(d => (d.Id, d.Name)).ToList();
+
+        _salespeople = cms.Db
+            .Report<OptRow>("Rpt.spFilterOptions", new { List = "Salespeople" })
+            .ToList().Select(s => (s.Id, s.Name)).ToList();
+
+        _arrangements = cms.Db
+            .Options("Arrangements").Select(a => a.Name)
+            .ToList();
+
+        _divisionOptions = _divisions.Select(d => new KpiOption(d.Id.ToString(Inv), d.Name))
+            .Prepend(new KpiOption("-1", "All")).ToList();
+        _salespersonOptions = _salespeople.Select(s => new KpiOption(s.Id.ToString(Inv), s.Name))
+            .Prepend(new KpiOption("-1", "All")).ToList();
+        _arrangementOptions = _arrangements.Select(a => new KpiOption(a, a))
+            .Prepend(new KpiOption("", "All")).ToList();
+    }
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        await Task.Yield();   // let the spinner paint before the blocking EF6 query
+        try
+        {
+            // Cached per (measure + interval + division + salesperson + arrangement + report date):
+            // instant on a repeat open / tab-flick or filter round-trip, one DB hit the first time.
+            // GetOrLoad is single-flight, so concurrent viewers load once.
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("YearOnYear", _measure, _interval, _divisionId, _salespersonId, _arrangement),
+                LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    // Pure loader: opens a one-shot session, runs the proc, returns the payload + its as-at.
+    // No component-field mutation here — that's Apply()'s job, so the cache can call this off
+    // the render path during a background refresh.
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+
+        var rows = new YearOnYearService(cms.Db)
+            .GetYearOnYear(_measure, _interval, _divisionId, _salespersonId, _arrangement);
+        var years = rows.Select(r => r.Year).Distinct().OrderBy(y => y).ToList();
+        var periods = Enumerable.Range(1, _interval == "Quarter" ? 4 : 12).ToList();
+
+        return (new Payload(rows, years, periods), asAt);
+    }
+
+    // Push a payload into the fields the markup renders. (_asOf comes from the cache entry's AsAt,
+    // set by the caller, not from the payload.)
+    private void Apply(Payload p)
+    {
+        _rows = p.Rows;
+        _years = p.Years;
+        _periods = p.Periods;
+        ShowWindow();
+    }
+
+    // The procedure returns the last ten years; the full view shows nine at a time, the latest first,
+    // and Earlier / Later years step the window back and forward a year at a time.
+    private const int YearsShown = 9;
+
+    private int MaxBack => Math.Max(0, _years.Count - YearsShown);
+
+    private void ShowWindow()
+    {
+        _back = Math.Clamp(_back, 0, MaxBack);
+        var end = _years.Count - _back;
+        var start = Math.Max(0, end - YearsShown);
+        _shown = _years.Skip(start).Take(end - start).ToList();
+    }
+
+    private void Earlier() { _back++; ShowWindow(); }
+    private void Later() { _back--; ShowWindow(); }
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view. Re-run through the cache;
+    // if the data changed, refresh the fields and fade the chart; otherwise just tick "Refreshed on".
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(
+                KpiCache.Key("YearOnYear", _measure, _interval, _divisionId, _salespersonId, _arrangement),
+                LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task OnDivision(ChangeEventArgs e)    { _divisionId = int.TryParse(e.Value?.ToString(), out var v) ? v : -1; await Load(); }
+    private async Task OnSalesperson(ChangeEventArgs e) { _salespersonId = int.TryParse(e.Value?.ToString(), out var v) ? v : -1; await Load(); }
+    private async Task OnMeasure(ChangeEventArgs e)     { _measure = e.Value?.ToString() ?? "AF"; await Load(); }
+    private async Task OnInterval(ChangeEventArgs e)    { _interval = e.Value?.ToString() ?? "Month"; await Load(); }
+    private async Task OnArrangement(ChangeEventArgs e) { var s = e.Value?.ToString(); _arrangement = string.IsNullOrEmpty(s) ? null : s; await Load(); }
+
+    // --- lookups over the loaded rows ---
+    private decimal Cell(int year, int period)
+        => _rows.FirstOrDefault(r => r.Year == year && r.Period == period)?.Total ?? 0m;
+
+    private decimal YearTotal(int year)
+        => _rows.Where(r => r.Year == year).Sum(r => r.Total);
+
+    // per-period current-vs-prior-year %, only where both have data
+    private RenderFragment YtdDelta(int period, int curYear) => DeltaCell(
+        _rows.FirstOrDefault(r => r.Year == curYear - 1 && r.Period == period)?.Total ?? 0m,
+        Cell(curYear, period));
+
+    private RenderFragment GrandYtdDelta(int curYear)
+    {
+        // grand total row's right cell: current year vs prior year, matched to the
+        // periods the current year actually has data for (YTD comparison).
+        var curPeriods = _rows.Where(r => r.Year == curYear && r.Total != 0m).Select(r => r.Period).ToHashSet();
+        var cur = _rows.Where(r => r.Year == curYear).Sum(r => r.Total);
+        var prior = _rows.Where(r => r.Year == curYear - 1 && curPeriods.Contains(r.Period)).Sum(r => r.Total);
+        return DeltaCell(prior, cur);
+    }
+
+    private RenderFragment YearDelta(int year) => DeltaCell(YearTotal(year - 1), YearTotal(year));
+
+    private RenderFragment TotalRow(string label, Func<YearOnYearRow, decimal> pick, int curYear) => builder =>
+    {
+        builder.OpenElement(0, "tr");
+        builder.AddAttribute(1, "class", "yoy-subtotal");
+        builder.OpenElement(2, "td"); builder.AddAttribute(3, "class", "yoy-rowlabel"); builder.AddContent(4, label); builder.CloseElement();
+        var seq = 5;
+        foreach (var y in _shown)
+        {
+            var v = _rows.Where(r => r.Year == y).Sum(pick);
+            builder.OpenElement(seq++, "td");
+            builder.AddAttribute(seq++, "class", y == curYear ? "yoy-cur" : "");
+            builder.AddContent(seq++, Cur(v));
+            builder.CloseElement();
+        }
+        builder.OpenElement(seq++, "td"); builder.AddContent(seq++, "–"); builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    // ▲ up (ss-up) / ▼ down (ss-down); dash where there's no basis. Emits a <span> (the
+    // caller supplies the <td>) — do NOT open a <td> here or you get a nested td
+    // that escapes the cell and loses the column's right-alignment.
+    private RenderFragment DeltaCell(decimal prior, decimal now) => builder =>
+    {
+        if (prior == 0m || now == 0m)
+        {
+            builder.AddContent(0, "–");
+        }
+        else
+        {
+            var pct = (now - prior) / Math.Abs(prior) * 100m;
+            var up = pct >= 0;
+            builder.OpenElement(1, "span");
+            builder.AddAttribute(2, "class", up ? "ss-up" : "ss-down");
+            builder.AddContent(3, pct.ToString("N2") + "% " + (up ? "▲" : "▼"));
+            builder.CloseElement();
+        }
+    };
+
+    private static readonly string[] Months =
+        { "January","February","March","April","May","June","July","August","September","October","November","December" };
+    private string PeriodName(int p) => _interval == "Quarter" ? $"Q{p}" : Months[p - 1];
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+
+    private class OptRow { public int Id { get; set; } public string Name { get; set; } = ""; }
+}

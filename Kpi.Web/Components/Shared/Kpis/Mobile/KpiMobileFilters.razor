@@ -1,0 +1,113 @@
+@implements IDisposable
+
+@* A phone report's filters, tucked away (Oct 2026, Steve). Open on arrival, the fields with a small fold button at
+   the end of their row - no extra band, so open takes no more room than the fields alone. After a few seconds with no
+   input (or a tap on the fold button) they fold into one slim bar - a filter icon, the choices that narrow the report
+   in a line ("Kettering · Medical", just "All" when nothing does) and a chevron - so more of the report shows while
+   it stays obvious the filters are there; a tap on the bar opens them again.
+   Never folds while a filter has focus (a picker open) or holds it open (KeepOpen); a change restarts the clock.
+   Wrap the report's filter row:  <KpiMobileFilters><div class="kpim-filters" ...>…KpiFields…</div></KpiMobileFilters>
+   (Compact="true" in a landscape row). The summary is built from the KpiFields inside (they report to this through
+   a cascade); anything else that should appear in it calls Report(key, text) itself. The fields stay rendered when
+   folded (CSS hides them), so the summary is always current. *@
+
+<CascadingValue Value="this" IsFixed="true">
+    <div class="kpim-fbox @(_open ? "kpim-fbox-open" : "") @(Compact ? "kpim-fbox-compact" : "")">
+        @* shown only while folded *@
+        <button type="button" class="kpim-fbar" aria-expanded="@(_open ? "true" : "false")"
+                aria-label="@(_open ? "Hide filters" : "Show filters")" @onclick="Toggle">
+            <i class="bi bi-funnel" aria-hidden="true"></i>
+            <span class="kpim-fbar-sum">@Summary</span>
+            <i class="bi bi-chevron-down kpim-fbar-chev" aria-hidden="true"></i>
+        </button>
+        <div class="kpim-fbox-body" @onfocusin="FocusIn" @onfocusout="FocusOut">
+            <div class="kpim-fbox-fields">@ChildContent</div>
+            <button type="button" class="kpim-fbox-fold" aria-label="Hide filters" @onclick="Toggle">
+                <i class="bi bi-chevron-up" aria-hidden="true"></i>
+            </button>
+        </div>
+    </div>
+</CascadingValue>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The shorter landscape version.</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    // Folds after this long with no input.
+    private static readonly TimeSpan IdleFold = TimeSpan.FromSeconds(6);
+
+    private bool _open = true;
+    private bool _focused;
+    private Timer? _timer;
+
+    // each field's current text, in the order the fields first reported
+    private readonly List<(object Key, string Text)> _parts = new();
+
+    private string Summary
+    {
+        get
+        {
+            // only what narrows the report: a field still on "All…" (All, All divisions, All funds) is left out
+            var shown = _parts.Select(p => p.Text)
+                .Where(t => !string.IsNullOrEmpty(t) && t != "All" && !t.StartsWith("All ", StringComparison.Ordinal))
+                .ToList();
+            return shown.Count == 0 ? "All" : string.Join(" · ", shown);
+        }
+    }
+
+    /// <summary>A field's current choice, for the summary line. A changed choice counts as input.</summary>
+    public void Report(object key, string text)
+    {
+        var i = _parts.FindIndex(p => ReferenceEquals(p.Key, key));
+        if (i < 0) { _parts.Add((key, text)); _ = InvokeAsync(StateHasChanged); return; }
+        if (_parts[i].Text == text) return;
+        _parts[i] = (key, text);
+        _focused = false;          // a choice was made: the picker has closed
+        RestartClock();
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>A field with its own open panel (Heat Map's year chips) holds the box open while that panel is open.</summary>
+    public void KeepOpen(object key, bool keep)
+    {
+        if (keep) { _holds.Add(key); return; }
+        if (_holds.Remove(key)) RestartClock();
+    }
+
+    private readonly HashSet<object> _holds = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>A field has gone (e.g. a filter shown only in one view).</summary>
+    public void Forget(object key)
+    {
+        if (_parts.RemoveAll(p => ReferenceEquals(p.Key, key)) > 0) _ = InvokeAsync(StateHasChanged);
+    }
+
+    protected override void OnInitialized() => RestartClock();
+
+    private void Toggle()
+    {
+        _open = !_open;
+        if (_open) RestartClock();
+    }
+
+    private void FocusIn() { _focused = true; _timer?.Change(Timeout.Infinite, Timeout.Infinite); }
+
+    private void FocusOut() { _focused = false; RestartClock(); }
+
+    private void RestartClock()
+    {
+        _timer ??= new Timer(_ => _ = InvokeAsync(Fold));
+        _timer.Change(IdleFold, Timeout.InfiniteTimeSpan);
+    }
+
+    private void Fold()
+    {
+        if (_focused || _holds.Count > 0 || !_open) return;
+        _open = false;
+        StateHasChanged();
+    }
+
+    public void Dispose() => _timer?.Dispose();
+}

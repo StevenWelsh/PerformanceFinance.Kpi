@@ -1,0 +1,121 @@
+@using Kpi.Web.Data
+@inject KpiSessionFactory Sessions
+
+@* Settings > Data sync: when the figures were last copied from CMS, whether a copy is overdue, and the recent copies
+   with any errors (Ref.LoadRun, through Rpt.spDataStatus / Rpt.spLoadHistory). The copy (Kpi.Push, on the office
+   server) logs a failure here whenever it can still reach this database; one that can't reach it at all shows only
+   as Overdue - then look at the KPI push task on the office server, and its Windows event log (source Kpi.Push). *@
+
+<div class="set-head">
+    <div>
+        <h2>Data sync</h2>
+        <p class="acc-hint">The figures are copied from CMS every 10 minutes (7am-8pm, Monday to Saturday), and Bad Debt and Exposure once a night.</p>
+    </div>
+    <button type="button" class="acc-btn-secondary" disabled="@_loading" @onclick="Load"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="login-error" role="alert"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+}
+@if (_status is not null)
+{
+    <div class="set-tiles">
+        <div class="set-tile @(_status.FiguresStale ? "set-tile-bad" : "")">
+            <span class="set-tile-label">Last copy</span>
+            <span class="set-tile-value">@UkTime.Show(_status.LastFrequentLoadUtc)</span>
+            <span class="set-tile-note">@(_status.FiguresStale ? "Overdue: more than 30 minutes ago, in office hours" : "Every 10 minutes in office hours")</span>
+        </div>
+        <div class="set-tile @(_status.NightlyStale ? "set-tile-bad" : "")">
+            <span class="set-tile-label">Last nightly copy</span>
+            <span class="set-tile-value">@UkTime.Show(_status.LastNightlyLoadUtc)</span>
+            <span class="set-tile-note">@(_status.NightlyStale ? "Overdue: more than 26 hours ago" : "Bad Debt and Exposure")</span>
+        </div>
+        <div class="set-tile">
+            <span class="set-tile-label">Figures as at</span>
+            <span class="set-tile-value">@_status.ReportDate.ToString("dd MMM yyyy")</span>
+            <span class="set-tile-note">@FailedToday</span>
+        </div>
+    </div>
+}
+
+@if (_runs is not null)
+{
+    <div class="set-table-wrap">
+        <table class="set-table">
+            <thead><tr><th>Started</th><th>Copy</th><th>Took</th><th>Result</th><th>Error</th></tr></thead>
+            <tbody>
+                @if (_runs.Count == 0)
+                {
+                    <tr><td colspan="5" class="set-sub">No copies yet.</td></tr>
+                }
+                @foreach (var r in _runs)
+                {
+                    <tr>
+                        <td>@UkTime.Show(r.StartedUtc, "dd MMM HH:mm:ss")</td>
+                        <td>@(r.Scope == "Nightly" ? "Nightly" : "Every 10 min")</td>
+                        <td>@(r.Seconds is null ? "-" : $"{r.Seconds} s")</td>
+                        <td>
+                            @if (r.Succeeded == true) { <span class="set-pill set-pill-active">Published</span> }
+                            else if (r.Succeeded == false) { <span class="set-pill set-pill-disabled">Failed</span> }
+                            else { <span class="set-pill">Running</span> }
+                        </td>
+                        <td class="set-error-cell" title="@r.Error">@r.Error</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private sealed class StatusRow
+    {
+        public DateTime ReportDate { get; set; }
+        public DateTime? LastFrequentLoadUtc { get; set; }
+        public DateTime? LastNightlyLoadUtc { get; set; }
+        public bool FiguresStale { get; set; }
+        public bool NightlyStale { get; set; }
+    }
+
+    private sealed class RunRow
+    {
+        public int LoadRunId { get; set; }
+        public string Scope { get; set; } = "";
+        public DateTime StartedUtc { get; set; }
+        public DateTime? FinishedUtc { get; set; }
+        public bool? Succeeded { get; set; }
+        public string? Error { get; set; }
+        public int? Seconds { get; set; }
+    }
+
+    private StatusRow? _status;
+    private List<RunRow>? _runs;
+    private string? _error;
+    private bool _loading;
+
+    private string FailedToday
+    {
+        get
+        {
+            var since = DateTime.UtcNow.AddHours(-24);
+            var failed = _runs?.Count(r => r.Succeeded == false && r.StartedUtc > since) ?? 0;
+            return failed == 0 ? "No failed copies in the last 24 hours" : $"{failed} failed cop{(failed == 1 ? "y" : "ies")} in the last 24 hours";
+        }
+    }
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _loading = true; _error = null;
+        try
+        {
+            using var cms = await Sessions.BeginAsync();
+            _status = cms.Db.Report<StatusRow>("Rpt.spDataStatus").SingleOrDefault();
+            _runs = cms.Db.Report<RunRow>("Rpt.spLoadHistory", new { Top = 50 });
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; }
+    }
+}

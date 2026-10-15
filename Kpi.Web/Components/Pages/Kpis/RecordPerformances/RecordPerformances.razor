@@ -1,0 +1,157 @@
+@page "/kpis/record-performances"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Record Performances — four grains (Transaction / Month / Quarter / Annual), each
+   with a best-per-year table (top) and an all-time top-10 table (bottom). In the
+   top-10 tables a current-year record is shaded and trophy-marked, as on the phone.
+   The Division filter applies to all eight tables; where four tables
+   across cannot fit, the grid shows two. UNVERIFIED beyond spot checks. *@
+
+<PageTitle>Record Performances — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="record-performances" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Record Performances" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+            <div class="kpi-rp-page">
+                <div class="kpi-filters">
+                    <KpiField Caption="Division" Value="@_divisionId.ToString()"
+                              ValueChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))"
+                              Options="@DivisionOptions" />
+                </div>
+
+                @if (_divisions is null)
+                {
+                    <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+                }
+                else
+                {
+                    @* @key includes the division so all tables reload when it changes *@
+                    <div class="rec-grid">
+                        @foreach (var g in Grains)
+                        {
+                            <RecordTable @key="Key(g.Grain, 'B')"
+                                         Grain="@g.Grain" Mode="RecordTable.RecordMode.BestPerYear"
+                                         Heading="@g.BestHeading" DivisionId="_divisionId"
+                                         OnLoaded="TableLoaded" />
+                        }
+                        @foreach (var g in Grains)
+                        {
+                            <RecordTable @key="Key(g.Grain, 'T')"
+                                         Grain="@g.Grain" Mode="RecordTable.RecordMode.Top10"
+                                         Heading="@g.TopHeading" DivisionId="_divisionId"
+                                         OnLoaded="TableLoaded" />
+                        }
+                    </div>
+                }
+            </div>
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Record Performances" Active="record-performances" AsAt="_asOf">
+    <RecordPerformancesMobile Divisions="_divisions" DivisionId="_divisionId"
+                              DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" />
+</KpiMobile>
+
+@code {
+    private record GrainDef(string Grain, string BestHeading, string TopHeading);
+
+    private static readonly GrainDef[] Grains =
+    {
+        new("Transaction", "Best Transaction in Year",       "Top 10 Transactions"),
+        new("Month",       "Best Month in Year",             "Top 10 Months"),
+        new("Quarter",     "Best Quarter in Year",           "Top 10 Quarters"),
+        new("Annual",      "Best Annual Performance in Year","Top 10 Annual Performances"),
+    };
+
+    private int _divisionId = -1;
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private List<(int Id, string Name)>? _divisions;
+    private KpiPanel? _panel;
+
+    // Only the page-level bootstrap (as-at + division list) is cached here. The record data
+    // itself lives in the child RecordTable components, each loading its own session — those are
+    // left uncached (they reload on a @key/division change). So the panel's "Refreshed on" tracks
+    // when we last re-read the report date + division list; the tables refresh on their own terms.
+    private sealed record Payload(List<(int Id, string Name)> Divisions);
+
+    private string Key(string grain, char mode) => grain + "-" + mode + "-" + _divisionId;
+
+    // "All" first, then each division (just "All" until the divisions have loaded)
+    private IReadOnlyList<KpiOption> DivisionOptions =>
+        new[] { new KpiOption("-1", "All") }
+            .Concat((_divisions ?? new List<(int Id, string Name)>()).Select(d => new KpiOption(d.Id.ToString(), d.Name)))
+            .ToList();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            var entry = await KpiCache.GetOrLoad(KpiCache.Key("RecordPerformances"), LoadPayload);
+            _divisions = entry.Data.Divisions;
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch { /* leave _divisions null → the page shows its loading state */ }
+        StateHasChanged();
+    }
+
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var divs = cms.Db.Report<DivRow>("Rpt.spFilterOptions", new { List = "Divisions" })
+            .ToList().OrderBy(d => d.Name).ToList();
+        return (new Payload(divs.Select(d => (d.Id, d.Name)).ToList()), asAt);
+    }
+
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(KpiCache.Key("RecordPerformances"), LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                _divisions = entry.Data.Divisions;
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch { /* keep showing current data */ }
+    }
+
+    private async Task OnDivision(ChangeEventArgs e)
+    {
+        _divisionId = int.TryParse(e.Value?.ToString(), out var v) ? v : -1;
+        _loaded.Clear();            // @key change re-creates the tables; they'll re-report as they load
+        await Task.CompletedTask;
+    }
+
+    // Waggle coordination: wait until all 8 tables have loaded, then wobble the
+    // trophies together. Each table calls back with itself once it's loaded.
+    private const int TableCount = 8;   // 4 grains x (best + top10)
+    private readonly List<RecordTable> _loaded = new();
+
+    private void TableLoaded(RecordTable table)
+    {
+        _loaded.Add(table);
+        if (_loaded.Count >= TableCount)
+        {
+            foreach (var t in _loaded.Where(t => t.HasTrophy))
+                t.Waggle();
+        }
+    }
+
+    private class DivRow { public int Id { get; set; } public string Name { get; set; } = ""; }
+}

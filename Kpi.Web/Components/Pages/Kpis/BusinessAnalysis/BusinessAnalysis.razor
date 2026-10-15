@@ -1,0 +1,616 @@
+@page "/kpis/business-analysis"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiScripts Scripts
+@inject IJSRuntime JS
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
+@implements IAsyncDisposable
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Business Analysis — break the book down by a chosen dimension, measured by AF or TFI.
+   Two layouts on ONE page (two data sources), switched by the Dimension selector:
+   • Profession / Facility / Arrangement / Division — Full/YTD comparison table, an
+     interactive current-year donut (BusinessAnalysis.razor.js — hover/click pops a
+     segment and cross-highlights the matching table row) and a grouped 8-year trend bar
+     chart (round-number £ axis, top-right year key, hover tooltips).
+   • Lender — four ranked year cards (latest 4 years) with a change per lender against the
+     year before (BusinessAnalysisLenderService, an embedded query): the report year against
+     the year before TO THE SAME DATE ("vs 2025 YTD"), earlier years whole against whole;
+     selected from the Dimension dropdown (or via the old /kpis/business-analysis-lender
+     route, which redirects here with ?dimension=Lender). The Year filter does not apply in
+     this mode (the four cards ARE the years).
+     UNVERIFIED beyond spot full-total checks.
+   Filters: Sales Office first, then Dimension, Measure, Year, Quarter; an office with no figures
+   shows KpiOfficeEmpty in place of the cards and charts.
+   The phone view (BusinessAnalysisMobile, inside KpiMobile) shows the same fields and drives
+   the same filters. *@
+
+<PageTitle>Business Analysis — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="business-analysis" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="@_panelTitle"
+                  AsAt="_asOf" RefreshedOn="_refreshedOn" RefreshRequested="OnRefreshRequested">
+            <div class="kpi-filters kpi-ba-filters">
+                <KpiOfficeField Changed="OnOffice" />
+                <KpiField Caption="Dimension" Value="@_dimension" ValueChanged="OnDimension" Options="DimensionOptions" />
+                <KpiField Caption="Measure" Value="@_measure" ValueChanged="OnMeasure" Options="MeasureOptions" />
+                @* Lender view = four year cards, so Year does not apply there (a dash); Measure + Quarter apply to both. *@
+                <KpiField Caption="Year" Value="@_year.ToString()" ValueChanged="OnYear" Options="YearOptions"
+                          Text="@(_year > 0 ? null : "")" Enabled="!IsLender" />
+                <KpiField Caption="Quarter" Value="@_quarter.ToString()" ValueChanged="OnQuarter" Options="QuarterOptions" />
+            </div>
+
+            @if (!Office.ShowsData)
+            {
+                <KpiOfficeEmpty />
+            }
+            else if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+            else if (IsLender)
+            {
+                @* ---- By Lender: four ranked year cards (latest 4 years), vs previous year ---- *@
+                <div class="bal-grid">
+                    @foreach (var yr in _lenderYears)
+                    {
+                        var card = LenderCard(yr);
+                        <div class="ss-card bal-card">
+                            <div class="ss-card-head">@_measure — @yr</div>
+                            <table class="bal-table">
+                                <thead>
+                                    <tr>
+                                        <th class="bal-rank"></th>
+                                        <th class="bal-lender">Lender</th>
+                                        <th class="bal-val">@_measure</th>
+                                        <th class="bal-vs">vs @(yr - 1)@(yr == ReportYear ? " YTD" : "")</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @{ var rank = 0; }
+                                    @foreach (var row in card.Top)
+                                    {
+                                        rank++;
+                                        <tr>
+                                            <td class="bal-rank">@rank</td>
+                                            <td class="bal-lender" title="@row.Lender">@row.Lender</td>
+                                            <td class="bal-val">@Cur(row.Value)</td>
+                                            <td class="bal-vs">@LenderDelta(row)</td>
+                                        </tr>
+                                    }
+                                    @* pad to a fixed LenderRowSlots so every card is the same
+                                       height regardless of how many lenders it has *@
+                                    @for (int i = card.Top.Count; i < LenderRowSlots; i++)
+                                    {
+                                        <tr class="bal-empty">
+                                            <td class="bal-rank"></td>
+                                            <td class="bal-lender">-</td>
+                                            <td class="bal-val"></td>
+                                            <td class="bal-vs"></td>
+                                        </tr>
+                                    }
+                                    @* Others always shown, even at 0 *@
+                                    <tr class="bal-others">
+                                        <td class="bal-rank"></td>
+                                        <td class="bal-lender">Others</td>
+                                        <td class="bal-val">@Cur(card.OthersValue)</td>
+                                        <td class="bal-vs"></td>
+                                    </tr>
+                                    <tr class="bal-total">
+                                        <td class="bal-rank"></td>
+                                        <td class="bal-lender"></td>
+                                        <td class="bal-val">@Cur(card.Total)</td>
+                                        <td class="bal-vs"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="ba-grid">
+                    @* ---- Full/YTD comparison table ---- *@
+                    <div class="ss-card ba-tablecard">
+                        <div class="ss-card-head">@_measure — @_year</div>
+                        <table class="ba-table">
+                            <thead>
+                                <tr>
+                                    <th class="ba-dim">@_dimension</th>
+                                    <th>Full @(_year - 1)</th>
+                                    <th>YTD @(_year - 1)</th>
+                                    <th>YTD @_year</th>
+                                    <th>vs Previous YTD</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var d in _dims)
+                                {
+                                    <tr data-dim="@d"
+                                        @onmouseenter="() => HoverDim(d, true)"
+                                        @onmouseleave="() => HoverDim(d, false)">
+                                        <td class="ba-dim">@d</td>
+                                        <td>@Cur(Full(_year - 1, d))</td>
+                                        <td class="ba-muted">@Cur(Ytd(_year - 1, d))</td>
+                                        <td>@Cur(Ytd(_year, d))</td>
+                                        <td>@Delta(Ytd(_year - 1, d), Ytd(_year, d))</td>
+                                    </tr>
+                                }
+                                <tr class="ba-total">
+                                    <td class="ba-dim"></td>
+                                    <td>@Cur(_dims.Sum(d => Full(_year - 1, d)))</td>
+                                    <td class="ba-muted">@Cur(_dims.Sum(d => Ytd(_year - 1, d)))</td>
+                                    <td>@Cur(_dims.Sum(d => Ytd(_year, d)))</td>
+                                    <td>@Delta(_dims.Sum(d => Ytd(_year - 1, d)), _dims.Sum(d => Ytd(_year, d)))</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @* ---- current-year donut (rendered by BusinessAnalysis.razor.js) ---- *@
+                    <div class="ss-card ba-piecard">
+                        <div class="ss-card-head">@_measure — @_year</div>
+                        <div class="ba-pie-wrap">
+                            <div class="ba-pie-host" @ref="_pieHost"></div>
+                            <ul class="ba-legend">
+                                @{ var pieTotal = PieSlices().Sum(s => s.Value); }
+                                @foreach (var (label, value, colour) in PieSlices())
+                                {
+                                    var pct = pieTotal == 0 ? 0 : (int)Math.Round(100m * value / pieTotal);
+                                    <li data-dim="@label"
+                                        @onmouseenter="() => HoverDim(label, true)"
+                                        @onmouseleave="() => HoverDim(label, false)">
+                                        <span class="ba-swatch" style="background:@colour"></span>
+                                        @label <span class="ba-legend-val">(@Cur(value)) [@pct%]</span>
+                                    </li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+
+                    @* ---- 8-year trend bars ---- *@
+                    <div class="ss-card ba-trendcard">
+                        <div class="ss-card-head ba-trendhead">
+                            <span>@_measure — 8 year trend</span>
+                            <ul class="ba-yearkey">
+                                @for (int i = 0; i < _trendYears.Count; i++)
+                                {
+                                    <li><span class="ba-swatch" style="background:@Chart(i)"></span>@_trendYears[i]</li>
+                                }
+                            </ul>
+                        </div>
+                        @* trend chart is drawn client-side (measure-and-redraw): JS sizes the
+                           SVG to this host's pixels so it fills the space at any resolution *@
+                        <div class="ba-trendhost" @ref="_barsHost"></div>
+                    </div>
+                </div>
+            }
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Business Analysis" Active="business-analysis" AsAt="_asOf">
+    <BusinessAnalysisMobile Loading="_loading" Error="@_error"
+                            Dimension="@_dimension" Measure="@_measure" Year="_year" Quarter="_quarter"
+                            Years="_allYears" Rows="_rows" Dims="_dims"
+                            LenderRows="_lenderRows" LenderYears="_lenderYears" TopLenders="LenderRowSlots"
+                            ReportDate="_asOf" OfficeChanged="OnOffice"
+                            DimensionChanged="OnDimension" MeasureChanged="OnMeasure"
+                            YearChanged="OnYear" QuarterChanged="OnQuarter" />
+</KpiMobile>
+
+@code {
+    // The old /kpis/business-analysis-lender route redirects here with ?dimension=Lender to
+    // preselect that dimension (and any future deep-link can do the same).
+    [SupplyParameterFromQuery(Name = "dimension")]
+    public string? DimensionParam { get; set; }
+
+    private string _dimension = "Profession";
+    private string _measure = "AF";
+    private int _year;
+    private int _quarter;   // 0 = ALL
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    // The whole result the markup renders, as one cacheable payload. Covers BOTH layouts:
+    // the dimension view (Rows/Dims/TrendYears/AllYears) and the By Lender view
+    // (LenderRows/LenderYears). Only one branch is populated per key — _dimension is in the
+    // key, so a Lender payload and a dimension payload never share an entry. AllYears is
+    // carried so the year dropdown seeds off the same cached fetch (empty for Lender).
+    // _asOf is NOT in the payload — it comes from the cache entry's AsAt.
+    private sealed record Payload(
+        List<BusinessAnalysisRow> Rows,
+        List<string> Dims,
+        List<int> TrendYears,
+        List<int> AllYears,
+        List<BusinessAnalysisLenderRow> LenderRows,
+        List<int> LenderYears);
+
+    private List<BusinessAnalysisRow> _rows = new();
+    private List<string> _dims = new();
+    private List<int> _trendYears = new();
+    private List<int> _allYears = new();
+
+    // ---- By Lender view (same page, its own query) ----
+    private const string LenderDimension = "Lender";
+    private const int LenderRowSlots = 15;     // fixed rows per card: the top 15 lenders, padded
+                                               // with dash rows when fewer; the rest roll into Others
+    private const int LenderCardCount = 4;     // four year cards side by side (latest 4 years)
+    private bool IsLender => _dimension == LenderDimension;
+    // KpiPanel title — the header gains a " — By Lender" suffix in the lender view (kept in C# to
+    // avoid nesting same-quote string literals inside a Razor attribute expression)
+    private string _panelTitle => IsLender ? "Business Analysis — By Lender" : "Business Analysis";
+    private List<BusinessAnalysisLenderRow> _lenderRows = new();
+    private List<int> _lenderYears = new();     // the 4 years shown, oldest-left to newest-right
+
+    private ElementReference _pieHost;
+    private ElementReference _barsHost;
+    private IJSObjectReference? _module;
+    private bool _pieDirty;            // data changed -> redraw JS visuals after the next render
+
+    private static readonly string[] _dimensions =
+        { "Profession", "Facility", "Arrangement", "Division", LenderDimension };
+
+    private static string Chart(int n) => $"var(--chart-{(n % 12) + 1})";
+
+    protected override void OnInitialized()
+    {
+        // preselect a dimension from ?dimension= (the By Lender redirect uses this); ignore
+        // anything that isn't a real dimension so the query string can't set a bad value
+        if (DimensionParam is not null &&
+            _dimensions.Contains(DimensionParam, StringComparer.OrdinalIgnoreCase))
+        {
+            _dimension = _dimensions.First(d => d.Equals(DimensionParam, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Load(firstLoad: true);
+            return;
+        }
+        if (_pieDirty && ChartsShown) { _pieDirty = false; await DrawVisuals(); }
+    }
+
+    // The donut's and the trend's hosts are on the page: a dimension's figures, loaded, for an office that has them.
+    private bool ChartsShown => Office.ShowsData && !_loading && _error is null && !IsLender;
+
+    // Hand the current slices to the JS donut and wire the trend bars' hover popups.
+    // Colours are resolved to real hex here (JS draws raw SVG and can't read var(--chart-n)),
+    // and slices carry their percentages so the pie tooltip matches the legend.
+    private async Task DrawVisuals()
+    {
+        _module ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", Scripts.Url("./Components/Pages/Kpis/BusinessAnalysis/BusinessAnalysis.razor.js"));
+
+        var slices = PieSlices();
+        var total = slices.Sum(s => s.Value);
+        var data = slices.Select((s, i) => new
+        {
+            label = s.Label,
+            value = s.Value,
+            colour = ChartHex(i),
+            pct = total == 0 ? 0 : (int)Math.Round(100m * s.Value / total),
+            valueText = Cur(s.Value)
+        });
+        await _module.InvokeVoidAsync("render", _pieHost, data, Short(total));
+        await _module.InvokeVoidAsync("renderTrend", _barsHost, TrendData());
+    }
+
+    // Everything the JS trend chart needs, computed here so £-formatting and the "nice" axis
+    // stay single-sourced in C#. Heights are fractions of the axis top (0..1); JS multiplies
+    // by the measured plot height. Colours are hex (JS draws raw SVG).
+    private object TrendData()
+    {
+        var rawMax = _dims.SelectMany(d => _trendYears.Select(y => Full(y, d))).DefaultIfEmpty(0m).Max();
+        var max = NiceMax(rawMax);
+        return new
+        {
+            // 5 y-axis ticks: fraction up the plot (0..1) + the round £ label
+            ticks = Enumerable.Range(0, 5).Select(g => new
+            {
+                frac = g / 4.0,
+                label = Axis(max * g / 4m)
+            }),
+            // one group per dimension: its label + a bar per trend year
+            groups = _dims.Select(d => new
+            {
+                label = d,
+                bars = _trendYears.Select((y, i) => new
+                {
+                    frac = max == 0m ? 0.0 : (double)(Full(y, d) / max),   // bar height 0..1
+                    colour = ChartHex(i),
+                    tip = $"{d} · {y}: {Cur(Full(y, d))}"
+                })
+            })
+        };
+    }
+
+    // JS draws into raw SVG, so it needs concrete colours rather than var(--chart-n).
+    private static readonly string[] _chartHex =
+    {
+        "#4F46E5", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6", "#06B6D4",
+        "#F97316", "#EC4899", "#84CC16", "#64748B"
+    };
+    private static string ChartHex(int n) => _chartHex[n % _chartHex.Length];
+
+    private async Task HoverDim(string dim, bool on)
+    {
+        if (_module is not null)
+            await _module.InvokeVoidAsync("hoverDim", _pieHost, dim, on);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("disposeTrend", _barsHost);   // stop the ResizeObserver
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { }   // circuit already gone
+        }
+    }
+
+    private async Task Load(bool firstLoad = false)
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            // On first load the year filter defaults to the current report year. That must be
+            // settled BEFORE the cache key (which folds in _year) and before the payload's
+            // dims/trend are shaped, so resolve the report date once here. It's a one-time
+            // bootstrap that mutates a field — deliberately NOT inside LoadPayload.
+            if (firstLoad)
+            {
+                using var boot = await SessionFactory.BeginAsync();
+                _year = boot.Db.ReportDate().Year;
+            }
+
+            // Cached per (dimension + measure + year + quarter + report date): instant on a
+            // repeat open / filter flick-back, one DB hit the first time. _dimension is in the
+            // key, so the Lender payload and each dimension payload occupy distinct entries.
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("BusinessAnalysis", _dimension, _measure, _year, _quarter),
+                LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            _pieDirty = !IsLender;   // the lender view has no pie/trend to (re)draw
+            StateHasChanged();
+        }
+    }
+
+    // Pure loader: opens a one-shot session, runs whichever query the current dimension
+    // needs, returns the payload + its as-at. No component-field mutation here — that's Apply()'s
+    // job, so the cache can call this off the render path during a background refresh.
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+
+        if (IsLender)
+        {
+            // (lender, year) with the same lender's figure for the year before (to date for the report year).
+            var lenderRows = new BusinessAnalysisLenderService(cms.Db).GetByLender(_measure, _quarter);
+            // the latest LenderCardCount years that have data, displayed oldest-left to
+            // newest-right (2023 … 2026) to match the report layout
+            var lenderYears = lenderRows.Select(r => r.Yr).Distinct()
+                                        .OrderByDescending(y => y).Take(LenderCardCount)
+                                        .OrderBy(y => y).ToList();
+            return (new Payload(new(), new(), new(), new(), lenderRows, lenderYears), asAt);
+        }
+
+        var rows = new BusinessAnalysisService(cms.Db).GetAnalysis(_dimension, _measure, _quarter);
+
+        var allYears = rows.Select(r => r.Yr).Distinct().OrderByDescending(y => y).ToList();
+
+        var dims = rows
+            .GroupBy(r => r.DimValue)
+            .OrderByDescending(g => g.Where(r => r.Yr == _year).Sum(r => r.FullTotal))
+            .ThenByDescending(g => g.Sum(r => r.FullTotal))
+            .Select(g => g.Key)
+            .ToList();
+
+        var trendYears = Enumerable.Range(_year - 7, 8).ToList();
+
+        return (new Payload(rows, dims, trendYears, allYears, new(), new()), asAt);
+    }
+
+    // Push a payload into the fields the markup renders. (_asOf comes from the cache entry's
+    // AsAt, set by the caller, not from the payload.) The year dropdown keeps its first
+    // non-empty roster — the Lender payload carries an empty AllYears, which must never clobber it.
+    private void Apply(Payload p)
+    {
+        _rows = p.Rows;
+        _dims = p.Dims;
+        _trendYears = p.TrendYears;
+        if (p.AllYears.Count > 0) _allYears = p.AllYears;
+        _lenderRows = p.LenderRows;
+        _lenderYears = p.LenderYears;
+    }
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view. Re-run through the cache;
+    // if the data changed, refresh the fields and fade; otherwise just tick "Refreshed on".
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(
+                KpiCache.Key("BusinessAnalysis", _dimension, _measure, _year, _quarter),
+                LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                _pieDirty = !IsLender;   // redraw the JS donut/trend after the next render
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();  // gentle fade
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    // The filters - the full view's fields and the phone's call the same handlers.
+    private async Task OnDimension(string v) { _dimension = string.IsNullOrEmpty(v) ? "Profession" : v; await Load(); }
+    private async Task OnMeasure(string v)   { _measure = string.IsNullOrEmpty(v) ? "AF" : v; await Load(); }
+    private async Task OnYear(string v)      { _year = int.TryParse(v, out var y) ? y : _year; await Load(); }
+    private async Task OnQuarter(string v)   { _quarter = int.TryParse(v, out var q) ? q : 0; await Load(); }
+
+    // The Sales Office (full view or phone) shows the figures or KpiOfficeEmpty, so the JS charts' hosts go and
+    // come back with it: stop the trend's resize watcher while its host is still there, and draw both again
+    // once they are back (OnAfterRenderAsync waits for ChartsShown).
+    private async Task OnOffice()
+    {
+        if (!Office.ShowsData && _module is not null && !IsLender)
+        {
+            try { await _module.InvokeVoidAsync("disposeTrend", _barsHost); }
+            catch (JSDisconnectedException) { }
+        }
+        _pieDirty = true;
+    }
+
+    private static readonly KpiOption[] DimensionOptions = _dimensions.Select(d => new KpiOption(d, d)).ToArray();
+    private static readonly KpiOption[] MeasureOptions = { new("AF", "AF"), new("TFI", "TFI") };
+    private static readonly KpiOption[] QuarterOptions =
+    {
+        new("0", "All"), new("1", "Q1"), new("2", "Q2"), new("3", "Q3"), new("4", "Q4")
+    };
+
+    // The years with data, newest first - and the chosen year, which a quarter's data can lack (as the phone).
+    private List<KpiOption> YearOptions =>
+        _allYears.Append(_year).Where(y => y > 0).Distinct().OrderByDescending(y => y)
+                 .Select(y => new KpiOption(y.ToString(), y.ToString())).ToList();
+
+    private decimal Full(int year, string dim) => _rows.FirstOrDefault(r => r.Yr == year && r.DimValue == dim)?.FullTotal ?? 0m;
+    private decimal Ytd(int year, string dim)  => _rows.FirstOrDefault(r => r.Yr == year && r.DimValue == dim)?.YtdTotal ?? 0m;
+
+    private string Colour(int index) => Chart(index);
+
+    private List<(string Label, decimal Value, string Colour)> PieSlices()
+        => _dims.Select((d, i) => (d, Full(_year, d), Colour(i)))
+                .Where(s => s.Item2 > 0)
+                .ToList();
+
+    // ---- By Lender helpers (all client-side reshaping of the one lender result set) ----
+
+    // One year card: the top lenders (by value) filling the fixed row slots, the "Others"
+    // roll-up of anything beyond them, and the card total. Rows already arrive value-desc
+    // from the service; we just rank/split/sum here. Others is always shown (even at 0).
+    private (List<BusinessAnalysisLenderRow> Top, decimal OthersValue, decimal Total) LenderCard(int yr)
+    {
+        var rows = _lenderRows.Where(r => r.Yr == yr)
+                              .OrderByDescending(r => r.Value)
+                              .ToList();
+        var top = rows.Take(LenderRowSlots).ToList();
+        var others = rows.Skip(LenderRowSlots).Sum(r => r.Value);
+        var total = rows.Sum(r => r.Value);
+        return (top, others, total);
+    }
+
+    // The report year: its card is compared with the year before TO THE SAME DATE (the service's
+    // PrevValue), so its header reads "vs 2025 YTD".
+    private int? ReportYear => _asOf?.Year;
+
+    // "vs previous year": no row the year before (a new lender) gets a star; rows but nothing by
+    // this date last year (or nothing at all) a dash; otherwise the same up/down % treatment as the
+    // dimension table's Delta.
+    private RenderFragment LenderDelta(BusinessAnalysisLenderRow row) => builder =>
+    {
+        if (row.PrevValue is null)
+        {
+            // new entrant this year — no comparable prior-year figure
+            builder.OpenElement(0, "i");
+            builder.AddAttribute(1, "class", "bi bi-star-fill bal-star");
+            builder.AddAttribute(2, "title", "New this year — no prior-year comparison");
+            builder.CloseElement();
+            return;
+        }
+        if (row.PrevValue == 0m)
+        {
+            builder.OpenElement(3, "span");
+            builder.AddAttribute(4, "class", "ba-muted");
+            builder.AddAttribute(5, "title", row.Yr == ReportYear
+                ? $"Nothing by this date in {row.Yr - 1}"
+                : $"Nothing in {row.Yr - 1}");
+            builder.AddContent(6, "–");
+            builder.CloseElement();
+            return;
+        }
+        var prev = row.PrevValue.Value;
+        var pct = (row.Value - prev) / Math.Abs(prev) * 100m;
+        var up = pct >= 0;
+        builder.OpenElement(7, "span");
+        builder.AddAttribute(8, "class", up ? "ss-up" : "ss-down");
+        builder.AddContent(9, (up ? "+" : "") + pct.ToString("N0") + "% " + (up ? "▲" : "▼"));
+        builder.CloseElement();
+    };
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+    private static string Short(decimal v)
+        => v >= 1_000_000m ? "£" + (v / 1_000_000m).ToString("0.#") + "m"
+         : v >= 1_000m     ? "£" + Math.Round(v / 1_000m) + "k"
+         : "£" + v.ToString("N0");
+
+    // Round the axis top up to a clean value (1/2/5 × 10ⁿ) so the four ticks land on
+    // round numbers (£5m, £10m, £15m, £20m — never £14.3m).
+    private static decimal NiceMax(decimal raw)
+    {
+        if (raw <= 0m) return 4m;                 // empty chart → arbitrary non-zero top
+        var step = NiceStep(raw / 4m);            // 4 divisions -> pick a clean per-tick step
+        return Math.Ceiling(raw / step) * step;
+    }
+    private static decimal NiceStep(decimal rough)
+    {
+        var mag = (decimal)Math.Pow(10, Math.Floor(Math.Log10((double)rough)));
+        var norm = rough / mag;                   // 1..10
+        var nice = norm <= 1m ? 1m : norm <= 2m ? 2m : norm <= 5m ? 5m : 10m;
+        return nice * mag;
+    }
+    // Axis label: whole-number £m / £k (never a decimal) — round tick values only.
+    private static string Axis(decimal v)
+        => v >= 1_000_000m ? "£" + Math.Round(v / 1_000_000m).ToString("N0") + "m"
+         : v >= 1_000m     ? "£" + Math.Round(v / 1_000m).ToString("N0") + "k"
+         : "£" + v.ToString("N0");
+
+    private RenderFragment Delta(decimal prev, decimal now) => builder =>
+    {
+        builder.OpenElement(0, "span");
+        if (prev != 0m)
+        {
+            var pct = (now - prev) / Math.Abs(prev) * 100m;
+            var up = pct >= 0;
+            builder.AddAttribute(1, "class", up ? "ss-up" : "ss-down");
+            builder.AddContent(2, (up ? "+" : "") + pct.ToString("N1") + "% " + (up ? "▲" : "▼"));
+        }
+        builder.CloseElement();
+    };
+}

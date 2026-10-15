@@ -1,0 +1,55 @@
+@* A KPI filter, full view or phone: the ONE look every parameter filter uses - caption, the current choice
+   in crimson with a chevron, and the browser's own picker (a native select laid invisibly over it).
+   On a phone put several in <div class="kpim-filters" style="--kpim-cols:N">, inside a .kpim-compact row
+   in landscape; on a full view in <div class="kpi-filters">. Disabled shows a dash and no picker.
+   Inside a KpiMobileFilters it reports its choice for that box's folded summary line. *@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+@implements IDisposable
+
+<label class="kpim-field @(Enabled ? "" : "kpim-field-off")">
+    <span class="kpim-field-caption">@Caption</span>
+    <span class="kpim-field-value">
+        <span>@(Enabled ? DisplayText : "–")</span>
+        @if (Enabled)
+        {
+            <i class="bi bi-chevron-down" aria-hidden="true"></i>
+        }
+    </span>
+    @if (Enabled)
+    {
+        <select aria-label="@Caption" @onchange="OnChange">
+            @foreach (var o in Options)
+            {
+                <option value="@o.Value" selected="@(o.Value == Value)">@o.Text</option>
+            }
+        </select>
+    }
+</label>
+
+@code {
+    [Parameter, EditorRequired] public string Caption { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public IReadOnlyList<KpiOption> Options { get; set; } = Array.Empty<KpiOption>();
+
+    /// <summary>False when the filter does not apply to the current choice (shows "–").</summary>
+    [Parameter] public bool Enabled { get; set; } = true;
+
+    /// <summary>Text to show in place of the chosen option's own (e.g. "3 years").</summary>
+    [Parameter] public string? Text { get; set; }
+
+    private string DisplayText => Text ?? Options.FirstOrDefault(o => o.Value == Value)?.Text ?? Value;
+
+    // the phone's fold-away filter box, when this field sits in one
+    [CascadingParameter] public KpiMobileFilters? FilterBox { get; set; }
+
+    protected override void OnParametersSet() => FilterBox?.Report(this, Enabled ? DisplayText : "");
+
+    public void Dispose() => FilterBox?.Forget(this);
+
+    private async Task OnChange(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString() ?? "";
+        await ValueChanged.InvokeAsync(Value);
+    }
+}

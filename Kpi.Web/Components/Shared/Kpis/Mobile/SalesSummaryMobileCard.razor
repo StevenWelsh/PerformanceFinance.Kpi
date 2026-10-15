@@ -1,0 +1,159 @@
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+
+@* One phone card of the Sales Summary: a division (or "All") or a salesperson over one period, this
+   year against the same dates last year - the phone's version of SalesSummaryPanel, from the same
+   service and with the same formats, except that lead counts carry thousands separators. Loads its
+   own figures, and loads again when the division or salesperson changes. Salesperson Summary's phone
+   view uses it too. *@
+
+<section class="kpim-card" aria-label="@Heading">
+    <h2 class="kpim-card-head">@Heading</h2>
+
+    @if (_loading)
+    {
+        <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+    }
+    else if (_error is not null)
+    {
+        <div class="kpim-ss-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @_error</div>
+    }
+    else
+    {
+        var now = _now ?? Zero;
+        var prev = _prev ?? Zero;
+        <table class="kpim-table kpim-ss-table">
+            <thead>
+                <tr><th></th><th>@prev.AnalysisPeriodName</th><th>@now.AnalysisPeriodName</th><th>%</th></tr>
+            </thead>
+            <tbody>
+                <tr><td class="kpim-label">TFI</td><td>@Cur(prev.TFI)</td><td>@Cur(now.TFI)</td>@Delta(prev.TFI, now.TFI)</tr>
+                <tr><td class="kpim-label">Amount Financed</td><td>@Cur(prev.AF)</td><td>@Cur(now.AF)</td>@Delta(prev.AF, now.AF)</tr>
+                <tr><td class="kpim-label">Margin</td><td>@Pct(prev.Margin)</td><td>@Pct(now.Margin)</td>@Delta(prev.Margin, now.Margin)</tr>
+                <tr><td class="kpim-label">Leads</td><td>@prev.Leads.ToString("N0")</td><td>@now.Leads.ToString("N0")</td>@Delta(prev.Leads, now.Leads)</tr>
+                <tr class="kpim-ss-ne">
+                    <td class="kpim-label">New / Existing</td>
+                    <td>@NewExisting(prev)<span class="kpim-ss-split">@Split(prev)</span></td>
+                    <td>@NewExisting(now)<span class="kpim-ss-split">@Split(now)</span></td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    [Parameter] public string Period { get; set; } = "Year";       // Year | Quarter | Month
+    [Parameter] public int DivisionId { get; set; } = -1;          // -1 = all divisions
+    [Parameter] public int SalespersonId { get; set; } = -1;       // -1 = not filtered by person
+    [Parameter] public string Title { get; set; } = "All";
+
+    private bool _loading = true;
+    private string? _error;
+    private SalesSummaryRow? _now;
+    private SalesSummaryRow? _prev;
+
+    private bool _rendered;
+    private string? _shownKey;   // the period / division / salesperson on screen (or loading)
+    private int _version;        // the latest load; an older one finishing late is dropped
+
+    // A period the proc returns no row for shows as nothing done.
+    private static readonly SalesSummaryRow Zero = new() { AnalysisPeriodName = "" };
+
+    private sealed record Rows(SalesSummaryRow? Now, SalesSummaryRow? Prev);
+
+    private string Heading => Title + ": " + Period switch
+    {
+        "Quarter" => "Quarter to date",
+        "Month" => "Month to date",
+        _ => "Year to date"
+    };
+
+    private string ScopeKey => Period + "|" + DivisionId + "|" + SalespersonId;
+
+    // Whether the phone view is showing (KpiMobile): the card loads only then, so a desktop - where this
+    // view is hidden - never runs its queries.
+    [CascadingParameter(Name = "KpiPhone")] public bool IsPhone { get; set; }
+
+    // First load after the first render, so the spinner paints at once (as SalesSummaryPanel).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _rendered = true;
+        if (IsPhone) await Load();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_rendered && IsPhone && ScopeKey != _shownKey) await Load();
+    }
+
+    private async Task Load()
+    {
+        var (period, divisionId, salespersonId) = (Period, DivisionId, SalespersonId);
+        _shownKey = ScopeKey;
+        var version = ++_version;
+        _loading = true; _error = null;
+        StateHasChanged();
+        try
+        {
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("SalesSummaryMobileCard", period, divisionId, salespersonId),
+                () => LoadRows(period, divisionId, salespersonId));
+            if (version != _version) return;
+            _now = entry.Data.Now;
+            _prev = entry.Data.Prev;
+        }
+        catch (Exception ex)
+        {
+            if (version == _version) _error = ex.Message;
+        }
+        finally
+        {
+            if (version == _version)
+            {
+                _loading = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    // Pure loader: the same proc call SalesSummaryPanel makes, plus the report date.
+    private async Task<(Rows, DateTime)> LoadRows(string period, int divisionId, int salespersonId)
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var rows = new SalesSummaryService(cms.Db).GetSummary(period, divisionId: divisionId, salespersonId: salespersonId);
+        return (new Rows(rows.FirstOrDefault(r => r.PeriodId == 1),
+                         rows.FirstOrDefault(r => r.PeriodId == 2)), asAt);
+    }
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+
+    // the proc returns Margin as a fraction (0.0336 -> 3.36%)
+    private static string Pct(decimal v) => (v * 100m).ToString("N2") + "%";
+
+    private static string NewExisting(SalesSummaryRow r) => r.NewLeads.ToString("N0") + " / " + r.ExistingLeads.ToString("N0");
+
+    // "30% / 70%" under the counts (blank with no leads)
+    private static string Split(SalesSummaryRow r)
+    {
+        var total = r.NewLeads + r.ExistingLeads;
+        if (total == 0) return "";
+        var newPct = (int)Math.Round(100m * r.NewLeads / total);
+        return $"{newPct}% / {100 - newPct}%";
+    }
+
+    // the change on last year: blue up, amber down, blank when last year is nothing
+    private RenderFragment Delta(decimal prev, decimal now) => __builder =>
+    {
+        if (prev == 0m)
+        {
+            <td></td>
+            return;
+        }
+        var pct = (now - prev) / Math.Abs(prev) * 100m;
+        var up = pct >= 0;
+        <td class="kpim-ss-delta @(up ? "kpim-up" : "kpim-down")">@((up ? "+" : "") + pct.ToString("N1") + "%")</td>
+    };
+}

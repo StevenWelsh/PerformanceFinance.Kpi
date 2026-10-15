@@ -1,0 +1,59 @@
+@using Kpi.Data
+@using Kpi.Data.Auth
+@using Kpi.Web.Data
+@using Microsoft.EntityFrameworkCore
+@inject IDbContextFactory<KpiDbContext> Dbs
+
+@* Settings > Audit: sign-ins (and refusals), invitations, account and integration changes - newest first. The trail
+   can only be added to: the site's database role is denied changing or deleting it. *@
+
+<div class="set-head">
+    <div>
+        <h2>Audit</h2>
+        <p class="acc-hint">The latest @Take entries. Nothing here can be changed or deleted.</p>
+    </div>
+    <input class="set-filter" @bind="_filter" @bind:event="oninput" placeholder="Filter" aria-label="Filter the audit" />
+</div>
+
+@if (_rows is null)
+{
+    <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+}
+else
+{
+    <div class="set-table-wrap">
+        <table class="set-table">
+            <thead><tr><th>When</th><th>What</th><th>Who</th><th>About</th><th>Detail</th><th>Address</th></tr></thead>
+            <tbody>
+                @foreach (var a in Shown)
+                {
+                    <tr>
+                        <td class="set-nowrap">@UkTime.Show(a.OccurredUtc, "dd MMM HH:mm:ss")</td>
+                        <td>@a.Event</td>
+                        <td>@a.ActorName</td>
+                        <td>@(a.SubjectName == a.ActorName ? "" : a.SubjectName)</td>
+                        <td>@a.Detail</td>
+                        <td class="set-sub">@a.IpAddress</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private const int Take = 500;
+    private List<AuditEntry>? _rows;
+    private string _filter = "";
+
+    private IEnumerable<AuditEntry> Shown => string.IsNullOrWhiteSpace(_filter) ? _rows! : _rows!.Where(a =>
+        Has(a.Event) || Has(a.ActorName) || Has(a.SubjectName) || Has(a.Detail) || Has(a.IpAddress));
+
+    private bool Has(string? s) => s?.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase) == true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await Dbs.CreateDbContextAsync();
+        _rows = await db.AuditEntries.AsNoTracking().OrderByDescending(a => a.Id).Take(Take).ToListAsync();
+    }
+}

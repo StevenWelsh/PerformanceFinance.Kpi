@@ -1,0 +1,110 @@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Bad Debt on a phone, landscape: the full view's table six years at a time, the latest first, with
+   Earlier / Later years stepping the window a year at a time; the current year is shaded while it is
+   in view. The Applications field drives the page's own filter and load. *@
+
+<div class="kpim-bd-tools">
+    <KpiMobileFilters Compact="true">
+        <div class="kpim-filters kpim-compact" style="--kpim-cols:1">
+            <KpiField Caption="Applications" Value="@Approval" ValueChanged="ApprovalChanged" Options="@ApprovalOptions" />
+        </div>
+    </KpiMobileFilters>
+    <span class="kpim-bd-spacer"></span>
+    <button type="button" class="kpim-bd-step" aria-label="Show an earlier year" disabled="@(Back >= MaxBack)" @onclick="Earlier">← earlier years</button>
+    <button type="button" class="kpim-bd-step" aria-label="Show a later year" disabled="@(Back <= 0)" @onclick="Later">later years →</button>
+</div>
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else
+{
+    var end = Years.Count - Back;
+    var start = Math.Max(0, end - YearsShown);
+    var shown = Years.Skip(start).Take(end - start).ToList();
+
+    <section class="kpim-fill kpim-bd-wrap">
+        <table class="kpim-bd-table">
+            <thead>
+                <tr>
+                    <th scope="col"></th>
+                    @foreach (var y in shown)
+                    {
+                        <th scope="col" class="@(IsCurrent(y) ? "kpim-bd-cur" : "")">@(IsCurrent(y) ? $"{y.BadDebtYear} to date" : y.BadDebtYear.ToString())</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in Lines)
+                {
+                    <tr class="@(line.GapAfter ? "kpim-bd-gap" : "")">
+                        <th scope="row">@line.Label</th>
+                        @foreach (var y in shown)
+                        {
+                            <td class="@(IsCurrent(y) ? "kpim-bd-cur" : "") @(line.Strong ? "kpim-bd-strong" : "")">@line.Value(y)</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+
+@code {
+    /// <summary>Every year the page loaded, oldest first.</summary>
+    [Parameter] public List<BadDebtYearRow> Years { get; set; } = new();
+
+    [Parameter] public DateTime? AsOf { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    /// <summary>The page's Applications filter, as BadDebtApproval's number.</summary>
+    [Parameter] public string Approval { get; set; } = "";
+    [Parameter] public EventCallback<string> ApprovalChanged { get; set; }
+
+    private static readonly IReadOnlyList<KpiOption> ApprovalOptions = new[]
+    {
+        new KpiOption(((int)BadDebtApproval.All).ToString(), "All applications"),
+        new KpiOption(((int)BadDebtApproval.AutoApproved).ToString(), "Auto approved"),
+        new KpiOption(((int)BadDebtApproval.Manual).ToString(), "Approved by hand"),
+    };
+
+    // Six years fit across the phone.
+    private const int YearsShown = 6;
+
+    // Years the window has stepped back from the latest (0 = it ends at the latest year).
+    private int _back;
+    private int MaxBack => Math.Max(0, Years.Count - YearsShown);
+    private int Back => Math.Clamp(_back, 0, MaxBack);
+
+    private void Earlier() => _back = Math.Min(Back + 1, MaxBack);
+    private void Later() => _back = Math.Max(Back - 1, 0);
+
+    // The full view's rows, in its order; GapAfter closes a group, Strong marks the two ratios.
+    private sealed record Line(string Label, Func<BadDebtYearRow, string> Value, bool GapAfter = false, bool Strong = false);
+
+    private static readonly Line[] Lines =
+    {
+        new("Amount Financed", r => Cur(r.AmountFinanced)),
+        new("EOY Outstanding Capital", r => Cur(r.RemainingCapital)),
+        new("EOY Active Leads", r => r.ActiveLeadCount.ToString("N0"), GapAfter: true),
+        new("Written Off Amount", r => Cur(r.WrittenOffAmount)),
+        new("Written Off Leads", r => r.WrittenOffLeadCount.ToString("N0")),
+        new("Bad Debt / Book Size", r => Pct(r.BadDebtPercentage), GapAfter: true, Strong: true),
+        new("Recovered Amount", r => Cur(r.RecoveredAmount)),
+        new("Net Bad Debt", r => Cur(r.NetBadDebt)),
+        new("Net Bad Debt / Book Size", r => Pct(r.NetBadDebtPercent), Strong: true),
+    };
+
+    // The year the report is "as at" has not ended: its year-end figures are today's.
+    private bool IsCurrent(BadDebtYearRow r) => AsOf is not null && r.BadDebtYear == AsOf.Value.Year;
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+}

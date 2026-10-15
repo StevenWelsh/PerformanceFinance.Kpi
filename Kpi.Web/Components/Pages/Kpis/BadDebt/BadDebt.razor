@@ -1,0 +1,226 @@
+@page "/kpis/bad-debt"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@attribute [Authorize(Policy = "OBEnquiryBadDebt.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@using Kpi.Web.Reports
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Bad Debt — own book, one column per calendar year, ten at a time (oldest left; the latest ten first, with
+   Earlier / Later years in the card header when there are more), from OB.AnnualBadDebtList:
+   the procedure behind the desktop's Own Book > Bad Debt History tab, so both show the same
+   figures. Rows are the Klipfolio report's; recoveries are the recovery receipts, which
+   Klipfolio's older rule reports as £0. Needs the desktop's Bad Debt right as well as Dashboard,
+   as the desktop does. The current year runs to today. *@
+
+<PageTitle>Bad Debt — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="bad-debt" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Bad Debt" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+            <div class="kpi-filters kpi-bd-filters">
+                <KpiField Caption="Applications" Value="@(((int)_approval).ToString())"
+                          ValueChanged="@(v => OnApproval(new ChangeEventArgs { Value = v }))" Options="ApprovalOptions" />
+            </div>
+
+            @if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+            else
+            {
+                <div class="ss-card bd-card">
+                    <div class="ss-card-head kpi-bd-head">
+                        <span class="kpi-bd-head-title">Own book bad debt by year</span>
+                        @if (MaxBack > 0)
+                        {
+                            @* more years than the ten shown: step the window a year at a time *@
+                            <button type="button" class="kpi-btn" title="Show an earlier year"
+                                    disabled="@(_back >= MaxBack)" @onclick="Earlier"><i class="bi bi-chevron-left" aria-hidden="true"></i>Earlier years</button>
+                            <button type="button" class="kpi-btn" title="Show a later year"
+                                    disabled="@(_back <= 0)" @onclick="Later">Later years<i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+                        }
+                    </div>
+                    <table class="mi-table bd-table">
+                        <thead>
+                            <tr>
+                                <th class="mi-l"></th>
+                                @foreach (var y in _years)
+                                {
+                                    <th class="@(IsCurrent(y) ? "yoy-cur" : "")">@YearLabel(y)</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var line in Lines)
+                            {
+                                if (line.Value is null)
+                                {
+                                    @* a cell per year, so the current year's shading runs unbroken *@
+                                    <tr class="bd-gap">
+                                        <td></td>
+                                        @foreach (var y in _years)
+                                        {
+                                            <td class="@(IsCurrent(y) ? "yoy-cur" : "")"></td>
+                                        }
+                                    </tr>
+                                    continue;
+                                }
+                                <tr class="@(line.Strong ? "kpi-bd-strong" : "")">
+                                    <td class="mi-l">@line.Label</td>
+                                    @foreach (var y in _years)
+                                    {
+                                        <td class="@(IsCurrent(y) ? "yoy-cur" : "")">@line.Value(y)</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Bad Debt" Active="bad-debt" AsAt="_asOf" Hint="KpiMobileHint.SummaryInPortrait">
+    <ChildContent>
+        <BadDebtMobile Years="_all" AsOf="_asOf" Loading="_loading" Error="@_error" />
+    </ChildContent>
+    <Landscape>
+        <BadDebtMobileLandscape Years="_all" AsOf="_asOf" Loading="_loading" Error="@_error"
+                                Approval="@(((int)_approval).ToString())"
+                                ApprovalChanged="@(v => OnApproval(new ChangeEventArgs { Value = v }))" />
+    </Landscape>
+</KpiMobile>
+
+@code {
+    private BadDebtApproval _approval = BadDebtApproval.All;
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    private List<BadDebtYearRow> _all = new();     // every year the procedure returns, oldest first
+    private List<BadDebtYearRow> _years = new();   // the ten shown
+    private int _back;                             // years the window has stepped back from the latest
+
+    // The rows, in the Klipfolio report's order; a null Value is the gap between groups. Strong marks the
+    // two ratios, as on the phone.
+    private static readonly (string Label, Func<BadDebtYearRow, string>? Value, bool Strong)[] Lines =
+    {
+        ("Amount Financed", r => Cur(r.AmountFinanced), false),
+        ("EOY Outstanding Capital", r => Cur(r.RemainingCapital), false),
+        ("EOY Active Leads", r => r.ActiveLeadCount.ToString("N0"), false),
+        ("", null, false),
+        ("Written Off Amount", r => Cur(r.WrittenOffAmount), false),
+        ("Written Off Leads", r => r.WrittenOffLeadCount.ToString("N0"), false),
+        ("Bad Debt / Book Size", r => Pct(r.BadDebtPercentage), true),
+        ("", null, false),
+        ("Recovered Amount", r => Cur(r.RecoveredAmount), false),
+        ("Net Bad Debt", r => Cur(r.NetBadDebt), false),
+        ("Net Bad Debt / Book Size", r => Pct(r.NetBadDebtPercent), true),
+    };
+
+    private static readonly IReadOnlyList<KpiOption> ApprovalOptions = new[]
+    {
+        new KpiOption(((int)BadDebtApproval.All).ToString(), "All"),
+        new KpiOption(((int)BadDebtApproval.AutoApproved).ToString(), "Auto approved"),
+        new KpiOption(((int)BadDebtApproval.Manual).ToString(), "Approved by hand"),
+    };
+
+    private sealed record Payload(List<BadDebtYearRow> Years);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            // Cached per (applications filter + report date): the procedure takes ~10 s, so only
+            // the first viewer of the day waits. GetOrLoad is single-flight.
+            var entry = await KpiCache.GetOrLoad(KpiCache.Key("BadDebt", (int)_approval), LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    // Pure loader: opens a one-shot session, runs the procedure, returns the payload + its as-at.
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var years = new BadDebtService(cms.Db).GetHistory(_approval);
+        return (new Payload(years), asAt);
+    }
+
+    // The desktop keeps every year since 2014; the dashboard shows ten at a time, the latest first,
+    // and Earlier / Later years step the window back and forward a year at a time.
+    private const int YearsShown = 10;
+
+    private int MaxBack => Math.Max(0, _all.Count - YearsShown);
+
+    private void Apply(Payload p)
+    {
+        _all = p.Years.OrderBy(y => y.BadDebtYear).ToList();
+        ShowWindow();
+    }
+
+    private void ShowWindow()
+    {
+        _back = Math.Clamp(_back, 0, MaxBack);
+        var end = _all.Count - _back;
+        var start = Math.Max(0, end - YearsShown);
+        _years = _all.Skip(start).Take(end - start).ToList();
+    }
+
+    private void Earlier() { _back++; ShowWindow(); }
+    private void Later() { _back--; ShowWindow(); }
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view.
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(KpiCache.Key("BadDebt", (int)_approval), LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task OnApproval(ChangeEventArgs e)
+    {
+        _approval = int.TryParse(e.Value?.ToString(), out var v) ? (BadDebtApproval)v : BadDebtApproval.All;
+        await Load();
+    }
+
+    // The year the report is "as at" has not ended: its year-end figures are today's.
+    private bool IsCurrent(BadDebtYearRow r) => _asOf is not null && r.BadDebtYear == _asOf.Value.Year;
+    private string YearLabel(BadDebtYearRow r) => IsCurrent(r) ? $"{r.BadDebtYear} to date" : r.BadDebtYear.ToString();
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+}

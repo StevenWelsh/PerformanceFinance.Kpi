@@ -1,0 +1,1329 @@
+/* The KPI screens' own stylesheet (Oct 2026, Steve). Loaded only by the KPI screens (KpiMobile's HeadContent -
+   every KPI page renders KpiMobile), so nothing here reaches the rest of Kpi.Web. It holds the PHONE views and,
+   in its "Full view" section, the look the full views share with them. Every KPI page renders its full view (.kpi-shell) AND
+   its phone view (.kpim); the media query below shows exactly one. A tablet or a desktop window keeps
+   today's full view, untouched. Inside the phone view, turning the handset swaps the portrait part
+   (.kpim-port) for the landscape part (.kpim-land) where a report has one - pure CSS, no round trip.
+
+   Colours: the Performance Finance phone palette, as tokens - never a literal colour below :root. */
+:root {
+    --kpim-crimson: #d20d43;            /* PF crimson: top bar, menu, the selected segment */
+    --kpim-crimson-dark: #a00a33;       /* values in filter fields, pressed / highlighted marks */
+    --kpim-on-crimson: #ffffff;
+    --kpim-on-crimson-wash: rgba(255, 255, 255, 0.18);   /* buttons and the active row on crimson */
+    --kpim-on-crimson-active: rgba(255, 255, 255, 0.22);
+    --kpim-on-crimson-rule: rgba(255, 255, 255, 0.25);
+    --kpim-bg: #f2f2f2;                 /* page */
+    --kpim-card: #ffffff;
+    --kpim-card-line: #e3e3e3;          /* card borders, the rule under table headers */
+    --kpim-card-head: #fafafa;          /* card header band */
+    --kpim-card-head-line: #ececec;
+    --kpim-row-line: #f0f0f0;           /* hairline between table rows */
+    --kpim-field-line: #cfcfcf;         /* filter field border */
+    --kpim-field-off: #f4f4f4;          /* a filter that does not apply */
+    --kpim-track: #e6e6e6;              /* segmented control track */
+    --kpim-hint: #76777c;               /* the landscape hint strip */
+    --kpim-text: #1a1a1a;
+    --kpim-text-strong: #3a3a3a;
+    --kpim-text-2: #5c5c5c;             /* labels, captions */
+    --kpim-text-3: #767676;             /* faint */
+    --kpim-logo-grey: #a1a2a7;          /* the grey of the PF logo dots */
+    --kpim-up: #0b5cad;                 /* a change for the better */
+    --kpim-up-bg: #e6f0fb;
+    --kpim-down: #b35c00;               /* a change for the worse */
+    --kpim-down-bg: #fdf0e1;
+    --kpim-overlay: rgba(20, 24, 33, 0.45);
+    --kpim-shadow: rgba(0, 0, 0, 0.25);
+    --kpim-tip-bg: rgba(20, 24, 33, 0.92);
+    --kpim-sps-avatar: #555555;         /* Salesperson Summary / Sales Productivity: the picker's initials disc */
+    --kpim-spr-track: #ececec;          /* Sales Productivity: funnel bar track */
+    --kpim-spr-approved: #e86a8b;       /* Sales Productivity: the Approved funnel bar */
+    --kpim-spr-now: #fdeef2;            /* Sales Productivity: the newest year's column */
+    --kpim-spr-now-head: #f6c9d5;       /* Sales Productivity: the newest year's heading */
+    --kpim-rp-current: #fdf6dc;         /* Record Performances: a record set this year */
+    --kpim-rp-badge: #f0f0f0;           /* Record Performances: the rank / year badge */
+    --kpim-rp-trophy: #b07f00;          /* Record Performances: trophy outline */
+    --kpim-rp-trophy-fill: #f2c94c;     /* Record Performances: trophy cup */
+    --kpim-ba-s1: #d20d43;              /* Business Analysis: series colours, in the table's order */
+    --kpim-ba-s2: #8a0a2d;
+    --kpim-ba-s3: #e86a8b;
+    --kpim-ba-s4: #f4b6c6;
+    --kpim-ba-s5: #3a3a3a;
+    --kpim-ba-s6: #76777c;
+    --kpim-ba-s7: #a1a2a7;
+    --kpim-ba-s8: #d0d1d4;
+    --kpim-ba-part: #f4b6c6;            /* Business Analysis: the report year's trend bar while part way */
+    --kpim-ba-track: #ececec;           /* Business Analysis: empty donut, lender bar track */
+    --kpim-ba-axis: #cfcfcf;            /* Business Analysis: trend baseline, the lender total rule */
+    --kpim-ba-flat: #f0f0f0;            /* Business Analysis: a change pill with no % (New, –) */
+    --kpim-sd-track: #ececec;           /* Supplier Development: trend bar track */
+    --kpim-sd-bar-cur: #f9dce4;         /* Supplier Development: the report year's trend bar (crimson outline) */
+    --kpim-bd-track: #ececec;           /* Bad Debt: bar track */
+    --kpim-bd-head: #f5f5f5;            /* Bad Debt landscape: the table's heading row */
+    --kpim-bd-now: #fdeef2;             /* Bad Debt landscape: the current year's column */
+    --kpim-bd-now-head: #f6c9d5;        /* Bad Debt landscape: the current year's heading */
+    --kpim-bd-off: #b5b5b5;             /* Bad Debt landscape: a year step that cannot go further */
+    --kpim-ex-track: #ececec;           /* Exposure Top 10: share bar track */
+    --kpim-ex-head: #f5f5f5;            /* Exposure Top 10 landscape: the table's heading row */
+    --kpim-yoy-cur: #fdeef2;            /* Year on Year: the current year's column */
+    --kpim-yoy-cur-head: #f6c9d5;       /* Year on Year: the current year's heading */
+    --kpim-yoy-head: #f5f5f5;           /* Year on Year: the fixed header band (landscape) */
+    --kpim-yoy-rule: #cfcfcf;           /* Year on Year: the rule under the header and around the totals */
+    --kpim-yoy-line: #ececec;           /* Year on Year: between rows */
+    --kpim-sp-col: #2b579a;             /* Sales Performance: target chart columns (the full view's --brand) */
+    --kpim-sp-col-on: #1f3a5f;          /* Sales Performance: the tapped column (the full view's --navy) */
+    --kpim-sp-target: #f4c20d;          /* Sales Performance: YTD and year target lines (the full view's --target-line) */
+    --kpim-sp-grid: #e5e5e5;            /* Sales Performance: chart gridlines */
+    --kpim-sp-link: #0b5cad;            /* Sales Performance: the Other button */
+    --kpim-sp-head: #f5f5f5;            /* Sales Performance: the landscape league table's header band */
+    --kpim-sp-rule: #cfcfcf;            /* Sales Performance: landscape header rule and the total rule */
+    --kpim-sp-line: #ececec;            /* Sales Performance: landscape rows */
+    --kpim-sp-axis: #8a8a8a;            /* Sales Performance chart: axis amounts */
+    --kpim-sp-name: #555555;            /* Sales Performance chart: the names under the columns */
+    --kpim-ma-track: #ececec;           /* Margin Analysis: the rate track under each row */
+    --kpim-ma-band: #f4b6c6;            /* Margin Analysis: the band between the buy and sell dots */
+    --kpim-ma-buy-dot: #76777c;         /* Margin Analysis: the buy dot (the sell dot is crimson) */
+    --kpim-ma-note: #6b6b6b;            /* Margin Analysis: "no deals" / "no funding" notes, a margin with no sales */
+    --kpim-ma-margin: #f59e0b;          /* Margin Analysis chart: margin bars (the full view's --chart-2) */
+    --kpim-ma-buy: #06b6d4;             /* Margin Analysis chart: buy rate (the full view's --chart-6) */
+    --kpim-ma-sell: #10b981;            /* Margin Analysis chart: sell rate (the full view's --chart-3) */
+    --kpim-ma-grid: #e5e5e5;            /* Margin Analysis chart: gridlines (the full view's --line) */
+    --kpim-ma-axis: #888888;            /* Margin Analysis chart: axis labels (the full view's --text-3) */
+    --kpim-ma-key: #555555;             /* Margin Analysis chart: the key (the full view's --text-2) */
+    --kpim-mi-below: #8a4700;           /* Minimum IRR: text on the below-minimum tint */
+    --kpim-mi-clear: #0b4f94;           /* Minimum IRR: text on the none-below tint */
+    --kpim-mi-neutral: #f0f0f0;         /* Minimum IRR: neutral chips and the no-deals panel */
+    --kpim-mi-head: #f5f5f5;            /* Minimum IRR landscape: the table's heading row */
+    --kpim-mi-rule: #cfcfcf;            /* Minimum IRR landscape: header rule and the total rule */
+    --kpim-mi-line: #ececec;            /* Minimum IRR landscape: between rows */
+    --kpim-hm-sea: #eef4fa;             /* Postcode Heat Map: the sea behind the map (the full view's) */
+    --kpim-hm-none-line: #d6d8db;       /* Postcode Heat Map: edge of the "None" legend swatch */
+    --kpim-hm-sel-row: #fdeef2;         /* Postcode Heat Map: the selected row in the list */
+    --kpim-hm-detail: #f6f6f6;          /* Postcode Heat Map: the selected-area card */
+    --kpim-hm-detail-shadow: rgba(0, 0, 0, 0.10);
+    --kpim-star: #f5b301;               /* a favourite report's star */
+    --kpim-on-crimson-soft: rgba(255, 255, 255, 0.6);   /* an unticked star on crimson */
+    --kpim-on-crimson-dash: rgba(255, 255, 255, 0.5);   /* the dashed empty-favourites box */
+    --kpim-menu-track: rgba(0, 0, 0, 0.18);             /* the Favourites / All switch on crimson */
+    --kpim-now: #fdeef2;                /* the current year / period, column or row */
+    --kpim-now-head: #f6c9d5;           /* ...and its heading */
+    /* ---- report tokens: add above this line, named --kpim-<report>-<role> ---- */
+}
+
+/* ---- Which view shows ----
+   .kpim carries an inline display:none (KpiMobile), so it stays hidden until this sheet has loaded;
+   on a phone the !important below wins over it. */
+@media (max-width: 599px), (max-height: 499px) and (orientation: landscape) and (pointer: coarse) {
+    .kpi-shell { display: none !important; }
+    .kpim { display: flex !important; }
+    html, body { background: var(--kpim-bg); }
+}
+.kpim-land { display: none; }
+@media (orientation: landscape) {
+    .kpim-has-land .kpim-port { display: none; }
+    .kpim-has-land .kpim-land { display: flex; }
+    .kpim-has-land .kpim-hint { display: none; }
+}
+
+/* ---- The phone shell ---- */
+.kpim {
+    position: fixed; inset: 0;
+    flex-direction: column;
+    background: var(--kpim-bg);
+    color: var(--kpim-text);
+    font-family: 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', sans-serif;
+    -webkit-text-size-adjust: 100%;
+}
+.kpim-bar {
+    display: flex; align-items: center; gap: 4px;
+    height: 60px; padding: 0 12px 0 4px; flex-shrink: 0;
+    background: var(--kpim-crimson); color: var(--kpim-on-crimson);
+}
+.kpim-bar-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 48px; height: 48px; flex-shrink: 0;
+    border: 0; background: transparent; color: var(--kpim-on-crimson); font-size: 24px; cursor: pointer;
+}
+.kpim-bar h1 { flex: 1; min-width: 0; margin: 0; font-size: 19px; font-weight: 600; line-height: 1.2; color: var(--kpim-on-crimson);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* top right: "As at" over "Refreshed hh:mm" (a spinner while loading / refreshing), as the full view's date line */
+.kpim-bar-dates { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0;
+    font-size: 12px; line-height: 1.25; color: var(--kpim-on-crimson); font-variant-numeric: tabular-nums; }
+.kpim-refreshed { display: inline-flex; align-items: center; gap: 6px; min-height: 15px; opacity: 0.85; }
+.kpim-mini-spinner { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--kpim-on-crimson-rule);
+    border-top-color: var(--kpim-on-crimson); animation: kpim-spin 0.7s linear infinite; }
+@media (orientation: landscape) {
+    .kpim-bar { height: 48px; gap: 8px; padding-right: 16px; }
+    .kpim-bar-btn { width: 44px; height: 44px; font-size: 22px; }
+    .kpim-bar h1 { font-size: 18px; }
+}
+
+.kpim-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.kpim-port, .kpim-land { flex: 1; min-height: 0; flex-direction: column; }
+.kpim-port { display: flex; overflow-y: auto; padding: 14px 16px 16px; gap: 12px; }
+.kpim-land { overflow: hidden; padding: 8px 16px 8px; gap: 8px; }
+.kpim-port > *, .kpim-land > * { flex-shrink: 0; }
+.kpim-land > .kpim-fill { flex: 1; min-height: 0; flex-shrink: 1; }
+
+/* ---- The landscape hint (portrait only, always first) ---- */
+.kpim-hint {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px; border-radius: 12px;
+    background: var(--kpim-hint); color: var(--kpim-on-crimson);
+    font-size: 15px; line-height: 1.3;
+}
+.kpim-hint svg { flex-shrink: 0; }
+.kpim-lh-phone { transform-box: fill-box; transform-origin: center; animation: kpim-rotate 2.8s ease-in-out infinite; }
+@keyframes kpim-rotate { 0%, 22% { transform: rotate(0deg); } 48%, 72% { transform: rotate(-90deg); } 96%, 100% { transform: rotate(0deg); } }
+/* the reverse: a portrait report held sideways (KpiMobile renders it only for reports with no landscape view) */
+.kpim-hint.kpim-hint-up { display: none; }
+@media (orientation: landscape) { .kpim-hint.kpim-hint-up { display: flex; padding: 8px 12px; font-size: 14px; } }
+.kpim-lh-phone-up { transform-box: fill-box; transform-origin: center; animation: kpim-rotate-up 2.8s ease-in-out infinite; }
+@keyframes kpim-rotate-up { 0%, 22% { transform: rotate(-90deg); } 48%, 72% { transform: rotate(0deg); } 96%, 100% { transform: rotate(-90deg); } }
+@media (prefers-reduced-motion: reduce) { .kpim-lh-phone, .kpim-lh-phone-up { animation: none; } }
+
+/* ---- Filters: ONE look for every parameter filter ---- */
+.kpim-filters { display: grid; gap: 10px; grid-template-columns: repeat(var(--kpim-cols, 2), minmax(0, 1fr)); }
+.kpim-field {
+    position: relative; display: flex; flex-direction: column; justify-content: center;
+    height: 48px; padding: 0 12px; box-sizing: border-box; min-width: 0; margin: 0;
+    border: 1px solid var(--kpim-field-line); border-radius: 12px; background: var(--kpim-card);
+    text-align: left; cursor: pointer;
+}
+.kpim-field-caption { font-size: 11.5px; color: var(--kpim-text-2); line-height: 1.25; }
+.kpim-field-value { display: inline-flex; align-items: center; gap: 4px; min-width: 0;
+    font-size: 14px; font-weight: 600; color: var(--kpim-crimson-dark); line-height: 1.3; }
+.kpim-field-value > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.kpim-field-value > i { font-size: 11px; flex-shrink: 0; }
+.kpim-field select {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    opacity: 0; border: 0; font-size: 16px; cursor: pointer;
+}
+.kpim-field-off { background: var(--kpim-field-off); cursor: default; }
+.kpim-field-off .kpim-field-value { color: var(--kpim-text-3); }
+.kpim-compact .kpim-field { height: 40px; }
+.kpim-compact .kpim-field-caption { font-size: 10.5px; }
+.kpim-compact .kpim-field-value { font-size: 13px; }
+
+/* ---- Filters that fold away (KpiMobileFilters): open = the fields with a fold button at the end of their row (no
+   extra band); folded = one slim summary bar. Opens on arrival, folds after a few idle seconds. ---- */
+.kpim-fbox { display: flex; flex-direction: column; min-width: 0; }
+.kpim-fbar {
+    display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; height: 36px; padding: 0 12px;
+    border: 1px solid var(--kpim-field-line); border-radius: 18px; background: var(--kpim-card);
+    font-family: inherit; font-size: 13.5px; text-align: left; cursor: pointer;
+}
+.kpim-fbar > .bi-funnel { color: var(--kpim-crimson-dark); flex-shrink: 0; }
+.kpim-fbar-sum { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    font-weight: 600; color: var(--kpim-crimson-dark); }
+.kpim-fbar-chev { flex-shrink: 0; color: var(--kpim-text-2); }
+.kpim-fbox-open .kpim-fbar { display: none; }
+.kpim-fbox-body { display: none; }
+.kpim-fbox-open .kpim-fbox-body { display: flex; align-items: flex-start; gap: 8px; }
+.kpim-fbox-fields { flex: 1; min-width: 0; }
+.kpim-fbox-fold {
+    flex-shrink: 0; width: 40px; height: 40px; margin-top: 4px; border-radius: 20px; border: 1px solid var(--kpim-field-line);
+    background: var(--kpim-card); color: var(--kpim-text-2); cursor: pointer;
+}
+/* landscape: the shorter version */
+.kpim-fbox-compact { flex: 1; }
+.kpim-land > .kpim-fbox-compact { flex: none; }   /* straight in the landscape column: its own height, not a share */
+.kpim-fbox-compact .kpim-fbar { height: 32px; font-size: 13px; }
+.kpim-fbox-compact .kpim-fbox-fold { width: 32px; height: 32px; margin-top: 4px; border-radius: 16px; }
+
+/* ---- Segmented control: ONLY for switching between views of the same data ---- */
+.kpim-seg { display: grid; gap: 4px; padding: 4px; border-radius: 12px; background: var(--kpim-track);
+    grid-template-columns: repeat(var(--kpim-cols, 2), minmax(0, 1fr)); }
+.kpim-seg button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    height: 40px; border: 0; border-radius: 9px; padding: 0 6px;
+    font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+    background: transparent; color: var(--kpim-text-strong);
+}
+.kpim-seg button.kpim-on { background: var(--kpim-crimson); color: var(--kpim-on-crimson); }
+.kpim-compact .kpim-seg button, .kpim-seg.kpim-compact button { height: 32px; font-size: 14px; }
+
+/* ---- Cards and tables ---- */
+.kpim-card { background: var(--kpim-card); border: 1px solid var(--kpim-card-line); border-radius: 14px; overflow: hidden; }
+.kpim-card-head {
+    margin: 0; padding: 10px 14px 9px;
+    background: var(--kpim-card-head); border-bottom: 1px solid var(--kpim-card-head-line);
+    font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-strong);
+}
+.kpim-card-pad { padding: 12px 16px 14px; }
+.kpim-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.kpim-table th {
+    padding: 7px 6px 6px; border-bottom: 2px solid var(--kpim-card-line);
+    font-size: 12.5px; font-weight: 600; color: var(--kpim-text-2); white-space: nowrap; text-align: right;
+}
+.kpim-table td { padding: 7px 6px; border-bottom: 1px solid var(--kpim-row-line); text-align: right; white-space: nowrap; }
+.kpim-table th:first-child, .kpim-table td:first-child { padding-left: 14px; text-align: left; }
+.kpim-table th:last-child, .kpim-table td:last-child { padding-right: 14px; }
+.kpim-table .kpim-left { text-align: left; }
+.kpim-table .kpim-label { color: var(--kpim-text-2); font-size: 13.5px; white-space: normal; }
+.kpim-table tr.kpim-total td { border-top: 2px solid var(--kpim-card-line); border-bottom: 0; font-weight: 700; }
+.kpim-table tr:last-child td { border-bottom: 0; }
+.kpim-sticky thead th { position: sticky; top: 0; background: var(--kpim-card); z-index: 1; }
+
+.kpim-up { color: var(--kpim-up); }
+.kpim-down { color: var(--kpim-down); }
+.kpim-pill { display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 13px;
+    font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpim-pill.kpim-up { background: var(--kpim-up-bg); }
+.kpim-pill.kpim-down { background: var(--kpim-down-bg); }
+.kpim-muted { color: var(--kpim-text-2); }
+.kpim-faint { color: var(--kpim-text-3); }
+.kpim-empty { padding: 14px 16px; font-size: 14px; color: var(--kpim-text-2); }
+.kpim-loading { display: flex; align-items: center; gap: 10px; padding: 18px 16px; font-size: 14px; color: var(--kpim-text-2); }
+.kpim-spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--kpim-card-line);
+    border-top-color: var(--kpim-crimson); animation: kpim-spin 0.7s linear infinite; }
+@keyframes kpim-spin { to { transform: rotate(360deg); } }
+.kpim-error { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-radius: 12px;
+    background: var(--kpim-card); border: 1px solid var(--kpim-card-line); font-size: 14px; color: var(--kpim-down); }
+
+/* Chart tooltip (tap a bar / band) */
+.kpim-tip { position: absolute; padding: 6px 10px; border-radius: 6px; background: var(--kpim-tip-bg); color: var(--kpim-on-crimson);
+    font-size: 12.5px; line-height: 1.45; white-space: nowrap; font-variant-numeric: tabular-nums;
+    box-shadow: 0 2px 8px var(--kpim-shadow); pointer-events: none; z-index: 5; }
+
+/* ---- The reports menu (a drawer over the report; the whole screen on /kpis) ---- */
+.kpim-menu-backdrop { position: fixed; inset: 0; z-index: 50; background: var(--kpim-overlay); border: 0; padding: 0; }
+.kpim-menu {
+    position: fixed; top: 0; left: 0; bottom: 0; z-index: 51;
+    width: min(312px, 85vw); box-sizing: border-box;
+    display: flex; flex-direction: column;
+    background: var(--kpim-crimson); color: var(--kpim-on-crimson);
+    box-shadow: 4px 0 18px var(--kpim-shadow);
+}
+.kpim-menu.kpim-menu-page { position: static; width: auto; flex: 1; min-height: 0; box-shadow: none; }
+.kpim-menu-head { display: flex; align-items: center; justify-content: space-between; height: 60px; padding: 0 4px 0 20px; flex-shrink: 0; }
+.kpim-menu-head span { font-size: 20px; font-weight: 600; }
+.kpim-menu-list { flex: 1; overflow-y: auto; padding: 4px 10px 12px; display: flex; flex-direction: column; gap: 14px; }
+.kpim-menu-section { display: flex; flex-direction: column; }
+.kpim-menu-heading { padding: 6px 12px; font-size: 12.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--kpim-on-crimson); }
+.kpim-menu-item {
+    display: flex; align-items: center; gap: 14px; height: 46px; padding: 0 12px; border-radius: 8px;
+    text-decoration: none; font-size: 16px; color: var(--kpim-on-crimson);
+}
+.kpim-menu-item:hover, .kpim-menu-item:focus { color: var(--kpim-on-crimson); background: var(--kpim-on-crimson-wash); }
+.kpim-menu-item.kpim-on { font-weight: 600; background: var(--kpim-on-crimson-active); }
+.kpim-menu-item i { font-size: 20px; width: 20px; text-align: center; }
+/* Favourites / All (KpiFavourites): the switch under the menu's head, a star on every row */
+.kpim-menu-seg { margin: 0 12px 8px; background: var(--kpim-menu-track); flex-shrink: 0; }
+.kpim-menu-seg button { height: 36px; color: var(--kpim-on-crimson); }
+.kpim-menu-seg button.kpim-on { background: var(--kpim-card); color: var(--kpim-crimson-dark); }
+.kpim-menu-count { font-size: 12px; font-weight: 700; padding: 1px 7px; border-radius: 10px; background: var(--kpim-on-crimson-wash); }
+.kpim-menu-seg button.kpim-on .kpim-menu-count { background: var(--kpim-now); }
+.kpim-menu-row { display: flex; align-items: center; border-radius: 8px; }
+.kpim-menu-row.kpim-on { background: var(--kpim-on-crimson-active); }
+.kpim-menu-row.kpim-on .kpim-menu-item { font-weight: 600; }
+.kpim-menu-row .kpim-menu-item { flex: 1; min-width: 0; }
+.kpim-star {
+    width: 40px; height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    border: 0; border-radius: 10px; background: transparent; color: var(--kpim-on-crimson-soft); font-size: 18px; cursor: pointer;
+}
+.kpim-star.kpim-on, .kpim-bar-star.kpim-on { color: var(--kpim-star); }
+.kpim-bar-star { font-size: 19px; }
+.kpim-menu-empty { margin: 6px 4px; padding: 16px; border: 1px dashed var(--kpim-on-crimson-dash); border-radius: 12px;
+    font-size: 14px; line-height: 1.45; color: var(--kpim-on-crimson); }
+@media (orientation: landscape) { .kpim-menu-head { height: 48px; } .kpim-menu-item { height: 40px; } }
+
+/* ==================== Full view ====================
+   The full views (.kpi-shell) wear the same look as the phone - lighter page, rounder and lighter cards, the
+   one filter field (KpiField, as on the phone), blue up / amber down, the pale crimson current year - with
+   their layout unchanged. app.css still lays them out; these rules only restyle, scoped to .kpi-shell. */
+.kpi-shell .kpi-main { background: var(--kpim-bg); }
+
+.kpi-shell .ss-card { border-color: var(--kpim-card-line); border-radius: 14px; }
+.kpi-shell .ss-card-head {
+    background: var(--kpim-card-head); border-bottom-color: var(--kpim-card-head-line);
+    font-size: 13px; letter-spacing: 0.06em; color: var(--kpim-text-strong);
+}
+.kpi-shell .ss-table, .kpi-shell .kcc-table { font-size: 14.5px; }
+.kpi-shell .kcc-table thead th { font-size: 12.5px; color: var(--kpim-text-2); }
+
+/* filters: a row of KpiFields, the Sales Office first; a view switch (KpiSegmented) may sit at its end */
+.kpi-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.kpi-filters .kpim-field { width: 190px; }
+.kpi-filters .kpim-seg { margin-left: auto; }
+.kpi-filters .kpim-seg button { height: 34px; font-size: 14px; padding: 0 14px; }
+
+/* changes: blue for better, amber for worse */
+.kpi-shell .ss-up, .kpi-shell .kcc-up { color: var(--kpim-up); }
+.kpi-shell .ss-down, .kpi-shell .kcc-down { color: var(--kpim-down); }
+
+/* the current year / period */
+.kpi-shell .yoy-cur { background: var(--kpim-now); }
+.kpi-shell thead .yoy-cur, .kpi-shell th.yoy-cur { background: var(--kpim-now-head); }
+
+/* actions on a card or bar (Earlier / Later years, Timelapse): a quiet pill */
+.kpi-btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px;
+    border: 1px solid var(--kpim-field-line); border-radius: 16px; background: var(--kpim-card);
+    font-family: inherit; font-size: 13px; font-weight: 600; color: var(--kpim-crimson-dark); cursor: pointer;
+}
+.kpi-btn:hover:not(:disabled) { border-color: var(--kpim-crimson-dark); }
+.kpi-btn:disabled { color: var(--kpim-text-3); cursor: default; }
+
+/* the Sales Office with no figures (KpiOfficeEmpty) - full view and phone */
+.kpi-office-empty {
+    display: flex; align-items: center; gap: 10px; padding: 16px 18px;
+    background: var(--kpim-card); border: 1px solid var(--kpim-card-line); border-radius: 14px;
+    font-size: 14.5px; color: var(--kpim-text-2);
+}
+.kpi-office-empty i { font-size: 18px; color: var(--kpim-logo-grey); }
+
+/* ==================== Reports ==================== */
+
+/* ---- Sales Summary (its period cards are Salesperson Summary's too) ---- */
+.kpim-ss-table { table-layout: fixed; }
+.kpim-ss-table th, .kpim-ss-table td { padding-left: 4px; padding-right: 4px; }
+.kpim-ss-table th:first-child, .kpim-ss-table td:first-child { padding-left: 14px; padding-right: 2px; }
+.kpim-ss-table th:last-child, .kpim-ss-table td:last-child { padding-left: 6px; padding-right: 13px; }
+.kpim-ss-table th:nth-child(2), .kpim-ss-table th:nth-child(3) { box-sizing: border-box; width: 88px; }
+.kpim-ss-table th:nth-child(4) { box-sizing: border-box; width: 72px; }
+.kpim-ss-table td.kpim-label { line-height: 1.25; }
+.kpim-ss-delta { font-weight: 600; }
+.kpim-ss-ne td { vertical-align: top; padding-bottom: 8px; }
+.kpim-ss-split { display: block; min-height: 18px; font-size: 12.5px; color: var(--kpim-text-2); }
+.kpim-ss-error { display: flex; align-items: center; gap: 8px; padding: 12px 14px; font-size: 14px; color: var(--kpim-down); }
+/* full view: the Sales Office row above the grid. The grid fills the panel's width (Salesperson Summary's too) -
+   the division (or salesperson) columns where they fit, else two, else one - so nothing needs a sideways scroll */
+.kpi-ss-page { display: flex; flex-direction: column; gap: 16px; }
+.kpi-ss-page, .kpi-sps-page { container: kpi-ss / inline-size; }
+.kpi-shell .ss-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container kpi-ss (min-width: 890px) {
+    .kpi-shell .kpi-ss-page .ss-grid { grid-template-columns: repeat(var(--ss-cols, 3), minmax(0, 1fr)); }
+}
+@container kpi-ss (max-width: 579px) {
+    .kpi-shell .ss-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* full view: the phone card's table - captions and labels grey, figures 14px, a hairline under each row - with a label
+   column that wraps, so the % column always shows; a narrow card (four salespeople across at 1440) tightens */
+.kpi-shell .kpi-ss-card { container: kpi-ss-card / inline-size; }
+.kpi-shell .ss-table { font-size: 14px; color: var(--kpim-text); }
+.kpi-shell .ss-table th { padding: 7px 6px 6px; border-bottom: 2px solid var(--kpim-card-line); font-size: 12.5px; color: var(--kpim-text-2); }
+.kpi-shell .ss-table td { padding: 7px 6px; border-bottom: 1px solid var(--kpim-row-line); }
+.kpi-shell .ss-table th:first-child, .kpi-shell .ss-table td:first-child { padding-left: 14px; padding-right: 4px; }
+.kpi-shell .ss-table th:last-child, .kpi-shell .ss-table td:last-child { padding-left: 8px; padding-right: 14px; }
+.kpi-shell .ss-table td:first-child { white-space: normal; font-size: 13.5px; line-height: 1.25; color: var(--kpim-text-2); }
+.kpi-shell .ss-table tr:last-child td { border-bottom: 0; }
+.kpi-shell .ss-table tr.ss-ne td { padding-bottom: 8px; }
+.kpi-shell .ss-ne-pct { min-height: 18px; font-size: 12.5px; color: var(--kpim-text-2); }
+@container kpi-ss-card (max-width: 330px) {
+    .kpi-shell .kpi-ss-card .ss-card-head { padding-left: 12px; padding-right: 10px; letter-spacing: 0.03em; }
+    .kpi-shell .kpi-ss-card .ss-table { font-size: 13.5px; }
+    .kpi-shell .kpi-ss-card .ss-table th, .kpi-shell .kpi-ss-card .ss-table td { padding-left: 3px; padding-right: 3px; }
+    .kpi-shell .kpi-ss-card .ss-table th:first-child, .kpi-shell .kpi-ss-card .ss-table td:first-child { padding-left: 10px; padding-right: 2px; }
+    .kpi-shell .kpi-ss-card .ss-table th:last-child, .kpi-shell .kpi-ss-card .ss-table td:last-child { padding-left: 4px; padding-right: 10px; }
+}
+
+/* ---- Salesperson Summary (its salesperson picker is Sales Productivity's too) ---- */
+.kpim-sps-picker { display: flex; align-items: center; gap: 4px; padding: 4px;
+    background: var(--kpim-card); border: 1px solid var(--kpim-card-line); border-radius: 14px; }
+.kpim-sps-step { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0;
+    padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--kpim-crimson-dark); cursor: pointer; }
+.kpim-sps-who { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.kpim-sps-avatar { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0;
+    border-radius: 50%; background: var(--kpim-sps-avatar); color: var(--kpim-on-crimson); font-size: 15px; font-weight: 600; }
+.kpim-sps-names { display: flex; flex-direction: column; min-width: 0; }
+.kpim-sps-name { font-size: 16.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpim-sps-pos { font-size: 12.5px; color: var(--kpim-text-2); }
+/* full view: four salespeople across only where each card has room for its tightened table (about 273px) */
+@container kpi-ss (min-width: 1140px) {
+    .kpi-shell .kpi-sps-page .ss-grid { grid-template-columns: repeat(var(--ss-cols, 4), minmax(0, 1fr)); }
+}
+
+/* ---- Sales Productivity ---- */
+.kpim-spr-title { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-2); }
+.kpim-spr-funnel { display: flex; flex-direction: column; gap: 10px; }
+.kpim-spr-bar { display: flex; flex-direction: column; gap: 4px; }
+.kpim-spr-bar-text { display: flex; justify-content: space-between; font-size: 14px; font-variant-numeric: tabular-nums; }
+.kpim-spr-bar-label { font-weight: 600; }
+.kpim-spr-bar-value { color: var(--kpim-text-strong); }
+.kpim-spr-track { height: 14px; border-radius: 7px; background: var(--kpim-spr-track); }
+.kpim-spr-fill { height: 14px; border-radius: 7px; }
+.kpim-spr-fill-leads { background: var(--kpim-logo-grey); }
+.kpim-spr-fill-approved { background: var(--kpim-spr-approved); }
+.kpim-spr-fill-activated { background: var(--kpim-crimson); }
+.kpim-spr-table { display: flex; flex-direction: column; padding: 12px 0 8px; }
+.kpim-spr-table .kpim-spr-title { margin-bottom: 6px; padding: 0 16px; }
+.kpim-spr-row { display: grid; grid-template-columns: 1.5fr repeat(4, minmax(0, 1fr));
+    border-bottom: 1px solid var(--kpim-card-head-line); font-size: 14px; font-variant-numeric: tabular-nums; }
+.kpim-spr-head { border-bottom: 2px solid var(--kpim-field-line); font-size: 13.5px; font-weight: 600; }
+.kpim-spr-corner { padding: 6px 4px 6px 16px; }
+.kpim-spr-year { padding: 6px 8px 6px 4px; text-align: right; }
+.kpim-spr-label { padding: 8px 4px 8px 16px; color: var(--kpim-text-strong); line-height: 1.25; }
+.kpim-spr-cell { display: flex; align-items: center; justify-content: flex-end; gap: 3px; padding: 8px 8px 8px 2px; }
+.kpim-spr-strong { font-weight: 700; }
+.kpim-spr-strong .kpim-spr-label { color: var(--kpim-text); }
+.kpim-spr-now { background: var(--kpim-spr-now); }
+.kpim-spr-now-head { background: var(--kpim-spr-now-head); }
+/* full view: two cards per row (one where two would not fit), and the phone's look on each card (KpiComparisonCard) -
+   the initials disc by the name, labels and figures at the phone's sizes and colours, a hairline under each row, the
+   newest year shaded, the up / down triangles after the figure */
+.kpi-spr-page { container: kpi-spr / inline-size; }
+.kpi-shell .sp-grid { grid-template-columns: minmax(0, 1fr); }
+@container kpi-spr (min-width: 900px) {
+    .kpi-shell .sp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.kpi-shell .kcc-head-badged { display: flex; align-items: center; gap: 10px; padding-top: 7px; padding-bottom: 7px; }
+.kpi-shell .kcc-badge { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; flex-shrink: 0;
+    border-radius: 50%; background: var(--kpim-sps-avatar); color: var(--kpim-on-crimson); font-size: 11px; letter-spacing: 0; }
+.kpi-shell .sp-card .kcc-table { font-size: 14px; color: var(--kpim-text); }
+.kpi-shell .sp-card .kcc-table th, .kpi-shell .sp-card .kcc-table td { padding: 8px 8px 8px 4px; border-bottom: 1px solid var(--kpim-card-head-line); }
+.kpi-shell .sp-card .kcc-table thead th { padding-top: 6px; padding-bottom: 6px; border-bottom: 2px solid var(--kpim-field-line);
+    font-size: 13.5px; font-weight: 600; color: var(--kpim-text); }
+.kpi-shell .sp-card .kcc-table .kcc-lbl { padding-left: 16px; white-space: normal; line-height: 1.25; color: var(--kpim-text-strong); }
+.kpi-shell .sp-card .kcc-table .kcc-indent { padding-left: 28px; }
+.kpi-shell .sp-card .kcc-table thead .kcc-lbl, .kpi-shell .sp-card .kcc-headrow .kcc-lbl { color: var(--kpim-text); }
+.kpi-shell .sp-card .kcc-table .kcc-num { color: var(--kpim-text); }
+.kpi-shell .sp-card .kcc-table tr.kcc-spacer td { padding: 4px 0; border-bottom: 0; }
+.kpi-shell .sp-card .kcc-table tbody tr:last-child td { border-bottom: 0; }
+.kpi-shell .sp-card .kcc-now { background: var(--kpim-now); }
+.kpi-shell .sp-card thead .kcc-now { background: var(--kpim-now-head); }
+.kpi-shell .kcc-tri { margin-left: 3px; vertical-align: 1px; }
+
+/* ---- Record Performances ---- */
+.kpim-rp-seg .kpim-seg button { font-size: 14px; }
+.kpim-rp-list { display: flex; flex-direction: column; padding: 10px 0 4px; }
+.kpim-rp-title { margin: 0 0 4px; padding: 0 16px; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-2); }
+.kpim-rp-row { display: flex; align-items: center; gap: 12px; box-sizing: content-box; min-height: 52px; padding: 4px 16px;
+    border-top: 1px solid var(--kpim-card-head-line); }
+.kpim-rp-current { background: var(--kpim-rp-current); }
+.kpim-rp-badge { display: flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 30px; height: 28px;
+    padding: 0 4px; flex-shrink: 0; border-radius: 14px; background: var(--kpim-rp-badge); color: var(--kpim-text-strong);
+    font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpim-rp-what { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.kpim-rp-main { font-size: 15.5px; font-weight: 600; line-height: 1.3; }
+.kpim-rp-sub { font-size: 13px; color: var(--kpim-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpim-rp-value { font-size: 15.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpim-rp-trophy { flex-shrink: 0; stroke: var(--kpim-rp-trophy); transform-origin: 50% 90%; animation: kpim-rp-waggle 0.9s ease-in-out 0.4s 2; }
+.kpim-rp-cup { fill: var(--kpim-rp-trophy-fill); }
+@keyframes kpim-rp-waggle { 0%, 100% { transform: rotate(0deg); } 20% { transform: rotate(-14deg); } 40% { transform: rotate(11deg); }
+    60% { transform: rotate(-7deg); } 80% { transform: rotate(4deg); } }
+@media (prefers-reduced-motion: reduce) { .kpim-rp-trophy { animation: none; } }
+.kpim-rp-error { display: flex; align-items: center; gap: 8px; padding: 12px 16px; font-size: 14px; color: var(--kpim-down); }
+/* full view: the Division row above the eight tables - four across where each has room for rank,
+   period, name, trophy and TFI (about 320px), else two, else one - and the phone's look on them: figures 14px, names
+   and captions grey, a hairline under each row, this year's records in the phone's shade with its trophy, ranks plain */
+.kpi-rp-page { display: flex; flex-direction: column; gap: 16px; container: kpi-rp / inline-size; }
+.kpi-shell .rec-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@container kpi-rp (min-width: 1340px) {
+    .kpi-shell .rec-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@container kpi-rp (max-width: 679px) {
+    .kpi-shell .rec-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.kpi-shell .rec-table { font-size: 14px; color: var(--kpim-text); }
+.kpi-shell .rec-table th { padding: 7px 6px 6px; border-bottom: 2px solid var(--kpim-card-line); font-size: 12.5px; color: var(--kpim-text-2); }
+.kpi-shell .rec-table td { padding: 5px 6px; border-bottom: 1px solid var(--kpim-row-line); }
+.kpi-shell .rec-table tr > :first-child { padding-left: 14px; }
+.kpi-shell .rec-table tr > :last-child { padding-right: 14px; }
+.kpi-shell .rec-table tbody tr:last-child td { border-bottom: 0; }
+.kpi-shell .rec-table td.rec-sales { font-size: 13px; color: var(--kpim-text-2); }
+.kpi-shell .rec-table .rec-trophycol { width: 22px; padding-left: 0; padding-right: 0; }
+.kpi-shell .rec-rank { min-width: 1.5em; font-weight: 400; color: var(--kpim-text-2); }
+.kpi-shell .rec-current td { background: var(--kpim-rp-current); }
+.kpi-shell .rec-trophy { color: var(--kpim-rp-trophy); vertical-align: -4px; }
+.kpi-shell .rec-trophy-cup { fill: var(--kpim-rp-trophy-fill); }
+
+/* ---- Business Analysis ---- */
+.kpim-ba-c0 { background: var(--kpim-ba-s1); stroke: var(--kpim-ba-s1); }
+.kpim-ba-c1 { background: var(--kpim-ba-s2); stroke: var(--kpim-ba-s2); }
+.kpim-ba-c2 { background: var(--kpim-ba-s3); stroke: var(--kpim-ba-s3); }
+.kpim-ba-c3 { background: var(--kpim-ba-s4); stroke: var(--kpim-ba-s4); }
+.kpim-ba-c4 { background: var(--kpim-ba-s5); stroke: var(--kpim-ba-s5); }
+.kpim-ba-c5 { background: var(--kpim-ba-s6); stroke: var(--kpim-ba-s6); }
+.kpim-ba-c6 { background: var(--kpim-ba-s7); stroke: var(--kpim-ba-s7); }
+.kpim-ba-c7 { background: var(--kpim-ba-s8); stroke: var(--kpim-ba-s8); }
+/* the year's donut beside its caption and change */
+.kpim-ba-summary { display: flex; align-items: center; gap: 18px; padding: 14px 16px; }
+.kpim-ba-donut { position: relative; width: 124px; height: 124px; flex-shrink: 0; }
+.kpim-ba-donut svg { display: block; }
+.kpim-ba-ring { fill: none; stroke-width: 22; }
+.kpim-ba-ring-empty { stroke: var(--kpim-ba-track); }
+.kpim-ba-centre { position: absolute; inset: 22px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.kpim-ba-centre-total { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpim-ba-centre-label { font-size: 11.5px; color: var(--kpim-text-2); }
+.kpim-ba-sumtext { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.kpim-ba-caption, .kpim-ba-lhead h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--kpim-text-2); }
+.kpim-ba-against { font-size: 14px; color: var(--kpim-text-strong); line-height: 1.35; }
+/* change pills: the summary's, and the fixed-width one at the end of each row */
+.kpim-pill.kpim-ba-big { align-self: flex-start; font-size: 14px; }
+.kpim-pill.kpim-ba-chip { justify-content: center; gap: 3px; width: 58px; height: 24px; padding: 0;
+    border-radius: 12px; font-size: 12.5px; flex-shrink: 0; }
+.kpim-ba-flat { background: var(--kpim-ba-flat); color: var(--kpim-text-strong); }
+/* one row per dimension value, opening to its 8-year trend */
+.kpim-ba-list { padding: 4px 0; }
+.kpim-ba-item { display: flex; flex-direction: column; border-bottom: 1px solid var(--kpim-row-line); }
+.kpim-ba-row { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 12px 0 16px;
+    border: 0; background: var(--kpim-card); font-family: inherit; color: var(--kpim-text); text-align: left; cursor: pointer; }
+.kpim-ba-open .kpim-ba-row, .kpim-ba-open .kpim-ba-detail { background: var(--kpim-card-head); }
+.kpim-ba-swatch { width: 12px; height: 12px; flex-shrink: 0; border-radius: 3px; }
+.kpim-ba-name { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpim-ba-value { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kpim-ba-share { width: 34px; flex-shrink: 0; text-align: right; font-size: 13px; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+.kpim-ba-detail { display: flex; flex-direction: column; gap: 6px; padding: 4px 16px 12px 38px; }
+.kpim-ba-trendhead { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--kpim-text-2); }
+.kpim-ba-bars { display: flex; align-items: flex-end; gap: 6px; height: 84px; border-bottom: 1px solid var(--kpim-ba-axis); }
+.kpim-ba-bar { flex: 1; border-radius: 3px 3px 0 0; background: var(--kpim-crimson); }
+.kpim-ba-bar-part { background: var(--kpim-ba-part); }
+.kpim-ba-years { display: flex; gap: 6px; font-size: 11.5px; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+.kpim-ba-years span { flex: 1; text-align: center; }
+.kpim-ba-detailtext { font-size: 13px; color: var(--kpim-text-strong); }
+/* Lender: one year card */
+.kpim-ba-lenders { padding-top: 10px; }
+.kpim-ba-lhead { display: flex; align-items: baseline; gap: 10px; padding: 0 12px 8px 16px; }
+.kpim-ba-lhead h2 { flex: 1; min-width: 0; }
+.kpim-ba-lhead span { flex-shrink: 0; font-size: 12.5px; font-weight: 600; color: var(--kpim-text-2); white-space: nowrap; }
+.kpim-ba-lrow { display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 16px; border-top: 1px solid var(--kpim-row-line); }
+.kpim-ba-rank { width: 20px; flex-shrink: 0; font-size: 13.5px; font-weight: 600; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+.kpim-ba-lmain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.kpim-ba-lname { font-size: 14.5px; font-weight: 600; line-height: 1.25; }
+.kpim-ba-track { height: 6px; border-radius: 3px; background: var(--kpim-ba-track); }
+.kpim-ba-fill { height: 6px; border-radius: 3px; background: var(--kpim-crimson); }
+.kpim-ba-others { min-height: 40px; color: var(--kpim-text-2); }
+.kpim-ba-others .kpim-ba-lname { flex: 1; min-width: 0; }
+.kpim-ba-gap { width: 58px; flex-shrink: 0; }
+.kpim-ba-ltotal { display: flex; justify-content: space-between; align-items: center; min-height: 42px; padding: 0 16px 0 46px;
+    border-top: 2px solid var(--kpim-ba-axis); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* the Sales Office on a row of its own above the report's four filters */
+.kpim-ba-office { grid-column: 1 / -1; min-width: 0; }
+/* the full view: the dimension table and the lender cards as the phone's tables (the cards themselves are
+   the shared .ss-card); the donut and the trend keep their own colours - only their keys are restyled */
+.kpi-shell .kpi-ba-filters { margin-bottom: 16px; }
+.kpi-shell .ba-table, .kpi-shell .bal-table { font-size: 14px; color: var(--kpim-text); }
+.kpi-shell .ba-table th, .kpi-shell .bal-table th {
+    padding-top: 8px; padding-bottom: 7px; border-bottom: 2px solid var(--kpim-card-line);
+    font-size: 12.5px; font-weight: 600; color: var(--kpim-text-2); }
+.kpi-shell .ba-table th, .kpi-shell .ba-table td { padding-left: 12px; padding-right: 12px; }
+.kpi-shell .ba-table td { padding-top: 7px; padding-bottom: 7px; border-bottom: 1px solid var(--kpim-row-line); }
+.kpi-shell .ba-table td.ba-dim, .kpi-shell .bal-table td.bal-lender { color: var(--kpim-text-2); }
+.kpi-shell .ba-muted { color: var(--kpim-text-3); }
+.kpi-shell .ba-table tr.ba-total td, .kpi-shell .bal-table tr.bal-total td {
+    border-top: 2px solid var(--kpim-card-line); border-bottom: 0; font-weight: 700; }
+.kpi-shell .bal-table th, .kpi-shell .bal-table td { padding-left: 8px; padding-right: 8px; }
+.kpi-shell .bal-table td { padding-top: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--kpim-row-line); }
+.kpi-shell .bal-table .bal-rank { padding-left: 12px; padding-right: 2px; font-size: 13px; font-weight: 600; color: var(--kpim-text-2); }
+.kpi-shell .bal-table tr.bal-empty td { color: var(--kpim-text-3); }
+.kpi-shell .bal-table tr.bal-others td { color: var(--kpim-text-2); border-top: 1px solid var(--kpim-card-line); }
+.kpi-shell .bal-star { color: var(--kpim-text-2); }
+.kpi-shell .ba-legend { font-size: 13px; }
+.kpi-shell .ba-legend li { color: var(--kpim-text-2); }
+.kpi-shell .ba-legend-val { color: var(--kpim-text-3); }
+.kpi-shell .ba-swatch { width: 12px; height: 12px; border-radius: 3px; }
+.kpi-shell .ba-yearkey { font-size: 12.5px; letter-spacing: 0; color: var(--kpim-text-2); }
+
+/* ---- Suppliers Year on Year ---- */
+.kpim-sy-card { display: flex; flex-direction: column; padding-top: 10px; }
+.kpim-sy-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 16px 6px 14px; }
+.kpim-sy-title { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-2); }
+.kpim-sy-sub { font-size: 12.5px; color: var(--kpim-text-2); }
+.kpim-sy-empty { margin: 0; padding: 14px 16px 16px; border-top: 1px solid var(--kpim-card-head-line); font-size: 14px; color: var(--kpim-text-2); }
+.kpim-sy-row { display: flex; align-items: center; gap: 10px; padding: 8px 16px 8px 14px; border-top: 1px solid var(--kpim-card-head-line); }
+.kpim-sy-rank { width: 22px; flex-shrink: 0; font-size: 13.5px; font-weight: 600; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+.kpim-sy-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.kpim-sy-name { font-size: 15px; font-weight: 600; line-height: 1.3; overflow: hidden; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.kpim-sy-prof { font-size: 13px; color: var(--kpim-text-2); }
+.kpim-sy-fig { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.kpim-sy-af { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpim-sy-prev { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+/* the running total after each ten */
+.kpim-sy-total { display: flex; align-items: center; gap: 10px; padding: 10px 16px 10px 14px; font-size: 15px; font-weight: 700;
+    border-top: 2px solid var(--kpim-field-line); border-bottom: 1px solid var(--kpim-card-head-line); background: var(--kpim-card-head); }
+.kpim-sy-total:last-child { border-bottom: 0; }
+.kpim-sy-total-label { flex: 1; }
+.kpim-sy-total-af { font-variant-numeric: tabular-nums; }
+/* full view: the four year cards fit across at 1440 with the sidebar open (fewer across, never a sideways
+   scroll, on a narrower window); the phone's type and colours. The name column takes what the rank,
+   profession and AF columns leave. */
+.kpi-shell .sy-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.kpi-shell .sy-table { font-size: 13.5px; line-height: 20px; color: var(--kpim-text); }
+.kpi-shell .sy-table th { padding: 6px 6px 5px; font-size: 12px; color: var(--kpim-text-2); border-bottom: 2px solid var(--kpim-card-line); }
+.kpi-shell .sy-table td { padding: 3px 6px; border-bottom-color: var(--kpim-row-line); }
+.kpi-shell .sy-table th:nth-child(1) { width: 26px; }
+.kpi-shell .sy-table th:nth-child(3) { width: 68px; }
+.kpi-shell .sy-table th:nth-child(4) { width: 88px; }
+.kpi-shell .sy-table th:first-child, .kpi-shell .sy-table td:first-child { padding-left: 7px; padding-right: 3px; }
+.kpi-shell .sy-table th:last-child, .kpi-shell .sy-table td:last-child { padding-left: 4px; padding-right: 10px; }
+.kpi-shell .sy-table tbody td:first-child { font-size: 12.5px; font-weight: 600; color: var(--kpim-text-2); }
+.kpi-shell .sy-table .kpi-sy-prof { overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; color: var(--kpim-text-2); }
+.kpi-shell .sy-table tbody tr:hover td { background: var(--kpim-card-head); }
+/* the running total after each ten, and the space below it */
+.kpi-shell .sy-table tr.sy-total td, .kpi-shell .sy-table tbody tr.sy-total:hover td {
+    padding-top: 6px; padding-bottom: 6px; font-weight: 700; color: var(--kpim-text);
+    background: var(--kpim-card-head); border-top: 2px solid var(--kpim-field-line); border-bottom: 10px solid var(--kpim-card); }
+
+/* ---- Supplier Development ---- */
+.kpim-sd-title { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-2); }
+.kpim-sd-facts { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 14px; }
+.kpim-sd-stats { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.kpim-sd-stat { display: flex; flex-direction: column; min-width: 0; }
+.kpim-sd-stat-end { align-items: flex-end; }
+.kpim-sd-label { font-size: 13px; color: var(--kpim-text-2); }
+.kpim-sd-big { font-size: 28px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.kpim-sd-accent { color: var(--kpim-crimson-dark); }
+.kpim-sd-prev { font-size: 13.5px; color: var(--kpim-text-strong); font-variant-numeric: tabular-nums; }
+.kpim-sd-top { display: flex; flex-direction: column; padding-top: 10px; }
+.kpim-sd-top-title { margin-bottom: 6px; padding: 0 16px 0 14px; }
+.kpim-sd-empty { margin: 0; padding: 12px 16px 12px 14px; border-top: 1px solid var(--kpim-card-head-line); font-size: 14px; color: var(--kpim-text-2); }
+.kpim-sd-row { display: flex; align-items: center; gap: 10px; padding: 8px 16px 8px 14px; border-top: 1px solid var(--kpim-card-head-line); }
+.kpim-sd-rank { width: 22px; flex-shrink: 0; font-size: 13.5px; font-weight: 600; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+.kpim-sd-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.kpim-sd-name { font-size: 15px; font-weight: 600; line-height: 1.3; overflow: hidden; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.kpim-sd-prof { font-size: 13px; color: var(--kpim-text-2); }
+.kpim-sd-af { flex-shrink: 0; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpim-sd-total { display: flex; align-items: center; gap: 10px; padding: 10px 16px 12px 14px;
+    border-top: 2px solid var(--kpim-field-line); background: var(--kpim-card-head); }
+.kpim-sd-total-label { flex: 1; font-size: 15px; font-weight: 700; }
+.kpim-sd-total .kpim-sd-af { font-weight: 700; }
+.kpim-sd-trend { display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 14px; }
+.kpim-sd-trend-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.kpim-sd-peak { font-size: 12.5px; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+.kpim-sd-year { display: flex; flex-direction: column; gap: 3px; }
+.kpim-sd-yline { display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.kpim-sd-yr { width: 38px; flex-shrink: 0; color: var(--kpim-text-strong); }
+.kpim-sd-track { flex: 1; height: 12px; border-radius: 6px; background: var(--kpim-sd-track); }
+.kpim-sd-fill { height: 12px; border-radius: 6px; box-sizing: border-box; background: var(--kpim-crimson); }
+.kpim-sd-yval { width: 84px; text-align: right; }
+.kpim-sd-cur .kpim-sd-yr, .kpim-sd-cur .kpim-sd-yval { font-weight: 700; }
+.kpim-sd-cur .kpim-sd-fill { background: var(--kpim-sd-bar-cur); border: 1px solid var(--kpim-crimson); }
+.kpim-sd-detail { padding-left: 48px; font-size: 12.5px; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+/* full view: the four salesperson cards fit across at 1440 with the sidebar open (fewer across, never a
+   sideways scroll, on a narrower window); the phone's headings, type and colours, its crimson trend bars */
+.kpi-shell .sd-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.kpi-shell .sd-sub { padding: 14px 15px 6px; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--kpim-text-2); }
+.kpi-shell .sd-trendhead { flex-wrap: wrap; column-gap: 8px; }
+.kpi-shell .sd-peak { margin-left: auto; font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--kpim-text-2); }
+/* one line height for every row, so the cards' rows line up across the page, the empty ones included */
+.kpi-shell .sd-table { font-size: 13.5px; line-height: 20px; color: var(--kpim-text); }
+.kpi-shell .sd-table th { padding: 6px 6px 5px; font-size: 12px; color: var(--kpim-text-2); border-bottom: 2px solid var(--kpim-card-line); }
+.kpi-shell .sd-table td { padding: 3px 6px; border-bottom-color: var(--kpim-row-line); }
+.kpi-shell .sd-table th:first-child, .kpi-shell .sd-table td:first-child { padding-left: 8px; }
+.kpi-shell .sd-table th:last-child, .kpi-shell .sd-table td:last-child { padding-right: 10px; }
+.kpi-shell .sd-card table:first-of-type th:nth-child(1) { width: 28px; }
+.kpi-shell .sd-card table:first-of-type th:nth-child(3) { width: 92px; }
+.kpi-shell .sd-card table:last-of-type th:nth-child(1) { width: 46px; }
+.kpi-shell .sd-card table:last-of-type th:nth-child(3) { width: 52px; }
+/* the rank and the year: row labels */
+.kpi-shell .sd-card table:first-of-type tbody td:first-child { font-size: 12.5px; font-weight: 600; color: var(--kpim-text-2); }
+.kpi-shell .sd-card table:last-of-type tbody td:first-child { color: var(--kpim-text-2); }
+.kpi-shell .sd-table tbody tr:hover td { background: var(--kpim-card-head); }
+.kpi-shell .sd-table tfoot td { padding-top: 6px; padding-bottom: 6px; color: var(--kpim-text);
+    background: var(--kpim-card-head); border-top: 2px solid var(--kpim-field-line); }
+.kpi-shell .sd-facts { font-size: 14px; color: var(--kpim-text-2); }
+.kpi-shell .sd-facts span:nth-child(even) { color: var(--kpim-text); }
+.kpi-shell .sd-chart { border-bottom-color: var(--kpim-field-line); }
+.kpi-shell .sd-bar { background: var(--kpim-crimson); }
+.kpi-shell .sd-bar-cur { background: var(--kpim-sd-bar-cur); box-shadow: inset 0 0 0 1px var(--kpim-crimson); }
+.kpi-shell .sd-years { font-size: 12.5px; color: var(--kpim-text-2); }
+
+/* ---- Bad Debt ---- */
+/* portrait: the summary card and bad debt / book size by year */
+.kpim-bd-title { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-2); }
+.kpim-bd-sum { display: flex; flex-direction: column; gap: 10px; padding: 12px 16px 14px; }
+.kpim-bd-stats { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.kpim-bd-stat { display: flex; flex-direction: column; }
+.kpim-bd-stat-end { align-items: flex-end; }
+.kpim-bd-label { font-size: 13px; color: var(--kpim-text-2); }
+.kpim-bd-big { font-size: 28px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.kpim-bd-accent { color: var(--kpim-crimson-dark); }
+.kpim-bd-under { font-size: 13.5px; color: var(--kpim-text-strong); }
+.kpim-bd-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding-top: 10px;
+    border-top: 1px solid var(--kpim-card-head-line); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.kpim-bd-facts > div { display: flex; flex-direction: column; }
+.kpim-bd-facts .kpim-bd-label { font-size: inherit; }
+.kpim-bd-fact { font-weight: 600; }
+.kpim-bd-bars { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; }
+.kpim-bd-bars .kpim-bd-title { margin-bottom: 4px; }
+.kpim-bd-bar { display: flex; align-items: center; gap: 10px; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.kpim-bd-year { width: 52px; flex-shrink: 0; color: var(--kpim-text-strong); }
+.kpim-bd-track { flex: 1; height: 12px; border-radius: 6px; background: var(--kpim-bd-track); }
+.kpim-bd-fill { height: 12px; border-radius: 6px; background: var(--kpim-logo-grey); }
+.kpim-bd-value { width: 48px; text-align: right; }
+.kpim-bd-bar.kpim-bd-cur .kpim-bd-year, .kpim-bd-bar.kpim-bd-cur .kpim-bd-value { font-weight: 700; }
+.kpim-bd-bar.kpim-bd-cur .kpim-bd-fill { background: var(--kpim-crimson); }
+/* landscape: the full table, six years at a time */
+.kpim-bd-tools { display: flex; align-items: center; gap: 10px; }
+/* the Applications field folds away (KpiMobileFilters) at its own width - the field and the fold button -
+   with the earlier / later steps at the far end */
+.kpim-bd-tools > .kpim-fbox-compact { flex: 0 0 210px; }
+.kpim-bd-spacer { flex: 1; }
+.kpim-bd-step { height: 40px; padding: 0 14px; box-sizing: border-box; border: 1px solid var(--kpim-field-line); border-radius: 12px;
+    background: var(--kpim-card); font-family: inherit; font-size: 13px; font-weight: 600; color: var(--kpim-crimson-dark); cursor: pointer; }
+.kpim-bd-step:disabled { color: var(--kpim-bd-off); cursor: default; }
+.kpim-bd-wrap { background: var(--kpim-card); border: 1px solid var(--kpim-card-line); border-radius: 12px; overflow: auto; }
+.kpim-bd-table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kpim-bd-table thead tr { background: var(--kpim-bd-head); border-bottom: 2px solid var(--kpim-field-line); }
+.kpim-bd-table thead th { padding: 5px 12px; text-align: right; font-weight: 600; }
+.kpim-bd-table thead th:first-child { padding: 5px 10px 5px 14px; }
+.kpim-bd-table thead th.kpim-bd-cur { background: var(--kpim-bd-now-head); }
+.kpim-bd-table tbody th { padding: 4px 10px 4px 14px; text-align: left; font-weight: 400; color: var(--kpim-text-strong); }
+.kpim-bd-table tbody td { padding: 4px 12px; text-align: right; }
+.kpim-bd-table tbody td.kpim-bd-cur { background: var(--kpim-bd-now); }
+.kpim-bd-table td.kpim-bd-strong { font-weight: 600; }
+/* the rule and space that close a group of rows */
+.kpim-bd-table tr.kpim-bd-gap { border-bottom: 1px solid var(--kpim-card-line); }
+.kpim-bd-table tr.kpim-bd-gap th, .kpim-bd-table tr.kpim-bd-gap td { padding-bottom: 10px; }
+/* a narrower phone on its side (under 800px): tighter columns, so all six years stay on screen */
+@media (max-width: 799px) {
+    .kpim-bd-table { font-size: 12.5px; }
+    .kpim-bd-table thead th, .kpim-bd-table tbody td { padding-left: 8px; padding-right: 8px; }
+}
+/* full view: Earlier / Later years as pills in the card header; ten years and the row labels fit across at
+   1440 with the sidebar open; the phone's type and colours, the two ratios strong and the current year
+   pale crimson on every row, the gaps and a hovered row included */
+.kpi-shell .kpi-bd-filters { margin-bottom: 16px; }
+.kpi-shell .kpi-bd-head { display: flex; align-items: center; gap: 8px; }
+.kpi-bd-head-title { flex: 1; min-width: 0; }
+.kpi-shell .kpi-bd-head .kpi-btn { margin: -6px 0; }
+.kpi-shell .bd-table { font-size: 14px; color: var(--kpim-text); }
+.kpi-shell .bd-table th, .kpi-shell .bd-table td { min-width: 0; padding: 5px 8px; }
+.kpi-shell .bd-table th { font-size: 12.5px; color: var(--kpim-text-2); border-bottom: 2px solid var(--kpim-card-line); }
+.kpi-shell .bd-table td { border-bottom-color: var(--kpim-row-line); }
+.kpi-shell .bd-table th:first-child, .kpi-shell .bd-table td:first-child { padding-left: 16px; }
+.kpi-shell .bd-table th:last-child, .kpi-shell .bd-table td:last-child { padding-right: 16px; }
+.kpi-shell .bd-table td.mi-l { color: var(--kpim-text-2); }
+.kpi-shell .bd-table tr.kpi-bd-strong td:not(.mi-l) { font-weight: 600; }
+.kpi-shell .bd-table tbody tr:hover td { background: var(--kpim-card-head); }
+.kpi-shell .bd-table tbody tr.bd-gap:hover td { background: transparent; }
+.kpi-shell .bd-table tbody tr td.yoy-cur, .kpi-shell .bd-table tbody tr:hover td.yoy-cur { background: var(--kpim-now); }
+
+/* ---- Exposure Top 10 ---- */
+/* portrait: the remaining capital and the ten as a list */
+.kpim-ex-sum { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; }
+.kpim-ex-title { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-2); }
+.kpim-ex-big { font-size: 28px; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.kpim-ex-under { font-size: 13.5px; color: var(--kpim-text-strong); }
+.kpim-ex-list { display: flex; flex-direction: column; padding-top: 4px; }
+.kpim-ex-row { display: flex; align-items: center; gap: 10px; padding: 8px 16px 8px 14px; border-bottom: 1px solid var(--kpim-card-head-line); }
+.kpim-ex-rank { width: 22px; flex-shrink: 0; font-size: 13.5px; font-weight: 600; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+.kpim-ex-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.kpim-ex-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 15px; font-weight: 600; }
+.kpim-ex-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpim-ex-share { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.kpim-ex-track { height: 6px; border-radius: 3px; background: var(--kpim-ex-track); }
+.kpim-ex-fill { height: 6px; border-radius: 3px; background: var(--kpim-crimson); }
+.kpim-ex-detail { font-size: 12.5px; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+.kpim-ex-total { display: flex; align-items: center; gap: 10px; padding: 10px 16px 12px 14px;
+    border-top: 2px solid var(--kpim-field-line); background: var(--kpim-card-head); }
+.kpim-ex-total-body { gap: 2px; }
+.kpim-ex-total-line { display: flex; justify-content: space-between; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpim-ex-total-detail { font-size: 12.5px; color: var(--kpim-text-strong); font-variant-numeric: tabular-nums; }
+/* landscape: the full view's table, its heading and Total held while the rows scroll */
+.kpim-ex-bar { display: flex; align-items: center; gap: 16px; }
+.kpim-ex-sums { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0;
+    font-size: 13px; line-height: 1.35; color: var(--kpim-text-strong); }
+.kpim-ex-sums strong { color: var(--kpim-text); font-variant-numeric: tabular-nums; }
+.kpim-ex-wrap { background: var(--kpim-card); border: 1px solid var(--kpim-card-line); border-radius: 12px; overflow: auto; }
+.kpim-ex-table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kpim-ex-table th { position: sticky; top: 0; z-index: 1; padding: 5px 10px; text-align: right; font-weight: 600;
+    background: var(--kpim-ex-head); box-shadow: inset 0 -2px 0 var(--kpim-field-line); }
+.kpim-ex-table td { padding: 3px 10px; text-align: right; }
+.kpim-ex-table tbody tr { border-bottom: 1px solid var(--kpim-card-head-line); }
+.kpim-ex-table tfoot td { position: sticky; bottom: 0; z-index: 1; padding-top: 4px; padding-bottom: 4px; font-weight: 700;
+    background: var(--kpim-card-head); box-shadow: inset 0 2px 0 var(--kpim-field-line); }
+.kpim-ex-table .kpim-ex-l { text-align: left; }
+.kpim-ex-table .kpim-ex-rankcol { width: 28px; padding-left: 14px; padding-right: 6px; }
+.kpim-ex-table tbody .kpim-ex-rankcol { color: var(--kpim-text-2); }
+.kpim-ex-table .kpim-ex-strong { font-weight: 600; }
+.kpim-ex-tag { margin-left: 6px; font-size: 12px; color: var(--kpim-text-3); }
+/* full view: the fund lender and fund fields wider for their long names; the phone's type and colours,
+   the share strong and the Total as the phone's */
+.kpi-shell .kpi-ex-filters { margin-bottom: 16px; }
+.kpi-shell .kpi-ex-filters .kpim-field:nth-child(n+2) { width: 250px; }
+.kpi-shell .ex-total { color: var(--kpim-text-2); }
+.kpi-shell .ex-type { font-size: 12px; color: var(--kpim-text-3); }
+.kpi-shell .kpi-ex-table { font-size: 14.5px; color: var(--kpim-text); }
+.kpi-shell .kpi-ex-table th { font-size: 12.5px; color: var(--kpim-text-2); border-bottom: 2px solid var(--kpim-card-line); }
+.kpi-shell .kpi-ex-table td { border-bottom-color: var(--kpim-row-line); }
+.kpi-shell .kpi-ex-table tbody td:first-child { font-size: 13.5px; font-weight: 600; color: var(--kpim-text-2); }
+.kpi-shell .kpi-ex-table .kpi-ex-share { font-weight: 600; }
+.kpi-shell .kpi-ex-table tbody tr:hover td { background: var(--kpim-card-head); }
+.kpi-shell .kpi-ex-table tfoot td { padding-top: 7px; padding-bottom: 7px; color: var(--kpim-text);
+    background: var(--kpim-card-head); border-top: 2px solid var(--kpim-field-line); }
+
+/* ---- Year on Year ---- */
+.kpim-yoy-busy { opacity: 0.55; transition: opacity 0.15s; }
+/* portrait: the year-to-date summary */
+.kpim-yoy-hero { display: flex; flex-direction: column; gap: 2px; padding: 12px 16px 14px; }
+.kpim-yoy-hero-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
+.kpim-yoy-hero h2, .kpim-yoy-title {
+    margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-2); }
+.kpim-yoy-pill { font-size: 14px; }
+.kpim-yoy-now { font-size: 31px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.kpim-yoy-prev { font-size: 14px; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+.kpim-yoy-none { padding: 6px 0 2px; font-size: 15px; color: var(--kpim-text-2); }
+/* portrait: the periods and the total, scrolling sideways */
+.kpim-yoy-tablecard { display: flex; flex-direction: column; gap: 8px; padding: 12px 0 6px; }
+.kpim-yoy-title { padding: 0 16px; }
+.kpim-yoy-xscroll { overflow-x: auto; }
+.kpim-yoy-xscroll .kpim-yoy-table { min-width: 640px; }
+/* the table, both views */
+.kpim-yoy-table { border-collapse: collapse; font-size: 14.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kpim-yoy-table th, .kpim-yoy-table td { padding: 7px 12px; text-align: right; }
+.kpim-yoy-table thead th { padding-top: 8px; padding-bottom: 8px; font-weight: 600; box-shadow: inset 0 -2px 0 var(--kpim-yoy-rule); }
+.kpim-yoy-table tbody th { font-weight: 400; }
+.kpim-yoy-table tr > :first-child { padding-left: 16px; text-align: left; }
+.kpim-yoy-table tr > :last-child { padding-right: 16px; }
+.kpim-yoy-table tbody tr { border-bottom: 1px solid var(--kpim-yoy-line); }
+.kpim-yoy-table tbody tr:last-child { border-bottom: 0; }
+.kpim-yoy-table .kpim-yoy-cur { background: var(--kpim-yoy-cur); }
+.kpim-yoy-table thead th.kpim-yoy-cur { background: var(--kpim-yoy-cur-head); }
+.kpim-yoy-table .kpim-yoy-chg { font-weight: 600; }
+.kpim-yoy-table tr.kpim-yoy-total { border-top: 2px solid var(--kpim-yoy-rule); }
+.kpim-yoy-table tr.kpim-yoy-total > * { padding-top: 8px; padding-bottom: 8px; font-weight: 700; }
+/* landscape: the full table, its header fixed while the rows scroll under it */
+.kpim-yoy-land { display: flex; flex-direction: column; border-radius: 12px; }
+.kpim-yoy-scroll { flex: 1; min-height: 0; overflow: auto; }
+.kpim-yoy-scroll .kpim-yoy-table { width: 100%; font-size: 15px; }
+.kpim-yoy-scroll thead th { position: sticky; top: 0; z-index: 1; background: var(--kpim-yoy-head); }
+/* a narrower phone on its side (under 800px): tighter columns, so the YTD column stays on screen */
+@media (max-width: 799px) {
+    .kpim-yoy-scroll .kpim-yoy-table { font-size: 13.5px; }
+    .kpim-yoy-scroll .kpim-yoy-table th, .kpim-yoy-scroll .kpim-yoy-table td { padding-left: 7px; padding-right: 7px; }
+    .kpim-yoy-scroll .kpim-yoy-table tr > :first-child { padding-left: 12px; }
+    .kpim-yoy-scroll .kpim-yoy-table tr > :last-child { padding-right: 12px; }
+}
+.kpim-yoy-table tr.kpim-yoy-sub > * { color: var(--kpim-text-3); }
+.kpim-yoy-table tr.kpim-yoy-grand { border-top: 2px solid var(--kpim-yoy-rule); border-bottom: 2px solid var(--kpim-yoy-rule); }
+.kpim-yoy-table tr.kpim-yoy-grand > * { font-weight: 700; }
+.kpim-yoy-table tr.kpim-yoy-pct > * { font-weight: 600; }
+.kpim-yoy-empty { flex: 1; display: flex; align-items: center; justify-content: center; padding: 14px; font-size: 15px; color: var(--kpim-text-2); }
+/* landscape: the folding filters in a row of their own, full width */
+.kpim-yoy-fbar { display: flex; }
+/* full view: six filters on one row, Earlier / Later years in the card header, the table in the phone's type -
+   nine years, the YTD column and all, inside the panel with the sidebar open at 1440 wide */
+.kpi-shell .yoy-body { gap: 14px; }
+.kpi-shell .kpi-yoy-filters .kpim-field { width: 180px; }
+.kpi-shell .kpi-yoy-head { display: flex; align-items: center; gap: 12px; box-sizing: border-box; min-height: 48px;
+    padding-top: 7px; padding-bottom: 7px; }
+.kpi-shell .kpi-yoy-title { flex: 1; min-width: 0; }
+.kpi-shell .kpi-yoy-steps { display: flex; gap: 8px; flex-shrink: 0; }
+.kpi-shell .kpi-yoy-head .kpi-btn { text-transform: none; letter-spacing: 0; }
+.kpi-shell .yoy-table { font-size: 14px; color: var(--kpim-text); }
+.kpi-shell .yoy-table th { padding: 7px 8px; font-size: 13px; color: var(--kpim-text-strong); border-bottom-color: var(--kpim-yoy-rule); }
+.kpi-shell .yoy-table td { padding: 4px 8px; }
+.kpi-shell .yoy-table tr > :first-child { padding-left: 14px; }
+.kpi-shell .yoy-table tr > :last-child { padding-right: 14px; }
+.kpi-shell .yoy-table th.yoy-rowlabel { text-align: left; }
+.kpi-shell .yoy-table td.yoy-rowlabel { color: var(--kpim-text-2); }
+.kpi-shell .yoy-table tbody tr { border-bottom: 1px solid var(--kpim-yoy-line); }
+.kpi-shell .yoy-table tbody tr:last-child { border-bottom: 0; }
+.kpi-shell .yoy-subtotal td { color: var(--kpim-text-3); }
+.kpi-shell .yoy-grand td { border-top-color: var(--kpim-yoy-rule); border-bottom-color: var(--kpim-yoy-rule); }
+.kpi-shell .yoy-table .yoy-grand td.yoy-rowlabel { color: var(--kpim-text); }
+
+/* ---- Sales Performance ---- */
+/* the league table: portrait rows */
+.kpim-sp-league { font-size: 15px; }
+.kpim-sp-league th { padding: 7px 8px 6px; }
+.kpim-sp-league td { padding: 9px 8px; }
+.kpim-sp-league th.kpim-sp-rank { width: 40px; padding: 7px 4px 6px 14px; }
+.kpim-sp-league td.kpim-sp-rank { padding: 9px 4px 9px 14px; color: var(--kpim-text-2); }
+.kpim-sp-league th:last-child { padding: 7px 14px 6px 8px; }
+.kpim-sp-league td:last-child { padding: 9px 14px 9px 8px; }
+.kpim-sp-league td.kpim-sp-othername { padding-top: 0; padding-bottom: 0; }
+.kpim-sp-otherbtn {
+    display: inline-flex; align-items: center; gap: 4px; height: 38px; padding: 0; border: 0;
+    background: transparent; font-family: inherit; font-size: inherit; color: var(--kpim-sp-link); cursor: pointer;
+}
+.kpim-sp-otherbtn i { font-size: 12px; }
+.kpim-sp-league tr.kpim-sp-otherrow td { padding-top: 6px; padding-bottom: 6px; font-size: 14px; color: var(--kpim-text-2); }
+.kpim-sp-league tr.kpim-sp-otherrow td.kpim-sp-oname { padding-left: 20px; }
+.kpim-sp-league tr.kpim-total td { padding-top: 10px; padding-bottom: 10px; }
+/* the league table: landscape rows, the header fixed while they scroll */
+.kpim-sp-league.kpim-sp-compact { font-size: 14.5px; line-height: 19px; }
+.kpim-sp-league.kpim-sp-compact th {
+    position: sticky; top: 0; z-index: 1; padding: 3px 12px;
+    background: var(--kpim-sp-head); border-bottom: 0; box-shadow: inset 0 -2px 0 var(--kpim-sp-rule);
+}
+.kpim-sp-league.kpim-sp-compact td { padding: 2px 12px; border-bottom-color: var(--kpim-sp-line); }
+.kpim-sp-league.kpim-sp-compact th.kpim-sp-rank { width: 44px; padding: 3px 4px 3px 16px; }
+.kpim-sp-league.kpim-sp-compact td.kpim-sp-rank { padding: 2px 4px 2px 16px; }
+.kpim-sp-league.kpim-sp-compact th:last-child { padding: 3px 16px 3px 12px; }
+.kpim-sp-league.kpim-sp-compact td:last-child { padding: 2px 16px 2px 12px; }
+.kpim-sp-league.kpim-sp-compact td.kpim-sp-othername { padding-top: 0; padding-bottom: 0; }
+.kpim-sp-compact .kpim-sp-otherbtn { height: 23px; }
+.kpim-sp-league.kpim-sp-compact tr.kpim-sp-otherrow td { padding-top: 1px; padding-bottom: 1px; font-size: 13.5px; line-height: 18px; }
+.kpim-sp-league.kpim-sp-compact tr.kpim-sp-otherrow td.kpim-sp-oname { padding-left: 26px; }
+.kpim-sp-league.kpim-sp-compact tr.kpim-total td { padding-top: 3px; padding-bottom: 3px; border-top-color: var(--kpim-sp-rule); }
+/* landscape: Measure and Year (folding away), the view switch, then the card */
+.kpim-sp-bar { display: flex; align-items: center; gap: 10px; }
+.kpim-sp-bar > .kpim-fbox-compact { flex: 0 1 400px; min-width: 0; }
+/* the view switch takes the width of its three labels, each on one line; the filters give way (their summary truncates) */
+.kpim-sp-seg { flex: 0 0 auto; margin-left: auto; }
+.kpim-sp-seg .kpim-seg { grid-template-columns: repeat(var(--kpim-cols, 3), auto); }
+.kpim-sp-seg .kpim-seg button { padding: 0 12px; white-space: nowrap; }
+.kpim-sp-card { display: flex; flex-direction: column; border-radius: 12px; }
+.kpim-sp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 14px 5px; flex-shrink: 0; }
+.kpim-sp-head h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-2); }
+.kpim-sp-key { display: flex; align-items: center; gap: 16px; font-size: 12.5px; color: var(--kpim-text-2); white-space: nowrap; }
+.kpim-sp-key > span { display: inline-flex; align-items: center; gap: 6px; }
+.kpim-sp-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+/* the target chart: drawn in an 810 x 230 space, scaled to fit the card (width, or height when that is shorter) */
+.kpim-sp-plot { flex: 1; min-height: 0; container-type: size; }
+.kpim-sp-chart {
+    position: relative; margin: 0 auto; aspect-ratio: 810 / 230;
+    width: 100%; width: min(100cqw, calc(100cqh * 810 / 230));
+}
+.kpim-sp-chart svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.kpim-sp-gl { stroke: var(--kpim-sp-grid); stroke-width: 1; }
+.kpim-sp-col { fill: var(--kpim-sp-col); }
+.kpim-sp-col.kpim-on { fill: var(--kpim-sp-col-on); }
+.kpim-sp-tick-year, .kpim-sp-tick-ytd { stroke: var(--kpim-sp-target); stroke-width: 3; }
+.kpim-sp-tick-ytd { stroke-dasharray: 3 4; stroke-linecap: round; }
+.kpim-sp-hit { fill: transparent; cursor: pointer; }
+.kpim-sp-ax, .kpim-sp-val, .kpim-sp-name { position: absolute; line-height: 16px; white-space: nowrap; pointer-events: none; }
+.kpim-sp-ax { left: 0; transform: translateY(-50%); text-align: right; font-size: 12px; color: var(--kpim-sp-axis); font-variant-numeric: tabular-nums; }
+.kpim-sp-val {
+    transform: translateY(-100%); text-align: center; font-size: 13px; font-weight: 700; color: var(--kpim-text);
+    font-variant-numeric: tabular-nums; text-shadow: 0 0 2px var(--kpim-card), 0 0 3px var(--kpim-card), 0 0 4px var(--kpim-card);
+}
+.kpim-sp-name { text-align: center; font-size: 13px; color: var(--kpim-sp-name); }
+/* landscape Timelapse: the full view's race (app.css .slt-*) in shorter rows - the script's compact payload
+   sets their pitch - scrolling inside the card when the roster is long; play, the scrubber and the key below */
+.kpim-sp-race { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 2px 14px 8px; }
+.kpim-sp-race .slt-racehost { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; }
+.kpim-sp-race .slt-av { height: 22px; font-size: 11px; border-radius: 11px 0 0 11px; }
+.kpim-sp-race .slt-bar { height: 22px; border-radius: 0 11px 11px 0; }
+.kpim-sp-race .slt-barval { font-size: 13px; color: var(--kpim-text); }
+.kpim-sp-race .slt-barwks { margin-left: 8px; font-size: 11.5px; color: var(--kpim-text-2); }
+.kpim-sp-race .slt-rline { height: 28px; margin-top: -14px; }
+.kpim-sp-race .slt-rline-ytd { border-left-color: var(--kpim-sp-target); }
+.kpim-sp-race .slt-racefoot { flex-shrink: 0; min-height: 0; padding: 22px 0 0; gap: 12px; }
+.kpim-sp-race .slt-date { bottom: calc(100% + 3px); font-size: 13px; color: var(--kpim-text); }
+.kpim-sp-race .slt-scrub { accent-color: var(--kpim-crimson); }
+.kpim-sp-race .slt-ctrl { width: 40px; height: 30px; align-self: center; border-color: var(--kpim-field-line); border-radius: 15px;
+    background: var(--kpim-card); color: var(--kpim-crimson-dark); }
+.kpim-sp-race .kpim-loading { padding: 8px 0; }
+/* full view: the filter row, then per year the league table and the target chart in the phone's colours;
+   both card headers 48px, so the Timelapse pill sits in one without making it taller than its neighbour */
+.kpi-shell .kpi-sp-filters { margin-bottom: 14px; }
+.kpi-shell .slt-head { box-sizing: border-box; min-height: 48px; padding-top: 7px; padding-bottom: 7px; }
+.kpi-shell .slt-head .kpi-btn { text-transform: none; letter-spacing: 0; }
+.kpi-shell .slt-head .kpi-btn i { font-size: 14px; line-height: 1; }
+/* the second row's year is picked in its league table header: the compact KpiField before the title, both headers
+   of that row a little taller to hold it */
+.kpi-shell .slt-yearrow-pick .slt-head { min-height: 54px; }
+.kpi-shell .slt-head-pick { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.kpi-shell .slt-yearfield { flex: 0 0 116px; text-transform: none; letter-spacing: 0; font-weight: 400; }
+.kpi-shell .slt-head .slt-key { font-size: 12.5px; color: var(--kpim-text-2); }
+.kpi-shell .slt-table { color: var(--kpim-text); }
+.kpi-shell .slt-table th { color: var(--kpim-text-2); border-bottom-color: var(--kpim-card-line); }
+.kpi-shell .slt-table td { border-bottom-color: var(--kpim-row-line); }
+.kpi-shell .slt-table .slt-blankrow td { border-bottom-color: transparent; }
+.kpi-shell .slt-table .slt-rank { color: var(--kpim-text-2); }
+.kpi-shell .slt-table .slt-otherrow td { color: var(--kpim-text-2); }
+.kpi-shell .slt-table tfoot td { border-top-color: var(--kpim-card-line); }
+.kpi-shell .slt-otherbtn { color: var(--kpim-sp-link); }
+.kpi-shell .slt-tgt-empty { font-size: 14px; color: var(--kpim-text-2); }
+/* the chart is drawn 1000 wide and scaled to the card (about 0.7 at 1440 with the sidebar open): its type is sized for that */
+.kpi-shell .slt-gl { stroke: var(--kpim-sp-grid); }
+.kpi-shell .slt-ax { font-size: 17px; fill: var(--kpim-sp-axis); }
+.kpi-shell .slt-col { fill: var(--kpim-sp-col); }
+.kpi-shell .slt-colval { font-size: 19px; fill: var(--kpim-text); }
+.kpi-shell .slt-colname { font-size: 19px; fill: var(--kpim-sp-name); }
+.kpi-shell .slt-tick-ytd, .kpi-shell .slt-tick-year { stroke: var(--kpim-sp-target); }
+.kpi-shell .slt-key-ytd, .kpi-shell .slt-key-year { border-top-color: var(--kpim-sp-target); }
+/* the timelapse popup (outside .kpi-shell): its play button a pill like .kpi-btn */
+.slt-race .slt-ctrl { width: 40px; height: 32px; border-color: var(--kpim-field-line); border-radius: 16px;
+    background: var(--kpim-card); color: var(--kpim-crimson-dark); }
+.slt-race .slt-ctrl:hover { border-color: var(--kpim-crimson-dark); color: var(--kpim-crimson-dark); }
+
+/* ---- Margin Analysis ---- */
+/* Portrait: a row per year / month - the buy and sell dots on the rate track, the band between them,
+   their rates under them and the margin centred on a dimension line above (lifted clear of the line
+   when the dots are close). Positions are inline, as a percent of the track. */
+.kpim-ma-rows { display: flex; flex-direction: column; padding: 4px 0; }
+.kpim-ma-row { display: flex; flex-direction: column; gap: 6px; padding: 10px 16px 8px; border-bottom: 1px solid var(--kpim-card-head-line); }
+.kpim-ma-drow { display: flex; flex-direction: column; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--kpim-card-head-line); }
+.kpim-ma-label { font-size: 15px; font-weight: 600; }
+.kpim-ma-note { font-size: 12.5px; color: var(--kpim-ma-note); }
+.kpim-ma-box { position: relative; height: 50px; font-variant-numeric: tabular-nums; }
+.kpim-ma-box.kpim-ma-lifted { height: 64px; }
+.kpim-ma-inner { position: absolute; left: 0; right: 0; top: 0; height: 50px; }
+.kpim-ma-lifted .kpim-ma-inner { top: 14px; }
+.kpim-ma-dim { position: absolute; top: 7.85px; height: 1.3px; background: var(--kpim-crimson-dark); }
+.kpim-ma-head { position: absolute; top: 5px; fill: var(--kpim-crimson-dark); }
+.kpim-ma-track { position: absolute; left: 0; right: 0; top: 24px; height: 2px; border-radius: 1px; background: var(--kpim-ma-track); }
+.kpim-ma-band { position: absolute; top: 21px; height: 8px; border-radius: 4px; background: var(--kpim-ma-band); }
+.kpim-ma-dot { position: absolute; top: 19px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--kpim-card); box-sizing: border-box; }
+.kpim-ma-dot-buy { background: var(--kpim-ma-buy-dot); }
+.kpim-ma-dot-sell { background: var(--kpim-crimson); }
+.kpim-ma-val { position: absolute; top: 33px; font-size: 12.5px; line-height: 16px; color: var(--kpim-text-strong); white-space: nowrap; }
+.kpim-ma-margin { position: absolute; top: 0; transform: translateX(-50%); padding: 0 5px; background: var(--kpim-card);
+    font-size: 13px; font-weight: 700; line-height: 17px; color: var(--kpim-crimson-dark); white-space: nowrap; }
+/* The Last days row: margin beside the window, the dots on a slimmer track, the rates and amounts under it */
+.kpim-ma-dhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.kpim-ma-dmargin { font-size: 15.5px; font-weight: 700; color: var(--kpim-crimson-dark); font-variant-numeric: tabular-nums; }
+.kpim-ma-dmargin.kpim-ma-dmargin-none { color: var(--kpim-ma-note); }
+.kpim-ma-dtrack { position: relative; height: 16px; }
+.kpim-ma-dtrack .kpim-ma-track { top: 7px; }
+.kpim-ma-dtrack .kpim-ma-band { top: 4px; }
+.kpim-ma-dtrack .kpim-ma-dot { top: 2px; }
+.kpim-ma-dfoot { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+/* Landscape: the Annual to Date chart. The plot box keeps the full view's paddings (48 / 14 / 12 / 26);
+   inside it everything is placed by percent, the lines drawn in a 0-100 box with unscaled strokes. */
+.kpim-ma-chartcard { display: flex; flex-direction: column; background: var(--kpim-card); border: 1px solid var(--kpim-card-line);
+    border-radius: 12px; overflow: hidden; }
+.kpim-ma-charthead { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 30px; padding: 0 14px; flex-shrink: 0; }
+.kpim-ma-charthead h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-2); }
+.kpim-ma-key { list-style: none; margin: 0; padding: 0; display: flex; gap: 14px; font-size: 12px; color: var(--kpim-ma-key); }
+.kpim-ma-key li { display: flex; align-items: center; gap: 6px; }
+.kpim-ma-sw { width: 12px; height: 12px; border-radius: 2px; background: var(--kpim-ma-margin); }
+.kpim-ma-ln { width: 16px; height: 3px; border-radius: 2px; }
+.kpim-ma-ln-buy { background: var(--kpim-ma-buy); }
+.kpim-ma-ln-sell { background: var(--kpim-ma-sell); }
+.kpim-ma-chart { position: relative; flex: 1; min-height: 0; margin: 4px 8px 6px; }
+.kpim-ma-plot { position: absolute; left: 48px; right: 14px; top: 12px; bottom: 26px; }
+.kpim-ma-gl { position: absolute; left: 0; right: 0; height: 1px; transform: translateY(-50%); background: var(--kpim-ma-grid); }
+.kpim-ma-yl, .kpim-ma-xl { position: absolute; font-size: 11px; line-height: 1; color: var(--kpim-ma-axis); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.kpim-ma-yl { right: calc(100% + 6px); transform: translateY(-50%); }
+.kpim-ma-xl { top: calc(100% + 9px); transform: translateX(-50%); }
+/* landscape: Division and the Chart / Table switch in one row; the table as the full view's Annual to Date */
+.kpim-ma-lbar { display: flex; align-items: flex-start; gap: 10px; }
+.kpim-ma-lbar > .kpim-fbox-compact { flex: 0 1 260px; }
+.kpim-ma-lbar > .kpim-seg { margin-left: auto; width: 240px; flex-shrink: 0; }
+.kpim-ma-tablecard { display: flex; flex-direction: column; }
+.kpim-ma-tscroll { flex: 1; min-height: 0; overflow: auto; }
+.kpim-ma-table td:first-child { color: var(--kpim-text-2); }
+.kpim-ma-table td.kpim-ma-mcol { background: var(--kpim-now); color: var(--kpim-crimson-dark); font-weight: 700; }
+.kpim-ma-table thead th.kpim-ma-mcol { background: var(--kpim-now-head); color: var(--kpim-crimson-dark); }
+.kpim-ma-bar { position: absolute; bottom: 0; transform: translateX(-50%); border-radius: 2px; background: var(--kpim-ma-margin); }
+.kpim-ma-lines { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.kpim-ma-lines polyline { fill: none; stroke-width: 2.5; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.kpim-ma-pl-buy { stroke: var(--kpim-ma-buy); }
+.kpim-ma-pl-sell { stroke: var(--kpim-ma-sell); }
+.kpim-ma-pt { position: absolute; width: 7px; height: 7px; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+.kpim-ma-pt-buy { background: var(--kpim-ma-buy); }
+.kpim-ma-pt-sell { background: var(--kpim-ma-sell); }
+.kpim-ma-hit { position: absolute; top: 0; bottom: 0; margin: 0; padding: 0; border: 0; background: transparent; cursor: default;
+    -webkit-tap-highlight-color: transparent; }
+.kpim-ma-tip { opacity: 0; transition: opacity 0.1s ease; }
+.kpim-ma-tip.kpim-on { opacity: 1; }
+/* Full view: the filters, then the two columns of cards filling the window below them (the graph card takes the
+   left column's slack); a window too short for the cards scrolls the report, so nothing is out of reach. */
+.kpi-shell .kpi-main:has(.kpi-ma) { display: block; overflow: auto; }
+.kpi-shell .kpi-main:has(.kpi-ma) .kpi-body { min-height: calc(100% - 60px); box-sizing: border-box; }
+.kpi-shell .kpi-main:has(.kpi-ma) .kpi-fade { flex: 1 0 auto; display: flex; flex-direction: column; }
+.kpi-ma { flex: 1 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.kpi-shell .ma-fill { flex: 1 0 auto; }
+.kpi-shell .ma-annualtable, .kpi-shell .ma-daysbody { overflow-x: auto; }
+/* the tables: phone sizes and greys; a long date range wraps rather than pushing Lead AF out of the card */
+.kpi-shell .ma-table { font-size: 14.5px; }
+.kpi-shell .ma-table th { padding: 7px 10px 6px; font-size: 12.5px; color: var(--kpim-text-2); border-bottom-color: var(--kpim-card-line); }
+.kpi-shell .ma-table td { padding: 6px 10px; color: var(--kpim-text); border-bottom-color: var(--kpim-row-line); }
+.kpi-shell .ma-table th:first-child, .kpi-shell .ma-table td:first-child { padding-left: 15px; }
+.kpi-shell .ma-table th:last-child, .kpi-shell .ma-table td:last-child { padding-right: 15px; }
+.kpi-shell .ma-table td.ma-l { color: var(--kpim-text-2); }
+.kpi-shell .ma-daysbody td.ma-l { white-space: normal; }
+.ma-date { white-space: nowrap; }
+/* the margin, as the phone marks it: crimson figures on the pale crimson column */
+.kpi-shell .ma-table th.ma-margin { background: var(--kpim-now-head); color: var(--kpim-text-strong); }
+.kpi-shell .ma-table td.ma-margin { background: var(--kpim-now); color: var(--kpim-crimson-dark); font-weight: 700; }
+.kpi-shell .ma-table tfoot td { border-top-color: var(--kpim-card-line); background: var(--kpim-card-head); }
+.kpi-shell .ma-table tfoot td.ma-l { color: var(--kpim-text); }
+.kpi-shell .ma-table tr.ma-future td, .kpi-shell .ma-table tr.ma-future td.ma-margin { color: var(--text-disabled); font-weight: 400; }
+/* the graph's key and axes in the phone chart's greys (the series keep their colours) */
+.kpi-shell .ma-key { font-size: 12px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--kpim-ma-key); }
+.kpi-shell .ma-axisline { stroke: var(--kpim-ma-grid); }
+.kpi-shell .ma-axistext { font-size: 11px; fill: var(--kpim-ma-axis); }
+
+/* ---- Minimum IRR ---- */
+.kpim-mi-card { display: flex; flex-direction: column; gap: 8px; }
+.kpim-mi-h { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-2); }
+.kpim-mi-sum { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; }
+.kpim-mi-sum svg { flex-shrink: 0; }
+.kpim-mi-sum-below { background: var(--kpim-down-bg); color: var(--kpim-mi-below); }
+.kpim-mi-sum-clear { background: var(--kpim-up-bg); color: var(--kpim-mi-clear); }
+.kpim-mi-sum-none { background: var(--kpim-mi-neutral); color: var(--kpim-text-strong); }
+.kpim-mi-sum-text { display: flex; flex-direction: column; }
+.kpim-mi-headline { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpim-mi-sub { font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.kpim-mi-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-variant-numeric: tabular-nums; }
+.kpim-mi-totals > div { display: flex; flex-direction: column; }
+.kpim-mi-cap { font-size: 12.5px; color: var(--kpim-text-2); }
+.kpim-mi-fig { font-size: 18px; font-weight: 600; }
+.kpim-mi-people { display: flex; flex-direction: column; padding: 6px 0 2px; }
+.kpim-mi-people > .kpim-mi-h { margin: 4px 0 6px; padding: 0 16px; }
+.kpim-mi-person { display: flex; flex-direction: column; gap: 5px; padding: 10px 16px; border-top: 1px solid var(--kpim-card-head-line); }
+.kpim-mi-person-top { display: flex; align-items: center; gap: 8px; }
+.kpim-mi-name { flex: 1; min-width: 0; font-size: 15.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpim-mi-div { padding: 2px 8px; border-radius: 10px; background: var(--kpim-mi-neutral); font-size: 12px; color: var(--kpim-text-strong); }
+.kpim-mi-line { display: flex; justify-content: space-between; font-size: 14px; color: var(--kpim-text-strong); font-variant-numeric: tabular-nums; }
+.kpim-mi-line strong { color: var(--kpim-text); }
+.kpim-mi-chip { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 12px;
+    font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; background: var(--kpim-mi-neutral); color: var(--kpim-text-2); }
+.kpim-mi-chip.kpim-mi-chip-below { background: var(--kpim-down-bg); color: var(--kpim-mi-below); }
+.kpim-mi-none { padding: 12px 16px 14px; border-top: 1px solid var(--kpim-card-head-line); font-size: 14px; color: var(--kpim-text-2); }
+/* Landscape: the full view's nine-column table, its header held while the rows scroll */
+.kpim-mi-wrap { background: var(--kpim-card); border: 1px solid var(--kpim-card-line); border-radius: 12px; overflow: auto; }
+.kpim-mi-table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kpim-mi-table th { position: sticky; top: 0; z-index: 1; padding: 6px 8px; text-align: right; vertical-align: bottom; white-space: normal;
+    font-size: 12.5px; font-weight: 600; line-height: 1.25; color: var(--kpim-text-2);
+    background: var(--kpim-mi-head); box-shadow: inset 0 -2px 0 var(--kpim-mi-rule); }
+.kpim-mi-table td { padding: 5px 8px; text-align: right; }
+.kpim-mi-table .kpim-mi-l { text-align: left; }
+.kpim-mi-table th:first-child, .kpim-mi-table td:first-child { padding-left: 14px; }
+.kpim-mi-table th:last-child, .kpim-mi-table td:last-child { padding-right: 14px; }
+.kpim-mi-table tbody tr { border-bottom: 1px solid var(--kpim-mi-line); }
+.kpim-mi-table tfoot tr { border-top: 2px solid var(--kpim-mi-rule); background: var(--kpim-card-head); font-weight: 700; }
+.kpim-mi-table tfoot td { padding-top: 6px; padding-bottom: 6px; }
+/* Full view: the three period cards as wide as the report allows (to a readable width), so all nine columns
+   show at 1440 with the menu open; the table as the phone's landscape one - grey headings that may wrap,
+   hairline rows, the Total on the header band's grey under a grey rule. */
+.kpi-mi { display: flex; flex-direction: column; gap: 16px; }
+.kpi-shell .kpi-mi .mi-card { max-width: 1180px; min-width: 0; margin-bottom: 0; }
+.kpi-shell .mi-card .mi-table { font-size: 14.5px; }
+.kpi-shell .mi-card .mi-table th { padding: 7px 10px 6px; vertical-align: bottom; white-space: normal; line-height: 1.25;
+    font-size: 12.5px; color: var(--kpim-text-2); border-bottom-color: var(--kpim-mi-rule); }
+.kpi-shell .mi-card .mi-table td { padding: 6px 10px; color: var(--kpim-text); border-bottom-color: var(--kpim-mi-line); }
+.kpi-shell .mi-card .mi-table th:first-child, .kpi-shell .mi-card .mi-table td:first-child { padding-left: 15px; }
+.kpi-shell .mi-card .mi-table th:last-child, .kpi-shell .mi-card .mi-table td:last-child { padding-right: 15px; }
+.kpi-shell .mi-card .mi-table tbody tr:hover td { background: var(--kpim-card-head); }
+.kpi-shell .mi-card .mi-table tfoot td { border-top-color: var(--kpim-mi-rule); background: var(--kpim-card-head); color: var(--kpim-text); }
+.kpi-mi-empty { padding: 12px 15px 14px; font-size: 14px; color: var(--kpim-text-2); }
+
+/* ---- Postcode Heat Map ---- */
+.kpim-hm-off { display: none !important; }
+/* Year (HeatMapMobileYear): a kpim-field that opens the year chips, so a button rather than a picker; the chips
+   sit under the fields in the fold-away filter box */
+.kpim-hm-year { width: 100%; font-family: inherit; color: inherit; }
+.kpim-hm-year.kpim-on { border-color: var(--kpim-crimson-dark); }
+.kpim-hm-years { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 10px 12px 12px; }
+.kpim-hm-done { align-self: flex-end; height: 32px; padding: 0 10px; border: 0; background: transparent;
+    font-family: inherit; font-size: 14px; font-weight: 600; color: var(--kpim-crimson-dark); cursor: pointer; }
+.kpim-hm-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.kpim-hm-chip { height: 34px; padding: 0; border: 1px solid var(--kpim-field-line); border-radius: 17px;
+    background: var(--kpim-card); color: var(--kpim-text-strong);
+    font-family: inherit; font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+.kpim-hm-chip.kpim-on { border-color: var(--kpim-crimson); background: var(--kpim-crimson); color: var(--kpim-on-crimson); }
+
+/* the map card: not clipped, so the selected-area card can stick to the bottom of the screen */
+.kpim-hm-mapcard { overflow: visible; display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 10px; }
+/* Leaflet's own map (HeatMap.razor.js phoneInit). Isolated so its panes stay under the card and the menu. */
+.kpim-hm-map { width: 100%; aspect-ratio: 1 / 1.98; border-radius: 10px; overflow: hidden; isolation: isolate;
+    background: var(--kpim-hm-sea); }
+.kpim-hm-map.leaflet-container { background: var(--kpim-hm-sea); font: inherit; }
+@media (orientation: landscape) {
+    .kpim-hm-map { max-height: calc(100vh - 80px); max-height: calc(100svh - 80px); }
+}
+/* the selected region / area: a crimson casing that pulses, a steady white line on it */
+.kpim-hm-map path.kpim-hm-sel-casing { stroke: var(--kpim-crimson); animation: kpim-hm-pulse 1.6s ease-in-out infinite; }
+.kpim-hm-map path.kpim-hm-sel-line { stroke: var(--kpim-on-crimson); }
+@keyframes kpim-hm-pulse { 0%, 100% { stroke-width: 4px; stroke-opacity: 1; } 50% { stroke-width: 9px; stroke-opacity: 0.4; } }
+@media (prefers-reduced-motion: reduce) {
+    .kpim-hm-map path.kpim-hm-sel-casing { animation: none; stroke-width: 5px; stroke-opacity: 1; }
+}
+
+.kpim-hm-legend { display: flex; flex-direction: column; gap: 3px; }
+.kpim-hm-legrow { display: flex; align-items: center; gap: 6px; }
+.kpim-hm-none { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: 11px; color: var(--kpim-text-2); }
+.kpim-hm-none-sw { width: 14px; height: 10px; box-sizing: border-box; border-radius: 3px; border: 1px solid var(--kpim-hm-none-line); }
+.kpim-hm-ghost { visibility: hidden; }
+.kpim-hm-bar { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); height: 10px; border-radius: 5px; overflow: hidden; }
+.kpim-hm-from { flex: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+    font-size: 10.5px; color: var(--kpim-text-2); font-variant-numeric: tabular-nums; }
+.kpim-hm-from span { white-space: nowrap; }
+
+.kpim-hm-detail { display: flex; flex-direction: column; gap: 2px;
+    padding: 10px 12px; border: 1px solid var(--kpim-card-line); border-radius: 10px;
+    background: var(--kpim-hm-detail); box-shadow: 0 2px 10px var(--kpim-hm-detail-shadow); }
+.kpim-hm-detail-title { font-size: 14.5px; font-weight: 600; }
+.kpim-hm-detail-measure { font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-crimson-dark); }
+/* each "label value" stays whole: the line wraps only between items */
+.kpim-hm-detail-items { display: flex; flex-wrap: wrap; column-gap: 0.3em; font-size: 13px; line-height: 1.4; color: var(--kpim-text-strong); }
+.kpim-hm-detail-items span { white-space: nowrap; }
+
+.kpim-hm-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; margin: 0; padding: 0 16px;
+    box-sizing: border-box; border: 0; border-top: 1px solid var(--kpim-card-head-line); background: transparent;
+    color: inherit; font-family: inherit; font-size: 14.5px; font-variant-numeric: tabular-nums; text-align: left; }
+button.kpim-hm-row { cursor: pointer; }
+.kpim-card-head + .kpim-hm-row { border-top: 0; }
+.kpim-hm-row.kpim-on { background: var(--kpim-hm-sel-row); }
+.kpim-hm-row.kpim-on .kpim-hm-name { font-weight: 700; }
+.kpim-hm-sw { width: 12px; height: 12px; flex-shrink: 0; border-radius: 3px; }
+.kpim-hm-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpim-hm-val { font-weight: 600; }
+.kpim-hm-share { width: 44px; flex-shrink: 0; text-align: right; font-size: 13px; color: var(--kpim-text-2); }
+.kpim-hm-um { font-style: italic; color: var(--kpim-text-2); }
+.kpim-hm-more { width: 100%; min-height: 40px; border: 0; border-top: 1px solid var(--kpim-card-head-line); background: transparent;
+    font-family: inherit; font-size: 14px; font-weight: 600; color: var(--kpim-crimson-dark); cursor: pointer; }
+.kpim-hm-total { min-height: 42px; border-top: 2px solid var(--kpim-field-line); font-weight: 700; }
+.kpim-hm-total .kpim-hm-name { padding-left: 22px; }
+.kpim-hm-total .kpim-hm-val { font-weight: inherit; }
+
+/* -- full view: the panels over the map as phone cards, the filter panel in the phone's field look (app.css lays
+   them out; these restyle). The map's own colours are untouched. -- */
+.kpi-shell .hm-main { border-color: var(--kpim-card-line); border-radius: 14px; }
+.kpi-shell .hm-panel, .kpi-shell .hm-zoom { background: var(--kpim-card); border-color: var(--kpim-card-line);
+    box-shadow: 0 2px 10px var(--kpim-hm-detail-shadow); }
+.kpi-shell .hm-panel { border-radius: 14px; }
+.kpi-shell .hm-zoom { border-radius: 12px; }
+.kpi-shell .hm-zoom button { border-color: var(--kpim-field-line); border-radius: 8px; background: var(--kpim-card); color: var(--kpim-text-2); }
+.kpi-shell .hm-zoom button:hover { border-color: var(--kpim-crimson-dark); color: var(--kpim-crimson-dark); }
+.kpi-shell .hm-zrange { accent-color: var(--kpim-crimson); }
+
+/* the left column over the map: the filters at the top, the table at the bottom, the table stopping below
+   the filters (on its own it reached the top at Postcode Area, over them). Clicks pass through the gap. */
+.kpi-shell .kpi-hm-left { position: absolute; z-index: 600; top: 14px; left: 14px; bottom: 18px; max-width: calc(100% - 28px);
+    display: flex; flex-direction: column; align-items: flex-start; gap: 12px; pointer-events: none; }
+.kpi-shell .kpi-hm-left > .hm-panel { position: relative; top: auto; left: auto; bottom: auto; max-width: 100%; pointer-events: auto; }
+.kpi-shell .kpi-hm-left > .hm-controls { flex: none; z-index: 2; }
+.kpi-shell .kpi-hm-left > .hm-regions { flex: 0 1 auto; min-height: 0; max-height: none; margin-top: auto; z-index: 1; }
+
+/* filters: KpiFields (a <label> - so app.css's caption-above label look is undone) and the Year dropdown, whose
+   summary carries the same field look. Widths in order: Measure, Arrangement, Year. */
+.kpi-shell .hm-controls { padding: 10px 12px; }
+.kpi-shell .hm-controls label.kpim-field { gap: 0; font-size: inherit; text-transform: none; letter-spacing: normal; color: inherit; }
+.kpi-shell .hm-controls .kpim-field select { min-width: 0; }
+.kpi-shell .hm-controls > .kpim-field { width: 132px; }
+.kpi-shell .hm-controls > .kpim-field:first-child { width: 180px; }
+.kpi-shell .hm-controls > .hm-yearsdd { width: 168px; }
+.kpi-shell .hm-controls .hm-yearsdd > summary { min-width: 0; padding: 0; border: 0; border-radius: 0; background: none; white-space: normal; }
+.kpi-shell .hm-controls .hm-yearsdd > summary::after { content: none; }
+.kpi-shell .hm-yearsdd > summary > .kpim-field { width: 100%; }
+.kpi-shell .hm-yearsdd[open] > summary > .kpim-field { border-color: var(--kpim-crimson-dark); }
+.kpi-shell .hm-yearsdd[open] .kpim-field-value > i { transform: rotate(180deg); }
+.kpi-shell .hm-controls .hm-yearsdd-menu { box-sizing: border-box; min-width: 100%; padding: 6px; border-color: var(--kpim-field-line);
+    border-radius: 12px; background: var(--kpim-card); box-shadow: 0 6px 20px var(--kpim-shadow); }
+.kpi-shell .hm-controls .hm-yearchk { border-radius: 8px; font-size: 13.5px; color: var(--kpim-text); font-variant-numeric: tabular-nums; }
+.kpi-shell .hm-controls .hm-yearchk:hover { background: var(--kpim-hm-sel-row); }
+.kpi-shell .hm-controls .hm-yearchk input { accent-color: var(--kpim-crimson); }
+
+/* the breakdown table: header band, the level switch (KpiSegmented), rows and total as the phone list */
+.kpi-shell .hm-cap { padding: 10px 14px 12px; background: var(--kpim-card-head); border-bottom-color: var(--kpim-card-head-line); }
+.kpi-shell .hm-ttl { font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-strong); }
+.kpi-shell .hm-metricname { font-size: 14px; color: var(--kpim-crimson-dark); }
+.kpi-shell .hm-cap .kpim-seg { margin-top: 10px; }
+.kpi-shell .hm-rtable { font-size: 14px; }
+.kpi-shell .hm-rtable thead th { background: var(--kpim-card); border-bottom: 2px solid var(--kpim-card-line);
+    font-size: 12.5px; text-transform: none; letter-spacing: 0; color: var(--kpim-text-2); }
+.kpi-shell .hm-rtable tbody td { padding-top: 6px; padding-bottom: 6px; border-bottom-color: var(--kpim-row-line); color: var(--kpim-text); }
+.kpi-shell .hm-rtable tbody td.p { color: var(--kpim-text); }
+.kpi-shell .hm-rtable tbody td:last-child { font-size: 13px; font-weight: 400; color: var(--kpim-text-2); }
+.kpi-shell .hm-rtable tbody tr.um td { color: var(--kpim-text-2); }
+.kpi-shell .hm-rtable tbody tr:hover { background: var(--kpim-hm-sel-row); }
+.kpi-shell .hm-rtable tfoot td { border-top-color: var(--kpim-field-line); background: var(--kpim-card); color: var(--kpim-text); }
+
+/* the selection and the legend: a header band each */
+.kpi-shell .hm-info, .kpi-shell .hm-legend { overflow: hidden; }
+.kpi-shell .hm-info h2 { margin: -14px -16px 10px; padding: 10px 16px 9px; background: var(--kpim-card-head);
+    border-bottom: 1px solid var(--kpim-card-head-line); font-size: 13px; font-weight: 600; letter-spacing: 0.06em; color: var(--kpim-text-strong); }
+.kpi-shell .hm-region { font-size: 18px; color: var(--kpim-text); }
+.kpi-shell .hm-region.empty { font-size: 14px; color: var(--kpim-text-2); }
+.kpi-shell .hm-inforow { border-top-color: var(--kpim-row-line); }
+.kpi-shell .hm-inforow .k { color: var(--kpim-text-2); }
+.kpi-shell .hm-inforow .v { color: var(--kpim-text); }
+.kpi-shell .hm-legend .lt { margin: -12px -14px 8px; padding: 9px 14px 8px; background: var(--kpim-card-head);
+    border-bottom: 1px solid var(--kpim-card-head-line); font-size: 12.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--kpim-text-strong); }
+.kpi-shell .hm-legend .band { font-size: 12.5px; color: var(--kpim-text-2); }
+.kpi-shell .hm-legend .band:hover { background: var(--kpim-hm-sel-row); }
+.kpi-shell .hm-legend .cnt, .kpi-shell .hm-legend .hint { color: var(--kpim-text-3); }
+
+/* ---- report sections: add yours above this line, one section per report, classes prefixed kpim-<report>- ---- */

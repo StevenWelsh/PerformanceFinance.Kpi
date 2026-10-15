@@ -1,0 +1,20 @@
+@* The account screens' shell: CMS.Web's sign-in card with the PF logo (app.css .login-*). Every page under /account
+   sits in it. These pages are static (no live Blazor connection), so their forms post to AccountEndpoints. *@
+
+<div class="login-page">
+    <div class="login-card">
+        <div class="pf-logo">
+            <img src="img/pf-logo.png" alt="Performance Finance — Funding your success" class="pf-logo-img" />
+        </div>
+        @if (Title is not null)
+        {
+            <h1 class="acc-title">@Title</h1>
+        }
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

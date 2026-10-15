@@ -1,0 +1,241 @@
+@page "/kpis/minimum-irr"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@using System.Globalization
+@using Kpi.Web.Reports
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Minimum IRR Analysis — own-book deals broken down by (division, salesperson) for This Month,
+   This Quarter and This Year: transactions, AF, the AF×term-weighted average IRR, and how many
+   transactions / how much AF fell BELOW the minimum acceptable IRR for the deal's date+division
+   (WebKPI.spMinIRRAnalysis / GetEffectiveMinIRR), with those as %. A Total row per panel.
+   All salespeople with own-book sales in the period appear. Filter: Division.
+   VERIFIED to the penny against the Klipfolio original. *@
+
+<PageTitle>Minimum IRR — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="minimum-irr" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Minimum IRR" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+          <div class="kpi-mi">
+            <div class="kpi-filters">
+                <KpiField Caption="Division" Value="@_divisionId.ToString(CultureInfo.InvariantCulture)"
+                          ValueChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" Options="DivisionOptions" />
+            </div>
+
+            @if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+            else
+            {
+                @Panel("This Month", "Month", _month)
+                @Panel("This Quarter", "Quarter", _quarter)
+                @Panel("This Year", "Year", _year)
+            }
+          </div>
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Minimum IRR" Active="minimum-irr" AsAt="_asOf" Hint="KpiMobileHint.SummaryInPortrait">
+    <ChildContent>
+        <MinimumIrrMobile Month="_month" Quarter="_quarter" Year="_year" Divisions="_divisions" DivisionId="_divisionId"
+                          Loading="_loading" Error="@_error" @bind-Period="_mobilePeriod"
+                          DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" />
+    </ChildContent>
+    <Landscape>
+        <MinimumIrrMobileLandscape Month="_month" Quarter="_quarter" Year="_year" Divisions="_divisions" DivisionId="_divisionId"
+                                   Loading="_loading" Error="@_error" @bind-Period="_mobilePeriod"
+                                   DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" />
+    </Landscape>
+</KpiMobile>
+
+@code {
+    private int _divisionId = -1;
+    private string _mobilePeriod = "Year";    // the phone's one-period-at-a-time choice
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    // The result the page renders, as one cacheable payload (the three period tables).
+    // The division dropdown fill is a one-time bootstrap, NOT part of the payload.
+    private sealed record Payload(
+        List<MinIRRRow> Month,
+        List<MinIRRRow> Quarter,
+        List<MinIRRRow> Year);
+
+    private List<(int Id, string Name)>? _divisions;
+    private List<MinIRRRow> _month = new();
+    private List<MinIRRRow> _quarter = new();
+    private List<MinIRRRow> _year = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Load(firstLoad: true);
+    }
+
+    private async Task Load(bool firstLoad = false)
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            // One-time bootstrap: fill the division dropdown once. Runs regardless of a cache hit,
+            // and mutates a component field, so it stays out of LoadPayload.
+            if (firstLoad)
+            {
+                using var cms = await SessionFactory.BeginAsync();
+                var divs = cms.Db.Report<DivRow>("Rpt.spFilterOptions", new { List = "Divisions" })
+                    .ToList().OrderBy(d => d.Name).ToList();
+                _divisions = divs.Select(d => (d.Id, d.Name)).ToList();
+            }
+
+            // Cached per (division + report date): instant on a repeat open / tab-flick, one DB
+            // hit the first time. GetOrLoad is single-flight, so concurrent viewers load once.
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("MinimumIrr", _divisionId),
+                LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    // Pure loader: opens a one-shot session, runs the procs, returns the payload + its as-at.
+    // No component-field mutation here — that's Apply()'s job, so the cache can call this off
+    // the render path during a background refresh.
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var svc = new MinIRRService(cms.Db);
+        var month = svc.GetAnalysis("M_This", _divisionId);
+        var quarter = svc.GetAnalysis("Q_This", _divisionId);
+        var year = svc.GetAnalysis("Y_This", _divisionId);
+        return (new Payload(month, quarter, year), asAt);
+    }
+
+    // Push a payload into the fields the markup renders. (_asOf comes from the cache entry's AsAt,
+    // set by the caller, not from the payload.)
+    private void Apply(Payload p)
+    {
+        _month = p.Month;
+        _quarter = p.Quarter;
+        _year = p.Year;
+    }
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view. Re-run through the cache;
+    // if the data changed, refresh the fields and fade the tables; otherwise just tick "Refreshed on".
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(
+                KpiCache.Key("MinimumIrr", _divisionId),
+                LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task OnDivision(ChangeEventArgs e)
+    { _divisionId = int.TryParse(e.Value?.ToString(), out var v) ? v : -1; await Load(); }
+
+    private IReadOnlyList<KpiOption> DivisionOptions =>
+        new[] { new KpiOption("-1", "All") }
+            .Concat((_divisions ?? new()).Select(d => new KpiOption(d.Id.ToString(CultureInfo.InvariantCulture), d.Name)))
+            .ToList();
+
+    private string? DivisionName => _divisions?.Where(d => d.Id == _divisionId).Select(d => d.Name).FirstOrDefault();
+
+    // period (Month / Quarter / Year) words the note under a period with no deals, as the phone does
+    private RenderFragment Panel(string title, string period, List<MinIRRRow> rows) => @<div class="ss-card mi-card">
+        <div class="ss-card-head">@title</div>
+        <table class="mi-table">
+            <thead>
+                <tr>
+                    <th class="mi-l">Division</th>
+                    <th class="mi-l">Salesperson</th>
+                    <th>Transactions</th>
+                    <th>AF</th>
+                    <th>Average IRR</th>
+                    <th>T Under Min</th>
+                    <th>AF Under Min</th>
+                    <th>% T Under Min</th>
+                    <th>% AF Under Min</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in rows.Where(x => !x.IsTotal))
+                {
+                    <tr>
+                        <td class="mi-l">@r.SalesDivision</td>
+                        <td class="mi-l">@r.Salesperson</td>
+                        <td>@r.TransactionsTotal.ToString("N0")</td>
+                        <td>@Cur(r.AFTotal)</td>
+                        <td>@Pct(r.IRRAverage)</td>
+                        <td>@r.TransactionsUnderMinIRR.ToString("N0")</td>
+                        <td>@Cur(r.AFUnderMinIRR)</td>
+                        <td>@Pct0(r.PercentTransactionsUnderMinIRR)</td>
+                        <td>@Pct0(r.PercentAFUnderMinIRR)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                @{ var total = rows.FirstOrDefault(x => x.IsTotal); }
+                @if (total is not null)
+                {
+                    <tr class="mi-total">
+                        <td class="mi-l">-</td>
+                        <td class="mi-l">Total</td>
+                        <td>@total.TransactionsTotal.ToString("N0")</td>
+                        <td>@Cur(total.AFTotal)</td>
+                        <td>@Pct(total.IRRAverage)</td>
+                        <td>@total.TransactionsUnderMinIRR.ToString("N0")</td>
+                        <td>@Cur(total.AFUnderMinIRR)</td>
+                        <td>@Pct0(total.PercentTransactionsUnderMinIRR)</td>
+                        <td>@Pct0(total.PercentAFUnderMinIRR)</td>
+                    </tr>
+                }
+            </tfoot>
+        </table>
+        @if (!rows.Any(x => !x.IsTotal))
+        {
+            <div class="kpi-mi-empty">@MinimumIrrMobileLandscape.EmptyNote(period, DivisionName)</div>
+        }
+    </div>;
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+    private static string Pct0(decimal fraction) => Math.Round(fraction * 100m).ToString("0") + "%";
+
+    private class DivRow { public int Id { get; set; } public string Name { get; set; } = ""; }
+}

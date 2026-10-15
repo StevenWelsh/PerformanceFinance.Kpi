@@ -1,0 +1,67 @@
+@using System.Security.Claims
+@using Kpi.Data.Auth
+@using Kpi.Web.Account
+
+@* The signed-in person's avatar, top right, as DavidsonHR: their initials, and a menu with who they are, My Account,
+   Settings (System Admin only) and Log out. Log out is a real form: the sign-in cookie can only be removed by an
+   ordinary request. *@
+
+<div class="um">
+    <button type="button" class="um-avatar" title="Account menu" aria-label="Account menu"
+            aria-haspopup="menu" aria-expanded="@(_open ? "true" : "false")" @onclick="() => _open = !_open">
+        @_initials
+    </button>
+    @if (_open)
+    {
+        <div class="um-backdrop" @onclick="() => _open = false"></div>
+        <div class="um-menu" role="menu">
+            <div class="um-head">
+                <div class="um-name">@_name</div>
+                <div class="um-email">@_email</div>
+                <div class="um-role">@_role</div>
+            </div>
+            <a href="/my-account" role="menuitem"><i class="bi bi-person-circle" aria-hidden="true"></i> My Account</a>
+            @if (_systemAdmin)
+            {
+                <a href="/settings" role="menuitem"><i class="bi bi-gear" aria-hidden="true"></i> Settings</a>
+            }
+            <form method="post" action="/account/logout">
+                <AntiforgeryToken />
+                <button type="submit" role="menuitem"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Log out</button>
+            </form>
+        </div>
+    }
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _open;
+    private string _initials = "";
+    private string _name = "";
+    private string _email = "";
+    private string _role = "";
+    private bool _systemAdmin;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AuthState is null) return;
+        var user = (await AuthState).User;
+        _name = user.FindFirstValue(KpiClaims.Name) ?? "";
+        _email = user.FindFirstValue(ClaimTypes.Email) ?? "";
+        _systemAdmin = user.IsInRole(KpiRoles.SystemAdmin);
+        _role = KpiRoles.Label(KpiRoles.All.FirstOrDefault(user.IsInRole));
+        _initials = Initials(_name);
+    }
+
+    private static string Initials(string name)
+    {
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..1].ToUpperInvariant(),
+            _ => (parts[0][..1] + parts[^1][..1]).ToUpperInvariant()
+        };
+    }
+}

@@ -1,0 +1,126 @@
+@page "/my-account"
+@layout EmptyLayout
+@attribute [Authorize(Policy = KpiPolicies.SignedIn)]
+@implements IDisposable
+@using System.Security.Claims
+@using Kpi.Data.Auth
+@using Kpi.Web.Account
+@using Kpi.Web.Data.Kpis
+@inject KpiFavourites Favourites
+
+@* My Account (Oct 2026, Steve): a page of its own, not a Settings section, laid out for a phone as well. Who you are,
+   your favourite reports (kept with your login, so every device has them), your password, and moving to a new phone.
+   The password and new-phone forms post to AccountEndpoints: the sign-in cookie can only be rewritten in an ordinary
+   request. *@
+
+<PageTitle>My Account — Performance Finance KPIs</PageTitle>
+
+<div class="kpi-shell acc-shell">
+    <KpiSidebar Active="" />
+
+    <main class="kpi-main">
+        <header class="kpi-topbar acc-topbar">
+            <a class="acc-back" href="/kpis"><i class="bi bi-chevron-left" aria-hidden="true"></i> Reports</a>
+            <h1>My Account</h1>
+            <KpiUserMenu />
+        </header>
+
+        <div class="acc-page">
+            <section class="acc-card">
+                <h2>You</h2>
+                <dl class="acc-facts">
+                    <dt>Name</dt><dd>@_name</dd>
+                    <dt>Email</dt><dd>@_email</dd>
+                    <dt>Role</dt><dd>@_role</dd>
+                </dl>
+                <p class="acc-hint">Your System Admin changes these.</p>
+            </section>
+
+            <section class="acc-card">
+                <h2>Favourite reports</h2>
+                <p class="acc-hint">Starred reports are listed first in the phone's reports menu, on every device you sign in on.</p>
+                <ul class="acc-favs">
+                    @foreach (var r in _reports)
+                    {
+                        var on = Favourites.Contains(r.Slug);
+                        <li>
+                            <button type="button" class="acc-fav @(on ? "acc-on" : "")" aria-pressed="@(on ? "true" : "false")"
+                                    @onclick="() => Favourites.ToggleAsync(r.Slug)">
+                                <i class="bi @(on ? "bi-star-fill" : "bi-star")" aria-hidden="true"></i>
+                                <i class="bi @r.Icon acc-fav-icon" aria-hidden="true"></i>
+                                <span>@r.Label</span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            </section>
+
+            <section class="acc-card">
+                <h2>Change password</h2>
+                <Kpi.Web.Components.Account.Messages Error="@PasswordError" Notice="@PasswordNotice" />
+                <form method="post" action="/account/change-password" class="acc-form">
+                    <AntiforgeryToken />
+                    <Kpi.Web.Components.Account.PasswordInput Id="current" Name="currentPassword" Label="Current password" />
+                    <Kpi.Web.Components.Account.PasswordInput Id="new" Name="newPassword" Label="New password" Autocomplete="new-password" />
+                    <Kpi.Web.Components.Account.PasswordInput Id="confirm" Name="confirmPassword" Label="Confirm new password" Autocomplete="new-password" />
+                    <p class="acc-hint">@Kpi.Web.Components.Account.Messages.PasswordRules Your other devices are signed out.</p>
+                    <button type="submit" class="login-button">Change password</button>
+                </form>
+            </section>
+
+            <section class="acc-card">
+                <h2>New phone</h2>
+                <Kpi.Web.Components.Account.Messages Error="@(NewPhone == "wrong" ? "That password wasn't right." : null)" />
+                <p class="acc-text">Moving to a new phone? Enter your password and you'll set up your authenticator app on the new one
+                   straight away. You are signed out everywhere else, and the old phone's codes stop working.</p>
+                <p class="acc-hint">Lost your phone and can't sign in? Ask your System Admin to reset your authenticator.</p>
+                <form method="post" action="/account/authenticator/reset" class="acc-form">
+                    <AntiforgeryToken />
+                    <Kpi.Web.Components.Account.PasswordInput Id="phone-password" Name="currentPassword" />
+                    <button type="submit" class="acc-btn-secondary">Set up a new phone</button>
+                </form>
+            </section>
+        </div>
+    </main>
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    [SupplyParameterFromQuery(Name = "password")] public string? Password { get; set; }
+    [SupplyParameterFromQuery(Name = "newphone")] public string? NewPhone { get; set; }
+
+    private string _name = "";
+    private string _email = "";
+    private string _role = "";
+    private List<KpiReport> _reports = new();
+
+    private string? PasswordError => Password switch
+    {
+        "wrong" => "Your current password wasn't right.",
+        "match" => "The new passwords don't match.",
+        "rules" => "That password isn't strong enough. " + Kpi.Web.Components.Account.Messages.PasswordRules,
+        _ => null
+    };
+
+    private string? PasswordNotice => Password == "changed" ? "Your password has been changed." : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Favourites.Changed += OnFavouritesChanged;
+        if (AuthState is null) return;
+        var user = (await AuthState).User;
+        _name = user.FindFirstValue(KpiClaims.Name) ?? "";
+        _email = user.FindFirstValue(ClaimTypes.Email) ?? "";
+        _role = KpiRoles.Label(KpiRoles.All.FirstOrDefault(user.IsInRole));
+
+        // only the reports they may open
+        foreach (var r in KpiReports.All)
+            if (KpiReportAccess.CanSee(user, r.Slug))
+                _reports.Add(r);
+        await Favourites.EnsureLoadedAsync();
+    }
+
+    private void OnFavouritesChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Favourites.Changed -= OnFavouritesChanged;
+}

@@ -1,0 +1,315 @@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* The Postcode Heat Map on a phone: Measure, Arrangement and Year (folding away), the Region / Postcode area
+   switch, the map, the selected region or area, and the list ranked by the measure. The map is a second
+   Leaflet map drawn by HeatMap.razor.js (phoneInit) over the page's own data, groups and colour bands; its
+   container below is left to Leaflet. Filters, level and selection are the page's own state: tapping a row or
+   the map selects it (one at a time, tap again to clear) and the page hands the selection back. *@
+
+<KpiMobileFilters>
+    <div class="kpim-filters" style="--kpim-cols:3">
+        <KpiField Caption="Measure" Value="@Metric" ValueChanged="OnMetric" Options="MeasureOptions" />
+        <KpiField Caption="Arrangement" Value="@Arrangement" ValueChanged="ArrangementChanged" Options="ArrangementOptions" />
+        <HeatMapMobileYear Enabled="IsSales" Text="@YearsText" Open="YearsOpen" Toggle="ToggleYears" />
+    </div>
+
+    @* its picker: the year chips, folding away with the fields *@
+    @if (YearsOpen)
+    {
+        <section class="kpim-card kpim-hm-years">
+            <button type="button" class="kpim-hm-done" @onclick="ToggleYears">Done</button>
+            <div class="kpim-hm-chips">
+                @foreach (var y in Years)
+                {
+                    var yr = y;
+                    var on = SelectedYears.Contains(yr);
+                    <button type="button" class="kpim-hm-chip @(on ? "kpim-on" : "")" aria-pressed="@(on ? "true" : "false")"
+                            @onclick="() => YearToggled.InvokeAsync(yr)">@yr</button>
+                }
+            </div>
+        </section>
+    }
+</KpiMobileFilters>
+
+<KpiSegmented Label="Level" Value="@Level" ValueChanged="OnLevel" Options="LevelOptions" />
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+
+@* hidden, never removed, while loading: the map lives in the container *@
+<section class="kpim-card kpim-hm-mapcard @(Ready ? "" : "kpim-hm-off")">
+    <div class="kpim-hm-map" @ref="_mapHost"></div>
+
+    <div class="kpim-hm-legend">
+        <div class="kpim-hm-legrow">
+            @if (NoneBand is not null)
+            {
+                <span class="kpim-hm-none"><span class="kpim-hm-none-sw" style="background:@NoneBand.Colour"></span>None</span>
+            }
+            <div class="kpim-hm-bar">
+                @foreach (var b in ColourBands)
+                {
+                    <span style="background:@b.Colour"></span>
+                }
+            </div>
+        </div>
+        <div class="kpim-hm-legrow">
+            @if (NoneBand is not null)
+            {
+                <span class="kpim-hm-none kpim-hm-ghost" aria-hidden="true"><span class="kpim-hm-none-sw"></span>None</span>
+            }
+            <div class="kpim-hm-from">
+                @foreach (var b in ColourBands)
+                {
+                    <span>@From(b)</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="kpim-hm-detail">
+        @if (Selection is not null)
+        {
+            @* the measure stays named above the chosen area, so its figures always read against it *@
+            <span class="kpim-hm-detail-measure">@MetricName</span>
+        }
+        <span class="kpim-hm-detail-title">@DetailTitle</span>
+        @if (Selection is not null)
+        {
+            <span class="kpim-hm-detail-items">
+                @foreach (var item in DetailItems())
+                {
+                    <span>@item</span>
+                }
+            </span>
+        }
+    </div>
+</section>
+
+<section class="kpim-card kpim-hm-list @(Ready ? "" : "kpim-hm-off")">
+    <h2 class="kpim-card-head">@ListTitle</h2>
+    @foreach (var r in ShownRows())
+    {
+        var key = r.Key;
+        var on = key == SelKey;
+        var v = ValueOf(r);
+        <button type="button" class="kpim-hm-row @(on ? "kpim-on" : "")" aria-pressed="@(on ? "true" : "false")"
+                @onclick="() => RowPicked.InvokeAsync(key)">
+            <span class="kpim-hm-sw" style="@SwatchStyle(key)"></span>
+            <span class="kpim-hm-name">@NameOf(key)</span>
+            <span class="kpim-hm-val">@Fmt(v)</span>
+            <span class="kpim-hm-share">@Share(v)</span>
+        </button>
+    }
+    @if (UnmappedV > 0)
+    {
+        <div class="kpim-hm-row kpim-hm-um">
+            <span class="kpim-hm-sw"></span>
+            <span class="kpim-hm-name">Overseas / unmapped</span>
+            <span class="kpim-hm-val">@Fmt(UnmappedV)</span>
+            <span class="kpim-hm-share">@Share(UnmappedV)</span>
+        </div>
+    }
+    @if (IsArea && Rows.Count > Top)
+    {
+        <button type="button" class="kpim-hm-more" @onclick="() => _showAll = !_showAll">
+            @(_showAll ? $"Show the top {Top}" : $"Show all {Rows.Count} areas")
+        </button>
+    }
+    <div class="kpim-hm-row kpim-hm-total">
+        <span class="kpim-hm-name">Total</span>
+        <span class="kpim-hm-val">@Full(Total)</span>
+        <span class="kpim-hm-share"></span>
+    </div>
+</section>
+
+@code {
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    /// <summary>The measure key: capital, leads, customers, af or tfi.</summary>
+    [Parameter] public string Metric { get; set; } = "capital";
+    [Parameter] public EventCallback<string> MetricChanged { get; set; }
+
+    [Parameter] public string Arrangement { get; set; } = "All";
+    [Parameter] public EventCallback<string> ArrangementChanged { get; set; }
+
+    /// <summary>Every year on offer, newest first, and the ticked ones (the sales measures add them up).</summary>
+    [Parameter] public IReadOnlyList<int> Years { get; set; } = Array.Empty<int>();
+    [Parameter] public IReadOnlyCollection<int> SelectedYears { get; set; } = Array.Empty<int>();
+    [Parameter] public EventCallback<int> YearToggled { get; set; }
+
+    /// <summary>The year chips opened (the page notes the ticked years) and closed (it reloads if they changed).</summary>
+    [Parameter] public EventCallback YearsOpened { get; set; }
+    [Parameter] public EventCallback YearsClosed { get; set; }
+
+    /// <summary>region or area.</summary>
+    [Parameter] public string Level { get; set; } = "region";
+    [Parameter] public EventCallback<string> LevelChanged { get; set; }
+
+    /// <summary>The groups at the level, as the module paints them, with the overseas / unmapped bucket.</summary>
+    [Parameter] public IReadOnlyList<HeatMap.Row> Rows { get; set; } = Array.Empty<HeatMap.Row>();
+    [Parameter] public HeatMap.Unmapped? Unmapped { get; set; }
+
+    /// <summary>The map's colour bands for the measure and level ("none" first when any area has no value).</summary>
+    [Parameter] public IReadOnlyList<HeatMap.Band> Bands { get; set; } = Array.Empty<HeatMap.Band>();
+
+    /// <summary>Each group's band colour (phoneSync).</summary>
+    [Parameter] public IReadOnlyDictionary<string, string> Swatch { get; set; } = new Dictionary<string, string>();
+
+    /// <summary>Postcode area to its district town.</summary>
+    [Parameter] public IReadOnlyDictionary<string, string> Districts { get; set; } = new Dictionary<string, string>();
+
+    [Parameter] public HeatMap.Selection? Selection { get; set; }
+    [Parameter] public EventCallback<string> RowPicked { get; set; }
+
+    /// <summary>The report year: the sales figures' year when a capital measure is shown.</summary>
+    [Parameter] public int? ReportYear { get; set; }
+
+    /// <summary>The map's container, handed to the module by the page.</summary>
+    public ElementReference MapHost => _mapHost;
+
+    private ElementReference _mapHost;
+    private bool _yearsOpen;
+    private bool _showAll;
+    private const int Top = 12;
+
+    private static readonly KpiOption[] MeasureOptions =
+    {
+        new("capital", "Capital"), new("leads", "Leads"), new("customers", "Customers"),
+        new("af", "AF"), new("tfi", "TFI"),
+    };
+    private static readonly KpiOption[] ArrangementOptions =
+    {
+        new("OwnBook", "Own Book"), new("Brokered", "Brokered"), new("All", "All"),
+    };
+    private static readonly KpiOption[] LevelOptions =
+    {
+        new("region", "Region"), new("area", "Postcode area"),
+    };
+
+    private bool Ready => !Loading && Error is null;
+    private bool IsSales => Metric is "af" or "tfi";
+    private bool IsMoney => Metric is not ("leads" or "customers");
+    private bool IsArea => Level == "area";
+    private bool YearsOpen => _yearsOpen && IsSales;
+    private string? SelKey => Selection?.Key;
+
+    private string YearsText => SelectedYears.Count <= 3
+        ? string.Join(", ", SelectedYears.OrderByDescending(y => y))
+        : SelectedYears.Count + " years";
+
+    private string MetricName => Metric switch
+    {
+        "leads" => "Active leads", "customers" => "Active customers",
+        "af" => "Amount financed", "tfi" => "Total fee income", _ => "Remaining capital",
+    };
+
+    // ---- filters ----
+    private async Task OnMetric(string m)
+    {
+        await MetricChanged.InvokeAsync(m);
+        if (_yearsOpen && m is not ("af" or "tfi"))
+        {
+            _yearsOpen = false;
+            await YearsClosed.InvokeAsync();
+        }
+    }
+
+    private async Task ToggleYears()
+    {
+        _yearsOpen = !_yearsOpen;
+        if (_yearsOpen) await YearsOpened.InvokeAsync();
+        else await YearsClosed.InvokeAsync();
+    }
+
+    private async Task OnLevel(string lv)
+    {
+        _showAll = false;
+        await LevelChanged.InvokeAsync(lv);
+    }
+
+    // ---- legend ----
+    private HeatMap.Band? NoneBand => Bands.FirstOrDefault(b => b.Key == "none");
+    private IEnumerable<HeatMap.Band> ColourBands => Bands.Where(b => b.Key != "none");
+
+    // where each band starts: the first half of the module's "from – to" label (the last is "from+")
+    private static string From(HeatMap.Band b)
+    {
+        var i = b.Label.IndexOf(" – ", StringComparison.Ordinal);
+        return i < 0 ? b.Label : b.Label[..i];
+    }
+
+    // ---- the selected region / area ----
+    private string DetailTitle => Selection is null
+        ? MetricName + (IsSales ? " " + YearsText : "")
+        : NameOf(Selection.Key);
+
+    // one item per figure, the separator kept on the item before it, so a line only breaks between items
+    private List<string> DetailItems()
+    {
+        var s = Selection!;
+        var yr = IsSales ? "" : $" ({ReportYear})";
+        var parts = new List<string>
+        {
+            "Capital " + Money(s.Capital),
+            s.Leads.ToString("N0") + (s.Leads == 1 ? " lead" : " leads"),
+            s.Customers.ToString("N0") + (s.Customers == 1 ? " customer" : " customers"),
+            $"AF{yr} " + Money(s.Af),
+            $"TFI{yr} " + Money(s.Tfi),
+        };
+        for (var i = 0; i < parts.Count - 1; i++) parts[i] += " ·";
+        return parts;
+    }
+
+    // ---- list ----
+    private string ListTitle => IsArea ? (_showAll ? "All areas" : "Top areas") : "By region";
+
+    // largest first; in areas the top twelve (plus the selected one) until "Show all"
+    private List<HeatMap.Row> ShownRows()
+    {
+        var ordered = Rows.OrderByDescending(ValueOf).ToList();
+        if (!IsArea || _showAll) return ordered;
+        var shown = ordered.Take(Top).ToList();
+        if (SelKey is not null && shown.All(r => r.Key != SelKey))
+            shown.AddRange(ordered.Where(r => r.Key == SelKey));
+        return shown;
+    }
+
+    private string NameOf(string key)
+    {
+        if (!IsArea) return key;
+        return Districts.TryGetValue(key, out var town) && !string.IsNullOrWhiteSpace(town) ? key + " · " + town : key;
+    }
+
+    private string SwatchStyle(string key) => Swatch.TryGetValue(key, out var c) ? "background:" + c : "";
+
+    private decimal ValueOf(HeatMap.Row r) => Metric switch
+    {
+        "leads" => r.Leads, "customers" => r.Customers, "af" => r.Af, "tfi" => r.Tfi, _ => r.Capital,
+    };
+
+    private decimal UnmappedV => Unmapped is null ? 0m : Metric switch
+    {
+        "leads" => Unmapped.Leads, "customers" => Unmapped.Customers, "af" => Unmapped.Af, "tfi" => Unmapped.Tfi,
+        _ => Unmapped.Capital,
+    };
+
+    private decimal Total => Rows.Sum(ValueOf) + UnmappedV;
+
+    // ---- formats ----
+    private string Fmt(decimal v) => IsMoney ? Money(v) : ((int)v).ToString("N0");
+    private string Full(decimal v) => IsMoney ? "£" + v.ToString("N0") : ((int)v).ToString("N0");
+    private string Share(decimal v) { var t = Total; return t > 0 ? (v / t * 100m).ToString("N1") + "%" : "—"; }
+
+    private static string Money(decimal v) =>
+        v >= 1_000_000m ? "£" + (v / 1_000_000m).ToString("0.0") + "m"
+        : v >= 1_000m ? "£" + Math.Round(v / 1_000m).ToString("0") + "k"
+        : "£" + Math.Round(v).ToString("0");
+}

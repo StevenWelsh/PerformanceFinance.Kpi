@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The KPI database (CMS_KPI): its EF Core context and migrations. The migrations ARE the database:
+       every table, staging table and report procedure is created by them. They are applied only by
+       Kpi.Tools "migrate", run by a person, never by an app at start-up. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.11" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
+    <!-- Update-Database / Add-Migration in Visual Studio's Package Manager Console, as DavidsonHR (Default project:
+         Kpi.Data). The console's EF commands come from Tools; Design alone serves only `dotnet ef`. Tooling only. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.11" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

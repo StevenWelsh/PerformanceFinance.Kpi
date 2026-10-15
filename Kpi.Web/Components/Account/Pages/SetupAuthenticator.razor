@@ -1,0 +1,45 @@
+@page "/account/setup-authenticator"
+@layout EmptyLayout
+@using Kpi.Data.Auth
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<KpiUser> Users
+@inject Kpi.Web.Account.AccountLinks Links
+
+<PageTitle>Set up your authenticator again — Performance Finance KPIs</PageTitle>
+
+@* The link a System Admin's reset emails. Opening it only LOOKS; the password proves it's them. *@
+<AuthCard Title="Set up your authenticator again">
+    @if (_user is null)
+    {
+        <Messages Notice="This link can't be used: it lasts a day and works once. Ask your System Admin to reset your authenticator again." />
+    }
+    else
+    {
+        <Messages Error="@(Error is null ? null : "That password wasn't right.")" />
+        <p class="acc-text">Your authenticator was reset. Enter your password, then set it up on your phone again.</p>
+        <form method="post" action="/account/setup-authenticator">
+            <AntiforgeryToken />
+            <input type="hidden" name="userId" value="@UserId" />
+            <input type="hidden" name="code" value="@Code" />
+            <label class="login-label" for="email">Email</label>
+            <input id="email" type="email" value="@_user.Email" autocomplete="username" readonly />
+            <PasswordInput Id="password" Name="password" />
+            <button type="submit" class="login-button">Continue</button>
+        </form>
+    }
+</AuthCard>
+
+@code {
+    [SupplyParameterFromQuery] public string? UserId { get; set; }
+    [SupplyParameterFromQuery] public string? Code { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+
+    private KpiUser? _user;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(UserId)) return;
+        var user = await Users.FindByIdAsync(UserId);
+        if (user is not null && Kpi.Web.Account.AccountEndpoints.ReenrolUsable(user, Code, Links)) _user = user;
+    }
+}

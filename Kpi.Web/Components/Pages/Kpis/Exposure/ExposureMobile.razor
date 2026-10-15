@@ -1,0 +1,90 @@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Exposure Top 10 on a phone, portrait: the remaining capital and the top ten's share of it, then the
+   ten as a list with a bar each and the total. Grouping and fund lender drive the page's own filters and
+   load. The table is the landscape view (ExposureMobileLandscape). *@
+
+<KpiMobileFilters>
+    <div class="kpim-filters" style="--kpim-cols:2">
+        <KpiField Caption="Grouping" Value="@Grouping.ToString()" ValueChanged="GroupingChanged" Options="@GroupingOptions" />
+        <KpiField Caption="Fund lender" Value="@(FundLenderId?.ToString() ?? "")" ValueChanged="FundLenderChanged" Options="@LenderOptions" />
+    </div>
+</KpiMobileFilters>
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else
+{
+    var shown = Rows.Take(10).ToList();
+    var max = shown.Count > 0 ? shown[0].RemainingCapital : 0m;
+    var share = shown.Sum(r => r.PercentRemainingCapital);
+
+    <section class="kpim-card kpim-ex-sum">
+        <h2 class="kpim-ex-title">Own book remaining capital</h2>
+        <span class="kpim-ex-big">@("£" + (shown.FirstOrDefault()?.TotalRemainingCapital ?? 0m).ToString("N0"))</span>
+        <span class="kpim-ex-under">@(shown.Count == 0 ? "No active own book lending here" : $"Top 10 hold {Pct(share)}")</span>
+    </section>
+
+    <section class="kpim-card kpim-ex-list">
+        @foreach (var r in shown)
+        {
+            <div class="kpim-ex-row">
+                <span class="kpim-ex-rank">@r.RowNumber</span>
+                <div class="kpim-ex-body">
+                    <div class="kpim-ex-line">
+                        <span class="kpim-ex-name">@r.Name</span>
+                        <span class="kpim-ex-share">@Pct(r.PercentRemainingCapital)</span>
+                    </div>
+                    <div class="kpim-ex-track"><div class="kpim-ex-fill" style="width:@Width(r.RemainingCapital, max)"></div></div>
+                    <span class="kpim-ex-detail">@($"{Cur(r.RemainingCapital)} · {Leads(r.LeadCount)}{(Grouping == ExposureGrouping.Combined && r.CustomerType == 2 ? " · business group" : "")}")</span>
+                </div>
+            </div>
+        }
+        <div class="kpim-ex-total">
+            <span class="kpim-ex-rank"></span>
+            <div class="kpim-ex-body kpim-ex-total-body">
+                <div class="kpim-ex-total-line"><span>Total</span><span>@Pct(share)</span></div>
+                <span class="kpim-ex-total-detail">@($"{Cur(shown.Sum(r => r.RemainingCapital))} · {Leads(shown.Sum(r => r.LeadCount))}")</span>
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    /// <summary>The page's rows, largest first (the top ten are shown).</summary>
+    [Parameter] public List<ExposureRow> Rows { get; set; } = new();
+
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    [Parameter] public ExposureGrouping Grouping { get; set; }
+    [Parameter] public EventCallback<string> GroupingChanged { get; set; }
+
+    [Parameter] public List<ExposureFundOptionResult> FundLenders { get; set; } = new();
+    [Parameter] public int? FundLenderId { get; set; }
+    [Parameter] public EventCallback<string> FundLenderChanged { get; set; }
+
+    private IReadOnlyList<KpiOption> LenderOptions => FundLenders
+        .Select(l => new KpiOption(l.Id.ToString(), l.Name))
+        .Prepend(new KpiOption("", "All fund lenders")).ToList();
+
+    private static readonly IReadOnlyList<KpiOption> GroupingOptions = new[]
+    {
+        new KpiOption(ExposureGrouping.Combined.ToString(), "Combined"),
+        new KpiOption(ExposureGrouping.Customer.ToString(), "Customer"),
+        new KpiOption(ExposureGrouping.BusinessGroup.ToString(), "Business Group"),
+    };
+
+    private static string Width(decimal value, decimal max)
+        => (max > 0m ? value / max * 100m : 0m).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    private static string Leads(int n) => n.ToString("N0") + (n == 1 ? " lead" : " leads");
+    private static string Cur(decimal v) => "£" + v.ToString("N2");
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+}

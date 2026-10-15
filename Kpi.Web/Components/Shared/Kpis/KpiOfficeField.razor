@@ -1,0 +1,29 @@
+@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
+@inject KpiSessionFactory Sessions
+
+@* The Sales Office filter - ALWAYS the first filter of a KPI report, on the full view and the phone. The choice
+   is kept per circuit (KpiOfficeState), so every report follows it. Changed fires after a choice: pass the page's
+   handler (an empty lambda will do) so the page re-renders - it reads Office.ShowsData to show its figures or
+   KpiOfficeEmpty. *@
+
+<KpiField Caption="Sales Office" Value="@(Office.OfficeId?.ToString() ?? "")" ValueChanged="Choose" Options="_options" />
+
+@code {
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private IReadOnlyList<KpiOption> _options = new[] { new KpiOption("", "All") };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Office.EnsureLoadedAsync(Sessions);
+        _options = new[] { new KpiOption("", "All") }
+            .Concat(Office.Offices.Select(o => new KpiOption(o.Id.ToString(), o.Name)))
+            .ToList();
+    }
+
+    private async Task Choose(string value)
+    {
+        Office.Choose(value);
+        await Changed.InvokeAsync();
+    }
+}

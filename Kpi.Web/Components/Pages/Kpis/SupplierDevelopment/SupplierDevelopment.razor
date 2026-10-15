@@ -1,0 +1,201 @@
+@page "/kpis/supplier-development"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@using Kpi.Web.Reports
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Supplier Development — a card per salesperson for the suppliers they look after (they are the
+   supplier's account manager now): the top ten for the report year, how many were active and the
+   total, the five years before in full, and the top ten's six-year trend. Rules ported unchanged
+   from Klipfolio (SupplierService); Klipfolio's version showed Pete George on every card. The
+   supplier figures are cached under one key shared with Suppliers Year on Year. *@
+
+<PageTitle>Supplier Development — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="supplier-development" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Supplier Development" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+            @if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+            else
+            {
+                <div class="sd-grid">
+                    @foreach (var card in _cards)
+                    {
+                        var current = card.Years.First();
+                        var previous = card.Years.Skip(1).ToList();
+                        var trend = card.Years.AsEnumerable().Reverse().ToList();
+                        var peak = Math.Max(1m, trend.Max(y => y.Top10AmountFinanced));
+
+                        <div class="ss-card sd-card">
+                            <div class="ss-card-head">@card.Salesperson</div>
+
+                            <div class="sd-sub">Top 10 — @card.Year to date</div>
+                            <table class="mi-table sd-table">
+                                <thead>
+                                    <tr><th></th><th class="mi-l">Supplier</th><th>AF</th></tr>
+                                </thead>
+                                <tbody>
+                                    @for (var i = 0; i < 10; i++)
+                                    {
+                                        var line = i < card.Top10.Count ? card.Top10[i] : null;
+                                        <tr>
+                                            <td>@(i + 1)</td>
+                                            <td class="mi-l sd-name" title="@line?.Supplier">@line?.Supplier</td>
+                                            <td>@(line is null ? "" : Cur(line.AmountFinanced))</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr><td></td><td class="mi-l">Total Top 10</td><td>@Cur(current.Top10AmountFinanced)</td></tr>
+                                </tfoot>
+                            </table>
+                            <div class="sd-facts">
+                                <span>Active in period</span><span>@current.ActiveSuppliers</span>
+                                <span>Total AF in period</span><span>@Cur(current.TotalAmountFinanced)</span>
+                            </div>
+
+                            <div class="sd-sub">Previous 5 years in full</div>
+                            <table class="mi-table sd-table">
+                                <thead>
+                                    <tr><th class="mi-l">Year</th><th>Top 10 AF</th><th>Active</th><th>Total AF</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var y in previous)
+                                    {
+                                        <tr>
+                                            <td class="mi-l">@y.Year</td>
+                                            <td>@Cur(y.Top10AmountFinanced)</td>
+                                            <td>@y.ActiveSuppliers</td>
+                                            <td>@Cur(y.TotalAmountFinanced)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+
+                            <div class="sd-sub sd-trendhead">
+                                <span>Top 10 supplier trend</span>
+                                <span class="sd-peak">peak @Cur(peak)</span>
+                            </div>
+                            <div class="sd-chart" role="img"
+                                 aria-label="@($"Top 10 amount financed by year: {string.Join(", ", trend.Select(t => $"{t.Year} {Cur(t.Top10AmountFinanced)}"))}")">
+                                @foreach (var t in trend)
+                                {
+                                    <div class="sd-bar @(t.Year == card.Year ? "sd-bar-cur" : "")"
+                                         style="height:@(Height(t.Top10AmountFinanced, peak))"
+                                         title="@($"{t.Year}: {Cur(t.Top10AmountFinanced)}")"></div>
+                                }
+                            </div>
+                            <div class="sd-years">
+                                @foreach (var t in trend)
+                                {
+                                    <span>@t.Year</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Supplier Development" Active="supplier-development" AsAt="_asOf">
+    <SupplierDevelopmentMobile Cards="_cards" Loading="_loading" Error="@_error" />
+</KpiMobile>
+
+@code {
+    // The four current salespeople, in Sales Productivity's order (Pete, Susan, Ryan, Stuart). The same
+    // hand-kept list as Salesperson Summary, until the reportable salespeople are a maintained list
+    // (TODO.md, WebKPI analytics).
+    private static readonly int[] SalesIds = { 68, 74, 73, 82 };
+
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    private Dictionary<int, string> _names = new();
+    private List<SupplierDevelopmentResult> _cards = new();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            // One-time bootstrap: the salespeople's names. Not part of the shared, cached rows.
+            using (var cms = await SessionFactory.BeginAsync())
+            {
+                _names = new SupplierService(cms.Db).GetSalespeople(SalesIds);
+            }
+
+            var entry = await KpiCache.GetOrLoad(KpiCache.Key("SupplierFigures"), LoadPayload);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+            Apply(entry.Data);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    // Pure loader: opens a one-shot session, runs the supplier query, returns the rows + the as-at.
+    // The cached type is the plain row list, the same as Suppliers Year on Year's, so the two pages
+    // share the one entry.
+    private async Task<(List<SupplierYearRow>, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        return (new SupplierService(cms.Db).GetFigures(), asAt);
+    }
+
+    private void Apply(List<SupplierYearRow> figures)
+    {
+        var year = (_asOf ?? DateTime.Today).Year;
+        _cards = SalesIds
+            .Select(id => SupplierService.BuildDevelopment(figures, id,
+                _names.TryGetValue(id, out var name) ? name : $"Salesperson {id}", year))
+            .ToList();
+    }
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view.
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(KpiCache.Key("SupplierFigures"), LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                _asOf = entry.AsAt;
+                Apply(entry.Data);
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private static string Height(decimal value, decimal peak)
+        => Math.Max(1m, Math.Round(Math.Max(0m, value) / peak * 100m, 1)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+}

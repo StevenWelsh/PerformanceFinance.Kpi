@@ -1,0 +1,17 @@
+@* The account screens' two kinds of message, as CMS.Web's sign-in: an error (icon + tinted panel) or a neutral notice. *@
+
+@if (Error is not null)
+{
+    <div class="login-error" role="alert"><i class="bi bi-exclamation-triangle-fill"></i> @Error</div>
+}
+@if (Notice is not null)
+{
+    <div class="login-notice" role="status"><i class="bi bi-info-circle"></i> @Notice</div>
+}
+
+@code {
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string? Notice { get; set; }
+
+    public const string PasswordRules = "At least 10 characters, with upper and lower case letters and a number.";
+}

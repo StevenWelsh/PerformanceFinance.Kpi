@@ -1,0 +1,44 @@
+@page "/kpis"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* KPI dashboard area — opens in a NEW browser tab (EmptyLayout, no CMS chrome).
+   The sidebar reuses the MAIN app's sidebar styling (crimson surface, white nav,
+   .app-sidebar / .nav-section-heading / .nav-item) so the KPI area reads as the
+   same product. Nav is subject-grouped (Sales / Business Analysis / Suppliers /
+   Portfolio). The content area asks the user to pick a report.
+   Gated by the existing Dashboard permission. *@
+
+<PageTitle>KPIs — Performance Finance</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="" />
+
+    <main class="kpi-main">
+        <header class="kpi-topbar">
+            <h1>KPIs</h1>
+            <KpiUserMenu />
+        </header>
+        <div class="kpi-empty">
+            <img src="img/pf-logo.png" alt="Performance Finance" class="kpi-empty-logo" />
+            <p>@(_any ? "Select a report from the left." : "No reports have been made available to you yet. Ask your System Admin.")</p>
+        </div>
+    </main>
+</div>
+
+@* On a phone the KPI home is the reports menu itself. *@
+<KpiMobile MenuPage="true" />
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private bool _any = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is null) return;
+        var user = (await AuthState).User;
+        _any = Kpi.Web.Data.Kpis.KpiReports.All.Any(r => Kpi.Web.Account.KpiReportAccess.CanSee(user, r.Slug));
+    }
+}
+

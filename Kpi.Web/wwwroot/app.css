@@ -1,0 +1,2225 @@
+* { box-sizing: border-box; }
+
+/* ===========================================================================
+   App palette (CSS variables). The Performance Finance crimson scheme was
+   tried and reverted (Aug 2026) back to the original navy/blue accents; the
+   PF logo itself (BrandDots) keeps its printed colours. The composed-error
+   rule is retained: --error only ever appears as icon + tinted panel +
+   message, or field border + message — never a bare red word; hue is never
+   the only signal. */
+:root {
+    --brand: #2b579a;                    /* interactive: buttons, selection, active nav, focus */
+    --brand-dark: #23477e;               /* hover */
+    --brand-tint: rgba(43, 87, 154, 0.07);   /* selected-row wash */
+    --brand-tint-2: rgba(43, 87, 154, 0.14); /* active nav / focus ring */
+    --navy: #1f3a5f;                     /* app identity: topbar, tab underlines */
+    --pf-grey: #8c8c8c;                   /* the PF logo grey (dots / "FINANCE") — login backdrop */
+    /* Nav sidebar surface — swap this one value to retheme the whole sidebar
+       (red now; #666 grey or --navy are the trialled alternatives). The nav-on-
+       colour tokens below are tuned for a dark surface with white text. */
+    --sidebar-bg: #d20d43;                /* PF crimson */
+    --sidebar-fg: #ffffff;                /* nav label + icon — pure white, as the PF site menu */
+    --sidebar-fg-dim: #ffffff;            /* resting label / icon (kept pure white for legibility on red) */
+    --sidebar-fg-faint: rgba(255, 255, 255, 0.75);/* section headings, disabled — the only muted whites */
+    --sidebar-hover: rgba(255, 255, 255, 0.12);   /* row hover wash */
+    --sidebar-active: rgba(255, 255, 255, 0.20);  /* active row wash */
+    --row-hl: rgba(210, 13, 67, 0.10);            /* light-red row highlight — PF crimson at 10%,
+                                                     the "selected KPI item" wash on a white surface */
+    --topbar-bg: var(--navy);            /* header bar — the natural theme switch point */
+    --topbar-fg: #fff;
+    --topbar-fg-muted: rgba(255, 255, 255, 0.65);
+    --topbar-hover: rgba(255, 255, 255, 0.12);
+    --charcoal: #252525;                 /* CMS chip, login backdrop */
+    --link: #0066cc;
+    --error: #b02a37;
+    --error-bg: #fdecea;
+    --error-border: #e8b3ae;
+    --warning-bg: #fff4d6;               /* caution panel wash (verdict strips) */
+    --warning-border: #f0d48a;
+    --success-bg: #e6f4ea;               /* all-clear panel wash */
+    --success-border: #b7dfc2;
+    --warning: #c77700;                  /* dirty markers, cautions */
+    --success: #2e7d32;
+    --target-line: #f4c20d;              /* sales-target lines/ticks (temporary yellow — TBC) */
+    /* Hand-rolled grid-like rows (master lists, rate matrix) MUST use these —
+       they mirror the DevExpress office-white grid so everything matches:
+       --dxbl-grid-font-size 0.875rem / --dxbl-grid-border-color #ced4da. */
+    --grid-font: 14px;
+    --grid-line: #ced4da;
+    --grid-head: #f5f5f5;                /* grid header strip */
+    --grid-head-line: #d3d3d3;           /* 2px rule under grid headers */
+    /* Neutral tokens (agreed Aug 2026): ALL colours in new CSS come from this
+       block — no literal hex outside :root — so future themes (light/dark,
+       red/blue) are a token-block override, not a rewrite. Existing literals
+       migrate whenever their area is next touched. */
+    --surface: #fff;                     /* cards, editors, dialogs */
+    --surface-alt: #fafafa;              /* filter strips, tool panels, inactive rows */
+    --panel-head: #f0f0f0;               /* panel/group header strips */
+    --line: #e5e5e5;                     /* hairline borders/dividers */
+    --line-strong: #c8c8c8;              /* control borders (buttons, menus) */
+    --text: #1a1a1a;                     /* primary text */
+    --text-strong: #000;                 /* true black: emphasised headings/figures */
+    --text-2: #555;                      /* secondary: labels, muted headings */
+    --text-3: #888;                      /* faint: metadata, counts, hints */
+    --text-disabled: #bbb;               /* inactive/disabled content */
+    --tooltip-bg: rgba(20, 24, 33, 0.92);/* dark hover-tooltip surface (charts) */
+    --tooltip-fg: #fff;                  /* tooltip text on the dark surface */
+    --overlay: rgba(20, 24, 33, 0.45);   /* dimmed backdrop behind a blocking dialog */
+    --map-sea: #eef4fa;                  /* heat-map backdrop — pale cool blue (as the original) so
+                                            the pink choropleth reads clearly, not washed out */
+    --map-none: #eef0f2;                  /* heat-map areas with no value (exact original pale grey) */
+    /* Categorical chart palette (pie slices, grouped bars). Distinct hues, brand
+       crimson first, then greys/teal/orange/purple/etc. — a token block so charts
+       stay themeable. Cycle --chart-1..12 in order; add more here if ever needed. */
+    --chart-1:  #4F46E5;                 /* indigo blue (primary anchor) */
+    --chart-2:  #F59E0B;                 /* amber gold */
+    --chart-3:  #10B981;                 /* emerald green */
+    --chart-4:  #EF4444;                 /* coral red */
+    --chart-5:  #8B5CF6;                 /* soft violet */
+    --chart-6:  #06B6D4;                 /* teal cyan */
+    --chart-7:  #F97316;                 /* warm orange */
+    --chart-8:  #EC4899;                 /* deep pink */
+    --chart-9:  #84CC16;                 /* lime yellow */
+    --chart-10: #64748B;                 /* slate gray (baseline / other) */
+    --chart-11: #4F46E5;                 /* wraps to the anchor (>10 categories rare) */
+    --chart-12: #F59E0B;
+}
+
+body {
+    margin: 0;
+    font-family: "Segoe UI", "Microsoft Sans Serif", Tahoma, sans-serif;
+    color: #1a1a1a;
+    background: #fff;
+}
+
+/* Shared surface: every panel/group header strip (detail-page info panels,
+   master-detail card heads) gets the same treatment — add new panel header
+   classes here rather than picking a fresh grey. */
+.info-panel-header,
+.mdp-card-head {
+    background: #f0f0f0;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+/* ===========================================================================
+   Authenticated app shell — topbar + collapsible left sidebar + main. */
+/* L-shaped shell (experiment/red-sidebar-nav): the logo sits at the top of a
+   full-height coloured sidebar (DavidsonHR topology), and the top bar spans
+   only the main column, holding the user avatar. --sidebar-h names the shared
+   height of the logo strip and the top bar so their bottom edges line up. */
+.app-shell {
+    display: grid;
+    /* minmax(0,…) NOT 1fr: a bare 1fr has min-width:auto, so the tab strip's
+       minimum content width pushes the whole column (and the avatar) past the
+       viewport instead of scrolling inside the strip. */
+    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-rows: var(--sidebar-h) 1fr;
+    grid-template-areas:
+        "sidebar topbar"
+        "sidebar main";
+    height: 100vh;
+    --sidebar-h: 60px;
+}
+
+/* --- Top bar — white, over the main column, avatar only. --- */
+.app-topbar {
+    /* Holds the working tabs (Layout/TabStrip) with the avatar at the far right;
+       the tabs sit on the BOTTOM edge so the space above them is deliberate
+       breathing room. Darker than the content surface so the white active tab
+       reads as a raised document. */
+    grid-area: topbar;
+    min-width: 0;
+    background: var(--panel-head);
+    border-bottom: 1px solid var(--grid-head-line);
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    padding: 0 20px 0 12px;
+}
+.topbar-right { margin-left: auto; position: relative; align-self: center; }
+
+/* Brand dot mark (Components/Shared/BrandDots) — still used elsewhere. */
+.brand-dots .d-grey { fill: #9b9b9b; }
+.brand-dots .d-brand { fill: #D20D43; }
+
+/* User menu — native <details>. */
+.user-menu-wrap { position: relative; }
+.user-menu-wrap > summary {
+    list-style: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--sidebar-bg);
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+}
+.user-menu-wrap > summary::-webkit-details-marker { display: none; }
+.user-menu-wrap > summary::marker { content: ""; }
+.user-menu-wrap[open] > summary { outline: 2px solid var(--brand-tint-2); }
+.user-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 240px;
+    background: #fff;
+    color: #222;
+    border: 1px solid #d0d0d0;
+    border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    padding: 12px;
+    z-index: 100;
+}
+.user-menu-name { font-weight: 600; }
+.user-menu-email { font-size: 12px; color: #666; margin-top: 2px; }
+.user-menu hr { margin: 8px 0; border: 0; border-top: 1px solid #e5e5e5; }
+.user-menu-item {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font: inherit;
+    color: #222;
+}
+.user-menu-item:hover { background: #f3f3f3; }
+
+/* --- Sidebar + nav (coloured surface, white nav) --- */
+.app-sidebar {
+    grid-area: sidebar;
+    background: var(--sidebar-bg);
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+}
+/* Logo strip — white band at the sidebar top; its height matches the top bar
+   so their bottom edges form one line across the window. */
+.sidebar-logo {
+    height: var(--sidebar-h);
+    box-sizing: border-box;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    flex: 0 0 auto;
+}
+.sidebar-logo a { display: flex; align-items: center; min-width: 0; }
+.sidebar-logo-img { width: 140px; height: auto; display: block; }
+
+.app-nav { padding: 8px 0; }
+.nav-section-heading {
+    padding: 14px 16px 6px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--sidebar-fg-faint);
+    white-space: nowrap;
+}
+.nav-list { list-style: none; margin: 0; padding: 0; }
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 16px 9px 13px;
+    border-left: 3px solid transparent;
+    color: var(--sidebar-fg-dim);
+    text-decoration: none;
+    font-size: 14px;
+    white-space: nowrap;
+}
+.nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-fg); }
+/* Permission-gated entries the user can't use (NavItem NotAuthorized). */
+.nav-item.nav-item-disabled,
+.nav-item.nav-item-disabled:hover {
+    background: none;
+    color: var(--sidebar-fg-faint);
+    cursor: default;
+}
+.nav-item.nav-item-disabled i { color: var(--sidebar-fg-faint); }
+.app-nav .nav-item.active,
+.app-nav .nav-item.active:hover {
+    background: var(--sidebar-active);
+    border-left-color: var(--sidebar-fg);
+    color: var(--sidebar-fg);
+    font-weight: 600;
+}
+.nav-item i { font-size: 16px; width: 18px; text-align: center; color: inherit; }
+/* inline-SVG nav icon (e.g. Sales Performance target-and-dart) — sized/aligned like the bi icons */
+.nav-svgicon { font-size: 16px; width: 18px; display: inline-flex; align-items: center;
+    justify-content: center; color: inherit; flex: 0 0 auto; }
+.nav-svgicon svg { display: block; }
+/* External-launch marker (e.g. KPIs opens in a new tab) — small muted glyph
+   pushed to the row end, signalling the link leaves the app. */
+.nav-item .nav-item-external {
+    margin-left: auto;
+    font-size: 12px;
+    width: auto;
+    color: var(--sidebar-fg-faint);
+}
+
+/* KPI dashboard area — standalone page (new tab, EmptyLayout). Two-column shell:
+   the MAIN app's crimson sidebar (reusing .app-sidebar / .nav-* styles) beside a
+   content area. The sidebar deliberately matches the rest of Kpi.Web. */
+.kpi-shell { display: flex; height: 100vh; --sidebar-h: 60px; }
+.kpi-sidebar { flex: 0 0 240px; transition: flex-basis 0.15s ease; }
+/* nav items now carry an icon; icon + gap sets the child indent */
+.kpi-sidebar .nav-item { display: flex; align-items: center; gap: 12px; padding-left: 18px; }
+.kpi-sidebar .nav-item i { flex: 0 0 auto; }
+.kpi-main { flex: 1; min-width: 0; overflow: auto; background: var(--surface-alt); }
+
+/* Logo strip carries the collapse toggle at its right edge. */
+.kpi-logo { justify-content: space-between; padding-right: 8px; }
+.kpi-logo-link { overflow: hidden; }
+.kpi-collapse-btn {
+    flex: 0 0 auto;
+    background: transparent; border: 0; cursor: pointer;
+    color: #888; font-size: 17px; line-height: 1;
+    padding: 6px; border-radius: 6px;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.kpi-collapse-btn:hover { background: #f0f0f0; color: #444; }
+
+/* Collapsed: narrow icon-only rail. Hide labels, headings and the logo image;
+   centre the icons and the expand button. */
+.kpi-sidebar-collapsed { flex-basis: 56px; }
+.kpi-sidebar-collapsed .nav-item-label,
+.kpi-sidebar-collapsed .nav-section-heading,
+.kpi-sidebar-collapsed .sidebar-logo-img { display: none; }
+.kpi-sidebar-collapsed .kpi-logo { justify-content: center; padding: 0; }
+.kpi-sidebar-collapsed .nav-item { justify-content: center; gap: 0; padding-left: 0; padding-right: 0; }
+.kpi-sidebar-collapsed .nav-section { margin-top: 4px; }
+.kpi-empty {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 4px;
+}
+/* holding-page placeholder for reports not yet built */
+.kpi-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 60px 20px; color: var(--text-3); text-align: center; }
+.kpi-placeholder i { font-size: 32px; color: var(--text-disabled); }
+.kpi-placeholder p { margin: 0; font-size: 14px; }
+
+.kpi-empty-logo { width: 220px; height: auto; margin-bottom: 20px; }
+.kpi-empty p { margin: 2px 0; color: var(--text-2); }
+
+/* KPI dashboard page chrome (Sales Summary and later reports). */
+.kpi-topbar {
+    height: 60px;
+    box-sizing: border-box;
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+}
+.kpi-topbar h1 { font-size: 25px; font-weight: 600; color: var(--text); margin: 0; }
+.kpi-asof { font-size: 13px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.kpi-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 16px; }
+.kpi-muted { color: var(--text-3); font-size: 13.5px; }
+
+/* KpiPanel date-line cluster: "As at <business date>" over "Refreshed on <time>",
+   the latter swapped in place for a small spinner + "Refreshing…" during a refresh. */
+.kpi-dateline { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; line-height: 1.3; }
+.kpi-refreshed { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums;
+    display: inline-flex; align-items: center; gap: 6px; min-height: 16px; }
+.kpi-refreshed .kpi-mini-spinner {
+    width: 11px; height: 11px; border-radius: 50%;
+    border: 2px solid var(--line); border-top-color: var(--brand);
+    animation: ss-spin 0.7s linear infinite; flex: 0 0 auto;
+}
+/* Chart fade: only applied on the "data changed" refresh branch. The content dips
+   then returns, so the eye registers "updated" without a fake loading state. */
+.kpi-fade { transition: opacity 0.22s ease; }
+.kpi-fade.kpi-fading { opacity: 0.25; }
+@media (prefers-reduced-motion: reduce) { .kpi-fade { transition: none; } }
+
+/* Sales Summary comparison card. */
+.ss-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.ss-card-head { padding: 10px 15px; background: var(--panel-head); border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-strong); }
+/* Body font bumped to match Minimum IRR / Margin Analysis (15.5px / 13.5px);
+   titles (ss-card-head) unchanged. */
+.ss-table { width: 100%; border-collapse: collapse; font-size: 15.5px; font-variant-numeric: tabular-nums; }
+.ss-table th { text-align: right; padding: 5.6px 12px; font-size: 13.5px; color: var(--text-strong); font-weight: 600; border-bottom: 2px solid var(--grid-line); white-space: nowrap; }
+.ss-table th:first-child { text-align: left; }
+/* nowrap so wide values (e.g. +114.1%, big £ AF) never wrap or clip at the card
+   edge; slightly tighter horizontal padding to give the numbers room in the
+   fixed-width salesperson grid. */
+.ss-table td { text-align: right; padding: 5.6px 12px; white-space: nowrap; }
+.ss-table td:first-child { text-align: left; color: var(--text-2); }
+.ss-up { color: var(--link); font-weight: 600; }
+.ss-down { color: var(--error); font-weight: 600; }
+
+/* ---- Record Performances ---- */
+.rec-card { overflow: hidden; }
+/* Font bumped to match Minimum IRR (15.5px / 13.5px); titles unchanged. Period/Year
+   column nowraps so a wider value (e.g. "Aug 2026") pushes the Sales column right
+   rather than wrapping. */
+.rec-table { width: 100%; border-collapse: collapse; font-size: 15.5px; font-variant-numeric: tabular-nums; }
+.rec-table th { padding: 5px 12px; font-size: 14.5px; color: var(--text-3); font-weight: 600; border-bottom: 2px solid var(--grid-line); }
+.rec-table td { padding: 3px 12px; }
+.rec-first  { text-align: left; white-space: nowrap; }
+/* Salesperson name: keep to one line — slightly smaller font + nowrap so a long
+   name (e.g. "Andrew Stevenson") stays on a single line and doesn't throw the row
+   height / alignment off. */
+.rec-sales  { text-align: left; color: var(--text-2); font-size: 14px; white-space: nowrap; }
+.rec-tfi    { text-align: right; white-space: nowrap; }
+.rec-table th.rec-first, .rec-table th.rec-sales { text-align: left; }
+.rec-table th.rec-tfi { text-align: right; }
+.rec-rank { display: inline-block; min-width: 1.4em; color: var(--text-3); }
+/* current-year record (Top 10 only): green-shaded row */
+.rec-current td { background: color-mix(in srgb, var(--success) 14%, transparent); font-weight: 600; }
+/* dedicated trophy column so the icon aligns vertically whichever row wins */
+.rec-trophycol { width: 22px; text-align: center; padding-left: 0; padding-right: 0; }
+/* inline-block so the transform-based waggle applies (transforms are ignored on
+   plain inline elements like the <i> icon) */
+.rec-trophy { display: inline-block; color: var(--success); transform-origin: 50% 80%; }
+/* the parent adds .rec-waggle once all tables are loaded: grow ~50% while wobbling,
+   then settle back to normal size. */
+.rec-waggle { animation: rec-waggle 2.6s ease-in-out 1; }
+@keyframes rec-waggle {
+    0%   { transform: scale(1)   rotate(0); }
+    10%  { transform: scale(1.5) rotate(-18deg); }
+    25%  { transform: scale(1.5) rotate(16deg); }
+    40%  { transform: scale(1.5) rotate(-12deg); }
+    55%  { transform: scale(1.5) rotate(9deg); }
+    70%  { transform: scale(1.5) rotate(-5deg); }
+    85%  { transform: scale(1.5) rotate(2deg); }
+    100% { transform: scale(1)   rotate(0); }
+}
+/* ---- Business Analysis (dimension) ---- */
+.ba-filters {
+    display: flex; gap: 28px; align-items: center;
+    background: var(--surface-alt); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px 18px; margin-bottom: 14px;
+}
+.ba-filters label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); }
+.ba-filters select { font: inherit; font-size: 13px; text-transform: none; letter-spacing: 0; padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); color: var(--text); min-width: 150px; }
+
+/* table + pie on the top row, trend full-width below */
+.ba-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.ba-trendcard { grid-column: 1 / -1; }
+@media (max-width: 900px) { .ba-grid { grid-template-columns: 1fr; } }
+
+.ba-table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.ba-table th { text-align: right; padding: 7px 14px; font-size: 12px; font-weight: 600; color: var(--text-strong); border-bottom: 2px solid var(--grid-line); }
+.ba-table td { text-align: right; padding: 6px 14px; }
+.ba-dim { text-align: left !important; }
+.ba-table td.ba-dim { color: var(--text-2); }
+.ba-muted { color: var(--text-3); }
+.ba-total td { font-weight: 600; border-top: 2px solid var(--grid-line); }
+/* light-red highlight when a table row is hovered OR its pie segment is hovered */
+.ba-table tbody tr { transition: background 0.12s ease; }
+.ba-table tbody tr.ba-row-hl td,
+.ba-table tbody tr:hover td { background: var(--row-hl); }
+
+/* donut — fills the card height, vertically centred; legend to its right.
+   The card is a flex column so the wrap grows to the stretched grid-row height
+   and its align-items:center then centres the pie vertically in that space. */
+.ba-piecard { display: flex; flex-direction: column; }
+.ba-pie-wrap { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: 20px; padding: 16px; flex-wrap: wrap; }
+.ba-pie-host { flex: 0 0 auto; display: flex; align-items: center; }
+.ba-pie { width: 280px; height: 280px; display: block; }
+.ba-pie path { stroke: var(--surface); stroke-width: 1; }
+/* each slice pops out (translate set inline by the JS) with a soft transition */
+.ba-slice { cursor: pointer; transition: transform 0.14s ease; }
+.ba-pie-centre { font-size: 22px; font-weight: 600; fill: var(--text); }
+.ba-legend { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+.ba-legend li { display: flex; align-items: center; gap: 7px; padding: 2px 0; color: var(--text-2); cursor: default; }
+.ba-swatch { display: inline-block; width: 11px; height: 11px; border-radius: 2px; flex: 0 0 auto; }
+.ba-legend-val { color: var(--text-3); }
+
+/* Shared KPI chart tooltip (js/kpiTooltip.js appends a .kpi-tip to <body>). Used by every KPI chart
+   so the hover popup is identical everywhere — dark surface, instant appear with a 0.1s fade,
+   follows the cursor. `white-space: pre-line` renders "\n" as line breaks for multi-line tips while
+   still collapsing incidental whitespace. .ba-tip is kept as an alias for the Business Analysis JS. */
+.kpi-tip, .ba-tip {
+    position: fixed; z-index: 3000; pointer-events: none;
+    padding: 5px 9px; border-radius: 5px;
+    background: var(--tooltip-bg); color: var(--tooltip-fg);
+    font-size: 12px; font-variant-numeric: tabular-nums; white-space: pre-line; line-height: 1.45;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    opacity: 0; transition: opacity 0.1s ease;
+}
+
+/* 8-year grouped trend bars — drawn client-side and measured (BusinessAnalysis.razor.js).
+   The host owns a responsive height governed by the viewport (clamp with vh so it adapts
+   across resolutions without overflowing); the JS sizes the SVG's viewBox to the host's real
+   pixels and fills it exactly (preserveAspectRatio="none"), so there is no empty band below
+   the bars and no letterboxing. */
+.ba-trendhead { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ba-trendhost { display: block; width: 100%; height: clamp(240px, 34vh, 420px); padding: 6px; }
+.ba-trendsvg { display: block; width: 100%; height: 100%; }
+.ba-bar { cursor: default; }
+.ba-axisline { stroke: var(--line); stroke-width: 1; }
+/* JS sets each label's font-size in px (measured); this is the resting colour/size fallback */
+.ba-axistext { font-size: 11px; fill: var(--text-3); }
+/* year key — now top-right in the trend card head */
+.ba-yearkey { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; font-weight: 400; color: var(--text-2); }
+.ba-yearkey li { display: flex; align-items: center; gap: 5px; }
+
+/* ---- Business Analysis "By Lender": four ranked year cards side by side ---- */
+.bal-grid { display: grid; grid-template-columns: repeat(4, minmax(240px, 1fr)); gap: 16px; }
+@media (max-width: 1200px) { .bal-grid { grid-template-columns: repeat(2, minmax(240px, 1fr)); } }
+@media (max-width: 680px)  { .bal-grid { grid-template-columns: 1fr; } }
+.bal-table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.bal-table th { padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--text-3); border-bottom: 2px solid var(--grid-line); }
+.bal-table td { padding: 5px 10px; }
+.bal-table th.bal-lender { text-align: left; }
+.bal-table th.bal-val, .bal-table th.bal-vs { text-align: right; }
+.bal-rank { width: 1.6em; text-align: right; color: var(--text-3); padding-right: 6px; }
+.bal-lender { text-align: left; color: var(--text-2); max-width: 0; width: 100%;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bal-val { text-align: right; white-space: nowrap; }
+.bal-vs  { text-align: right; white-space: nowrap; width: 5.5em; }
+.bal-star { color: var(--warning); }                          /* new entrant marker */
+.bal-empty td { color: var(--text-disabled); }                /* dash filler rows */
+.bal-others td { color: var(--text-3); border-top: 1px solid var(--line); }
+.bal-total td { font-weight: 600; border-top: 2px solid var(--grid-line); }
+
+/* ---- Sales Performance: one ROW per year (current year on top, prior year below); each row is
+   the league table (left) beside its Sales Target Performance panel (right). Both years fit one
+   page — hence no card footer: the timelapse button sits in the card header and each race opens
+   in a popup (see .slt-race*). ---- */
+.slt-yearrow { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 6fr); gap: 16px;
+    align-items: stretch; }
+/* A clear gap between the stacked year rows (2026 / 2025). The tightened table rows
+   (32px) freed the height for this without bringing back the page's vertical scroll. */
+.slt-yearrow + .slt-yearrow { margin-top: 14px; }
+@media (max-width: 1100px) { .slt-yearrow { grid-template-columns: 1fr; } }
+.slt-tablecard { display: flex; flex-direction: column; }
+/* card head carrying an action/'% of year' chip on the right */
+.slt-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.slt-basis { font-size: 12px; font-weight: 500; color: var(--text-3); font-variant-numeric: tabular-nums; }
+
+.slt-table { width: 100%; border-collapse: collapse; font-size: 14.5px; font-variant-numeric: tabular-nums; }
+.slt-table th { padding: 6px 14px; font-size: 12.5px; font-weight: 600; color: var(--text-2);
+    border-bottom: 2px solid var(--grid-line); text-align: right; }
+.slt-table th.slt-rank, .slt-table th.slt-name { text-align: left; }
+/* Every BODY cell is a fixed height (box-sizing so padding is included), so data rows, blank
+   padding rows, and the always-present Other slot are all identical — the year cards line up
+   regardless of roster size or whether an Other exists for the current measure. Slightly reduced
+   (was 37px) to shorten the two stacked year cards enough to remove the page's vertical scroll
+   and leave a small gap between them. */
+.slt-table td { box-sizing: border-box; height: 32px; padding: 6px 14px; border-bottom: 1px solid var(--line);
+    text-align: right; white-space: nowrap; }
+.slt-table .slt-rank { width: 2.2em; text-align: left; color: var(--text-3); }
+.slt-table .slt-name { text-align: left; }
+.slt-table .slt-val { white-space: nowrap; }
+.slt-table tbody tr:last-child td { border-bottom: none; }
+.slt-table tfoot td { font-weight: 700; border-top: 2px solid var(--grid-line); }
+/* blank padding rows: no hairline (they're empty space, not data) */
+.slt-table .slt-blankrow td { border-bottom-color: transparent; }
+/* "Other" row: the non-core salespeople summed — grey, no rank (dash), above the Total. The row
+   ALWAYS renders (even with no Other) so the Total line sits at the same height in every card. */
+.slt-table .slt-otherrow td { color: var(--text-3); }
+.slt-table .slt-otherrow .slt-rank { color: var(--text-3); }
+/* the name cell is a blue button (obviously clickable → opens the breakdown popup) */
+.slt-otherbtn { font: inherit; color: var(--link); background: none; border: none; padding: 0;
+    cursor: pointer; }
+.slt-otherbtn:hover { text-decoration: underline; }
+
+/* "Other" breakdown popup: per-person name + value for the non-core salespeople */
+.slt-otherpop { padding: 2px 2px 4px; }
+.slt-ottable { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.slt-ottable th { padding: 6px 10px; font-size: 12px; font-weight: 600; color: var(--text-2);
+    border-bottom: 2px solid var(--grid-line); text-align: right; }
+.slt-ottable th.slt-ot-name { text-align: left; }
+.slt-ottable td { padding: 5px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.slt-ottable td.slt-ot-name { text-align: left; }
+.slt-ottable tbody tr:last-child td { border-bottom: none; }
+.slt-ottable tfoot td { font-weight: 700; border-top: 2px solid var(--grid-line); color: var(--text); }
+
+/* ---- Sales Target Performance panel: one bar per salesperson against a shared scale, with a
+   DOTTED YTD-target line and a SOLID year-target line. Bar colour reports achievement against the
+   YTD target (ahead/behind); where no target is set the bar is neutral and no lines are drawn.
+   Colour is never the only signal — the % of year target is printed beside every bar. ---- */
+.slt-targetcard { display: flex; flex-direction: column; }
+/* Vertical column chart (server-rendered SVG, viewBox 1000×320). It scales uniformly to the card
+   width (aspect-ratio matches the viewBox, so preserveAspectRatio="meet" adds no letterbox) — the
+   fixed aspect keeps the panel short enough that both year rows fit one page. Uniform brand columns;
+   the target ticks (YTD dotted, year solid) carry performance, not the bar colour. Font sizes are in
+   viewBox units (≈2× the on-screen px once scaled into a ~half-width card). */
+.slt-tgtsvg { display: block; width: 100%; aspect-ratio: 1000 / 320; padding: 6px 10px 0; box-sizing: border-box; overflow: visible; }
+.slt-gl { stroke: var(--line); stroke-width: 1; }
+/* the card is wide, so the viewBox scales ~1:1 — font sizes are near their on-screen px */
+.slt-ax { fill: var(--text-3); font-size: 12px; font-variant-numeric: tabular-nums; }
+.slt-col { fill: var(--brand); }
+.slt-colval { fill: var(--text); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.slt-colname { fill: var(--text-2); font-size: 13px; }
+/* target lines — YELLOW for now (temporary, high-visibility) so they're unmistakable over the navy
+   bars and the white background. YTD dotted, Year solid. TODO: settle final colour. */
+.slt-tick-halo { stroke: transparent; stroke-width: 0; }
+.slt-tick-ytd  { stroke: var(--target-line); stroke-width: 3; stroke-dasharray: 3 4; stroke-linecap: round; }
+.slt-tick-year { stroke: var(--target-line); stroke-width: 3; }
+.slt-tgt-empty { padding: 14px; color: var(--text-3); font-size: 13.5px; }
+/* key for the two target lines (also reused under the race standings) */
+.slt-key { margin-top: auto; padding: 8px 14px 12px; display: flex; gap: 16px;
+    font-size: 12px; color: var(--text-2); }
+/* the key living in a card HEADER (Formed-style, top-right) — no footer margins/padding */
+.slt-head .slt-key { margin: 0; padding: 0; font-size: 11.5px; font-weight: 500;
+    text-transform: none; letter-spacing: normal; color: var(--text-2); }
+.slt-key-item { display: inline-flex; align-items: center; gap: 6px; }
+.slt-key-item i { display: inline-block; width: 18px; height: 0; }
+.slt-key-ytd { border-top: 2px dotted var(--target-line); }
+.slt-key-year { border-top: 2px solid var(--target-line); }
+.slt-key-none { color: var(--text-3); font-style: italic; }
+/* in the RACE key the line on the pills is VERTICAL, so its swatch is a vertical dotted line too */
+.slt-race-key .slt-key-item i { width: 0; height: 14px; }
+.slt-race-key .slt-key-ytd { border-top: 0; border-left: 2px dotted var(--target-line); }
+
+/* ---- timelapse race popup ---- */
+.slt-race { min-height: 300px; }
+/* Bar / Graph mode toggle — a small segmented control, right-aligned above the race. */
+.slt-race-modebar { display: flex; justify-content: flex-end; padding: 0 2px 8px; }
+.slt-modetoggle { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 7px; overflow: hidden; }
+.slt-modebtn { font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 14px; border: none;
+    background: var(--surface); color: var(--text-2); cursor: pointer; }
+.slt-modebtn + .slt-modebtn { border-left: 1px solid var(--line-strong); }
+.slt-modebtn:hover:not(.active) { background: var(--surface-alt); }
+.slt-modebtn.active { background: var(--brand); color: #fff; }
+
+/* Graph (line-chart) mode — a cumulative-£ line per salesperson with a labelled moving dot. */
+.slt-graph { position: absolute; inset: 0; }
+.slt-graph-svg { display: block; width: 100%; height: 100%; }
+.slt-graph-grid { stroke: var(--line); stroke-width: 1; }
+.slt-graph-axis { font-size: 11px; fill: var(--text-3); font-variant-numeric: tabular-nums; }
+.slt-graph-dotlbl { font-size: 10px; font-weight: 700; fill: #fff; pointer-events: none; }
+
+/* full-width bar race (the standings table was removed — each bar carries its own £ value + Wks #1
+   tally, so the race gets the whole popup width and more vertical room). */
+.slt-racehost { position: relative; min-height: 320px; overflow: hidden; }
+.slt-track { position: relative; }
+.slt-bar-row { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; will-change: transform; }
+/* the avatar is the pill's LEFT cap — fixed "free" width (not scaled), rounded-left only, and it
+   butts flush against the bar so the two read as one continuous pill: [SM]▓▓▓▓ £1.2m.
+   NO inset shadow on the avatar — its shadow bled into a dark hairline at the avatar/bar seam. */
+.slt-av { flex: 0 0 auto; width: 34px; height: 30px; border-radius: 15px 0 0 15px; color: #fff; font-weight: 700;
+    font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.slt-bar { flex: 0 0 auto; position: relative; height: 30px; border-radius: 0 15px 15px 0; min-width: 6px;
+    box-shadow: inset 0 -2px 6px rgba(0,0,0,0.12); }
+/* £ value rides just outside the bar's right edge — always visible, even at a sliver width */
+.slt-barval { flex: 0 0 auto; margin-left: 8px; font-weight: 700; font-size: 14px;
+    font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--text); }
+/* the weeks-at-#1 tally, trailing the £ value */
+.slt-barwks { flex: 0 0 auto; margin-left: 10px; font-size: 12.5px; color: var(--text-3);
+    font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* the moving YTD-target line: a dotted YELLOW vertical over each pill (slightly taller than the bar
+   so it overlaps it). `left` is set in JS against the same px scale as the bars — it tracks the
+   pro-rata target for the current week, advancing rightward as the race plays. */
+.slt-rline { position: absolute; top: 50%; height: 38px; width: 0; margin-top: -19px;
+    z-index: 2; pointer-events: none; }
+.slt-rline-ytd { border-left: 2px dotted var(--target-line); }
+/* key under the race */
+.slt-race-key { padding: 4px 2px 0; }
+
+/* control bar under the race: play + scrubber, with the running date floating above the thumb.
+   The big top padding is the gap between the bar rows and the scrubber, so the date has room to
+   float there. */
+.slt-racefoot { display: flex; align-items: center; gap: 10px; padding: 42px 2px 4px; min-height: 44px; }
+.slt-ctrl { font: inherit; width: 34px; height: 30px; border: 1px solid var(--line-strong);
+    background: var(--surface-alt); color: var(--text-2); border-radius: 6px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; align-self: flex-end; }
+.slt-ctrl:hover { border-color: var(--sidebar-bg); color: var(--sidebar-bg); }
+/* the scrubber + its floating date share a relative wrapper so the date can be positioned to the thumb */
+.slt-scrubwrap { position: relative; flex: 1 1 auto; display: flex; align-items: center; }
+.slt-scrub { flex: 1 1 auto; accent-color: var(--sidebar-bg); cursor: pointer; margin: 0; }
+/* date floats above the thumb (left set in JS to track it); big + bold, centred on the marker */
+.slt-date { position: absolute; bottom: calc(100% + 8px); left: 0; transform: translateX(-50%);
+    font-size: 20px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums;
+    white-space: nowrap; pointer-events: none; }
+
+/* ---- KpiComparisonCard (shared): a titled card, labelled rows × period columns, per-cell trend
+   arrows vs the previous column. The glyph carries direction; colour only reinforces it (up = brand
+   blue per the app's blue-in-place-of-green convention, down = error red, flat = grey). ---- */
+/* Larger font + tighter horizontal spacing to match the WinForms productivity
+   panel's denser look (colours already follow the app convention: blue up, red
+   down, grey flat — green intentionally replaced by brand blue). */
+.kcc-table { width: 100%; border-collapse: collapse; font-size: 16.5px; font-variant-numeric: tabular-nums; }
+.kcc-table th, .kcc-table td { padding: 6px 10px; white-space: nowrap; }
+.kcc-table thead th { font-size: 15px; font-weight: 600; color: var(--text-2); border-bottom: 2px solid var(--grid-line); }
+.kcc-lbl { text-align: left; color: var(--text-2); }
+.kcc-num { text-align: right; }
+.kcc-muted { color: var(--text-3); }              /* quieter rows (e.g. the £ AF Volume line) */
+.kcc-indent { padding-left: 26px; }
+.kcc-headrow .kcc-lbl, .kcc-strong { font-weight: 700; color: var(--text); }
+.kcc-spacer td { padding: 4px 0; border: 0; }     /* gap between blocks */
+/* Trend arrows deliberately larger so the direction glyph + its blue/red/grey
+   colour read clearly at a glance. */
+.kcc-arrow { font-size: 20px; margin-right: 6px; vertical-align: -2px; }
+.kcc-up   { color: var(--brand); }                /* blue in place of green (app convention) */
+.kcc-down { color: var(--error); }
+.kcc-flat { color: var(--text-3); }
+
+/* ---- Sales Productivity page: two larger cards per row ---- */
+.sp-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .sp-grid { grid-template-columns: 1fr; } }
+.sp-card { padding-bottom: 8px; }
+
+/* ---- Minimum IRR Analysis — own-book (division, salesperson) breakdown per period,
+   with a blue Total row (as the original). Three stacked panels. ---- */
+/* Cap the tables at ~2/3 of the page width (they were stretching full-width and
+   looked sparse); fonts match Margin Analysis (titles via shared .ss-card-head).
+   A clear gap BETWEEN the three panels, with rows narrowed so the extra spacing
+   doesn't push the last panel too far down. */
+.mi-card { overflow-x: auto; max-width: 66%; min-width: 620px; margin-bottom: 18px; }
+.mi-card:last-child { margin-bottom: 0; }
+.mi-table { width: 100%; border-collapse: collapse; font-size: 15.5px; font-variant-numeric: tabular-nums; }
+.mi-table th { text-align: right; padding: 6px 16px; font-size: 13.5px; font-weight: 600;
+    color: var(--text-2); border-bottom: 2px solid var(--grid-line); white-space: nowrap; }
+.mi-table td { text-align: right; padding: 4px 16px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.mi-table .mi-l { text-align: left; }
+.mi-table tbody tr:hover td { background: var(--surface-alt); }
+/* blue Total row (matches the original) */
+.mi-table tfoot td { font-weight: 700; border-top: 2px solid var(--brand);
+    background: var(--brand-tint-2); color: var(--text-strong); }
+
+/* ---- Own Book: Bad Debt (one column per year) and Exposure Top 10. Both use .mi-table. ---- */
+/* Ten years across; on a narrow window the card scrolls sideways rather than squeezing them. */
+.bd-card { overflow-x: auto; }
+.bd-table th, .bd-table td { min-width: 96px; }
+.bd-table tr.bd-gap td { height: 12px; padding: 0; border-bottom: 0; }
+.bd-table tbody tr.bd-gap:hover td { background: transparent; }
+/* the current year keeps its shading on every row, the gaps and a hovered row included */
+.bd-table tbody tr td.yoy-cur, .bd-table tbody tr:hover td.yoy-cur { background: var(--brand-tint-2); }
+
+/* ---- Suppliers Year on Year (four year cards) and Supplier Development (a card per salesperson).
+   Both use .mi-table at a smaller size so the cards sit side by side. ---- */
+.sy-grid { display: grid; grid-template-columns: repeat(4, minmax(300px, 1fr)); gap: 16px; overflow-x: auto; }
+.sd-grid { display: grid; grid-template-columns: repeat(4, minmax(290px, 1fr)); gap: 16px; overflow-x: auto; align-items: start; }
+/* Fixed layout: the number columns keep their width and a long supplier name is cut with an
+   ellipsis (full name on hover) - never the amounts. */
+.sy-table, .sd-table { table-layout: fixed; width: 100%; font-size: 13px; }
+.sy-table th, .sd-table th { padding: 5px 6px; font-size: 12px; }
+.sy-table td, .sd-table td { padding: 3px 6px; }
+.sy-table th:nth-child(1) { width: 22px; }
+.sy-table th:nth-child(3) { width: 66px; }
+.sy-table th:nth-child(4) { width: 82px; }
+.sd-card table:first-of-type th:nth-child(1) { width: 22px; }
+.sd-card table:first-of-type th:nth-child(3) { width: 84px; }
+.sd-card table:last-of-type th:nth-child(1) { width: 40px; }
+.sd-card table:last-of-type th:nth-child(3) { width: 44px; }
+.sy-name, .sd-name { overflow: hidden; text-overflow: ellipsis; }
+/* running total after each block of ten */
+.sy-table tr.sy-total td { font-weight: 700; border-top: 1px solid var(--line-strong);
+    border-bottom: 10px solid var(--surface); background: var(--surface-alt); }
+.sy-table tbody tr.sy-total:hover td { background: var(--surface-alt); }
+.sd-sub { padding: 12px 15px 4px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.sd-trendhead { display: flex; justify-content: space-between; align-items: baseline; }
+.sd-peak { font-weight: 400; font-size: 12px; color: var(--text-3); }
+.sd-facts { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 8px 15px 0;
+    font-size: 13.5px; font-variant-numeric: tabular-nums; color: var(--text-2); }
+.sd-facts span:nth-child(even) { text-align: right; color: var(--text-strong); font-weight: 600; }
+.sd-chart { display: flex; align-items: flex-end; gap: 8px; height: 110px; margin: 4px 15px 0;
+    border-bottom: 1px solid var(--line-strong); }
+.sd-bar { flex: 1; border-radius: 3px 3px 0 0; background: var(--brand); }
+.sd-bar-cur { background: var(--brand-tint-2); box-shadow: inset 0 0 0 1px var(--brand); }
+.sd-years { display: flex; gap: 8px; padding: 4px 15px 14px; font-size: 12px; color: var(--text-3);
+    font-variant-numeric: tabular-nums; }
+.sd-years span { flex: 1; text-align: center; }
+
+.ex-card { overflow-x: auto; max-width: 1000px; }
+.ex-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.ex-total { font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-2); }
+.ex-type { margin-left: 8px; font-size: 12.5px; color: var(--text-3); }
+
+/* ---- Margin Analysis — funding buy vs lend rate. Left column: annual table + graph;
+   right column: last-N-days + 12-month table. Margin column highlighted green. ---- */
+/* two columns, each a vertical stack of cards (left: annual table + graph;
+   right: last-N-days + 12-month), matching the original layout */
+.ma-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.ma-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 1100px) { .ma-grid { grid-template-columns: 1fr; } }
+
+/* Fill-to-bottom (Margin Analysis only, gated by .ma-fill so the shared KPI shell
+   is untouched for the other 14 pages). The chain: kpi-main becomes a fixed-height
+   flex column, KpiPanel's kpi-body fills it, the grid fills that with BOTH columns
+   stretched to equal height, and the Annual graph card grows to fill the left
+   column's slack — so both columns end at the page bottom, aligned. overflow:hidden
+   on kpi-main means no page scroll; the taller table scrolls inside its own card. */
+.kpi-main:has(.ma-fill) { overflow: hidden; display: flex; flex-direction: column; }
+.kpi-main:has(.ma-fill) .kpi-body { flex: 1; min-height: 0; }
+.ma-fill { flex: 1; min-height: 0; align-items: stretch; }
+.ma-fill .ma-col { min-height: 0; }
+/* The CARD stretches to the page bottom so its bottom edge aligns with the tall
+   12 Month table. The CHART inside is capped to a well-proportioned height and sits
+   at the top of that space (the data range is only ~4–13%, so a full-height chart
+   would leave a big empty band). The gap below the chart is just empty card. */
+.ma-fill .ma-graphcard { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.ma-fill .ma-graphcard .ma-graphhost { flex: 0 0 auto; height: 340px; overflow: hidden; }
+/* The 12 Month table can be the tallest — let its card body scroll internally
+   (its header stays put) so it never pushes past the page bottom. */
+.ma-fill .ma-monthcard { min-height: 0; display: flex; flex-direction: column; }
+.ma-fill .ma-monthcard .ma-monthbody { min-height: 0; overflow: auto; }
+
+/* Larger, readable body font (titles/ss-card-head unchanged); rows kept fairly
+   tight vertically so the tall 12 Month table still fits. */
+.ma-table { width: 100%; border-collapse: collapse; font-size: 15.5px; font-variant-numeric: tabular-nums; }
+.ma-table th { text-align: right; padding: 6px 14px; font-size: 13.5px; font-weight: 600;
+    color: var(--text-strong); border-bottom: 2px solid var(--grid-line); white-space: nowrap; }
+.ma-table td { text-align: right; padding: 5px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.ma-table .ma-l { text-align: left; }
+.ma-table tbody tr:last-child td { border-bottom: none; }
+/* Margin column: green highlight (as the original) — header + cells */
+.ma-table th.ma-margin, .ma-table td.ma-margin {
+    background: color-mix(in srgb, var(--success) 16%, transparent); font-weight: 600; }
+.ma-table tfoot td { font-weight: 700; border-top: 2px solid var(--grid-line); }
+.ma-table tr.ma-future td { color: var(--text-disabled); }
+.ma-table tr.ma-overall td { font-weight: 700; }
+.ma-daysbody, .ma-monthbody { display: flex; flex-direction: column; }
+
+/* annual graph */
+.ma-graphhead { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ma-key { list-style: none; margin: 0; padding: 0; display: flex; gap: 14px; font-size: 12px; color: var(--text-2); }
+.ma-key li { display: flex; align-items: center; gap: 6px; }
+.ma-swatch { width: 12px; height: 12px; border-radius: 2px; }
+.ma-line { width: 16px; height: 3px; border-radius: 2px; }
+.ma-graphhost { height: 300px; padding: 8px 6px; }
+.ma-chart { width: 100%; height: 100%; display: block; }
+.ma-axisline { stroke: var(--line); stroke-width: 1; }
+.ma-axistext { font-size: 10px; fill: var(--text-3); }
+
+/* ---- Postcode Heat Map — panels float over a full-bleed Leaflet map (ported from the
+   standalone app: blue-sea backdrop, crimson accents, fixed-layout breakdown table). Filters
+   reuse .yoy-filters for consistency; only the heat-map-specific pieces live here. ---- */
+.hm-body { height: calc(100vh - 60px); display: flex; flex-direction: column; overflow: hidden; }
+
+/* filters — floating panel top-left over the map (uppercase mini-labels like yoy-filters) */
+.hm-controls { top: 14px; left: 14px; z-index: 600; padding: 12px 14px; display: flex; flex-wrap: wrap; gap: 12px 16px; }
+.hm-controls label { display: flex; flex-direction: column; gap: 5px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3); }
+.hm-controls label.hm-dim { color: var(--text-disabled); }
+.hm-controls select { font: inherit; font-size: 13px; text-transform: none; letter-spacing: 0;
+    color: var(--text); padding: 5px 8px; border: 1px solid var(--line-strong); border-radius: 4px;
+    background: var(--surface); min-width: 140px; }
+.hm-controls select:disabled { background: var(--surface-alt); color: var(--text-disabled); cursor: not-allowed; }
+/* Year is a checkbox dropdown (native <details>) — pick several years, summed on the map */
+.hm-yearsdd { position: relative; }
+.hm-yearsdd > summary { list-style: none; cursor: pointer; min-width: 100px;
+    font: inherit; font-size: 13px; padding: 5px 26px 5px 8px; border: 1px solid var(--line-strong);
+    border-radius: 4px; background: var(--surface); color: var(--text); white-space: nowrap; }
+.hm-yearsdd > summary::-webkit-details-marker { display: none; }
+.hm-yearsdd > summary::after { content: "▾"; position: absolute; right: 8px; color: var(--text-3); }
+.hm-yearsdd-off > summary { background: var(--surface-alt); color: var(--text-disabled); pointer-events: none; }
+/* open dropdown must sit above ALL panels (regions table is z-index 500); 1000 is decisive */
+.hm-controls:has(.hm-yearsdd[open]) { z-index: 1000; }
+.hm-yearsdd[open] { z-index: 1000; }
+.hm-yearsdd-menu { position: absolute; z-index: 1000; top: calc(100% + 4px); left: 0; min-width: 150px;
+    max-height: 240px; overflow-y: auto; background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: 6px; box-shadow: 0 6px 20px rgba(0,0,0,0.22); padding: 4px; }
+/* row (CHECK then year). Selector must out-specify `.hm-controls label` (which sets
+   flex-direction:column for the mini-labels) — hence `.hm-controls .hm-yearchk`. */
+.hm-controls .hm-yearchk { display: flex; flex-direction: row; align-items: center; gap: 7px;
+    padding: 4px 8px; border-radius: 4px; font-size: 13px; text-transform: none; letter-spacing: 0;
+    color: var(--text); cursor: pointer; white-space: nowrap; }
+.hm-controls .hm-yearchk:hover { background: var(--surface-alt); }
+.hm-controls .hm-yearchk input { accent-color: var(--sidebar-bg); flex: 0 0 auto; margin: 0; width: auto; }
+
+/* the map fills the remaining space; panels are absolutely positioned over it */
+.hm-main { position: relative; flex: 1 1 auto; min-height: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.hm-map { position: absolute; inset: 0; background: var(--map-sea); }
+.hm-map .leaflet-container { width: 100%; height: 100%; background: var(--map-sea); font: inherit; }
+
+.hm-panel { position: absolute; z-index: 500; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.14); }
+
+/* breakdown table — bottom-left. Height fits its content (Region: 13 + Unmapped + total, no
+   empty gap below) up to a cap; Postcode Area (124 rows) hits the cap and scrolls internally. */
+.hm-regions { left: 14px; bottom: 18px; width: 360px; max-width: calc(100% - 28px);
+    max-height: calc(100% - 32px); min-width: 320px;
+    display: flex; flex-direction: column; overflow: hidden; }
+.hm-cap { padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.hm-caprow { display: flex; justify-content: space-between; align-items: center; }
+.hm-ttl { font-size: 15px; font-weight: 600; color: var(--text-strong); }
+.hm-metricname { font-size: 15px; font-weight: 600; color: var(--sidebar-bg); }
+.hm-seg { display: flex; gap: 6px; margin-top: 10px; }
+.hm-seg button { flex: 1; font: inherit; font-size: 12px; font-weight: 500; padding: 6px 4px; cursor: pointer;
+    border: 1px solid var(--line-strong); background: var(--surface-alt); color: var(--text-2); border-radius: 7px; }
+.hm-seg button:hover { border-color: var(--sidebar-bg); }
+.hm-seg button.active { background: var(--sidebar-bg); border-color: var(--sidebar-bg); color: #fff; }
+.hm-scroll { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+.hm-rtable { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.hm-rtable thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-alt); color: var(--text-strong);
+    font-weight: 600; text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--line);
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; overflow: visible; }
+.hm-rtable thead th.l { text-align: left; }
+.hm-rtable tbody td { padding: 5px 9px; border-bottom: 1px solid var(--line); text-align: right;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hm-rtable tbody tr:last-child td { border-bottom: none; }   /* no stray line above the total */
+.hm-rtable tbody td.l { text-align: left; }
+.hm-rtable tbody td.code { color: var(--text-3); font-weight: 600; }
+.hm-rtable tbody td.p { color: var(--text-strong); font-weight: 600; }
+.hm-rtable tbody td.s { color: var(--text-3); }
+.hm-rtable tbody tr:hover { background: var(--row-hl); cursor: pointer; }
+.hm-rtable tbody tr.um td { color: var(--text-3); font-style: italic; }
+.hm-rtable tfoot td { position: sticky; bottom: 0; z-index: 2; padding: 9px 12px; font-weight: 700;
+    border-top: 2px solid var(--sidebar-bg); background: var(--surface); text-align: right; }
+.hm-rtable tfoot td.l { text-align: left; }
+
+/* selection info — top-right */
+.hm-info { top: 14px; right: 14px; width: 256px; padding: 14px 16px; }
+.hm-info h2 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-3); }
+.hm-region { font-size: 20px; font-weight: 600; margin: 4px 0 10px; color: var(--text-strong); }
+.hm-region.empty { color: var(--text-3); font-weight: 400; font-size: 15px; }
+.hm-inforow { display: flex; justify-content: space-between; gap: 14px; padding: 3px 0; font-size: 14px;
+    border-top: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.hm-inforow:first-of-type { border-top: none; }
+.hm-inforow .k { color: var(--text-3); }
+.hm-inforow .v { font-weight: 600; color: var(--text); }
+
+/* legend — bottom-right, click a band to flash */
+.hm-legend { bottom: 18px; right: 14px; width: 220px; padding: 12px 14px; font-size: 12px; }
+.hm-legend .lt { font-weight: 600; margin-bottom: 8px; color: var(--text-strong); }
+.hm-legend .band { display: flex; align-items: center; gap: 8px; padding: 3px 4px; border-radius: 5px; cursor: pointer; color: var(--text-2); }
+.hm-legend .band:hover { background: var(--surface-alt); }
+.hm-legend .band.empty { opacity: 0.45; }
+.hm-legend .sw { width: 18px; height: 14px; border-radius: 3px; flex: none; }
+.hm-legend .bl { white-space: nowrap; }
+.hm-legend .cnt { margin-left: auto; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.hm-legend .hint { color: var(--text-3); font-style: italic; margin-top: 6px; font-size: 11px; }
+
+/* zoom — right edge: +, vertical slider, −, reset (as the original) */
+.hm-zoom { position: absolute; z-index: 500; right: 18px; top: 50%; transform: translateY(-50%);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.14);
+    padding: 8px 6px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.hm-zoom button { width: 26px; height: 26px; border: 1px solid var(--line-strong); background: var(--surface-alt);
+    border-radius: 6px; cursor: pointer; font-size: 16px; line-height: 1; color: var(--text-2); }
+.hm-zoom button:hover { border-color: var(--sidebar-bg); color: var(--sidebar-bg); }
+.hm-zrange { writing-mode: vertical-lr; direction: rtl; width: 8px; height: 140px;
+    accent-color: var(--sidebar-bg); cursor: pointer; }
+
+/* help footnote — centred pill along the bottom (as the original) */
+/* Help hint: centre-TOP, hidden until the mouse moves over the map (JS toggles
+   .show, then fades it back out after a pause) so it doesn't clutter the view. */
+.hm-helpkey { position: absolute; z-index: 500; top: 14px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.95); border: 1px solid var(--line); border-radius: 14px;
+    padding: 6px 14px; font-size: 12px; color: var(--text-3); white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    opacity: 0; transition: opacity 0.3s ease; pointer-events: none; }
+.hm-helpkey.show { opacity: 1; }
+
+/* four grains across; best-per-year row then top-10 row (8 cards in a 4-col grid) */
+.rec-grid { display: grid; grid-template-columns: repeat(4, minmax(240px, 1fr)); gap: 16px; }
+@media (max-width: 1200px) { .rec-grid { grid-template-columns: repeat(2, minmax(240px, 1fr)); } }
+@media (max-width: 680px)  { .rec-grid { grid-template-columns: 1fr; } }
+
+/* Sales Summary grid: one column per division (All + each), rows are the periods.
+   --ss-cols set inline from the division count; collapses to fewer columns when narrow. */
+.ss-grid { display: grid; grid-template-columns: repeat(var(--ss-cols, 3), minmax(320px, 1fr)); gap: 16px; }
+@media (max-width: 1100px) { .ss-grid { grid-template-columns: repeat(2, minmax(320px, 1fr)); } }
+@media (max-width: 760px)  { .ss-grid { grid-template-columns: 1fr; } }
+
+/* ---- Year on Year report ---- */
+
+/* Filter bar: label sits ABOVE each dropdown; filters wrap on narrow widths. */
+.yoy-filters {
+    display: flex; flex-wrap: wrap; gap: 14px 28px;
+    background: var(--surface-alt); border: 1px solid var(--line);
+    border-radius: 8px; padding: 14px 18px; margin-bottom: 7px;
+    flex: 0 0 auto;
+}
+.yoy-filters label {
+    display: flex; flex-direction: column; gap: 5px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-3);
+}
+.yoy-filters select {
+    font: inherit; font-size: 13px; text-transform: none; letter-spacing: 0;
+    color: var(--text); padding: 5px 8px;
+    border: 1px solid var(--line-strong); border-radius: 4px; background: var(--surface); min-width: 150px;
+}
+
+/* Body is a flex column so the table card grows into the space below the filters. */
+.yoy-body { display: flex; flex-direction: column; min-height: 0; }
+.yoy-card { overflow: hidden; flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+.yoy-scroll { position: relative; overflow: auto; flex: 1 1 auto; min-height: 0; }
+
+/* loading overlay shown over the table while refreshing on a filter change */
+.yoy-refreshing { pointer-events: none; }
+.yoy-overlay {
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: color-mix(in srgb, var(--surface) 65%, transparent);
+    color: var(--text-2); font-size: 14px;
+}
+.yoy-table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.yoy-table th { text-align: right; padding: 4px 14px; font-size: 13px; font-weight: 600; color: var(--text-strong); border-bottom: 2px solid var(--grid-line); }
+.yoy-table td { text-align: right; padding: 3px 14px; }
+.yoy-table td.yoy-rowlabel { text-align: left; color: var(--text-2); }
+.yoy-table th.yoy-rowlabel { color: var(--text-strong); }
+
+/* current-year column tint */
+.yoy-cur { background: var(--brand-tint-2); }
+
+/* three grey sub-total rows */
+.yoy-subtotal td { color: var(--text-3); }
+
+/* grand total: bold, red-ruled top and bottom (horizontal rule across the row). */
+.yoy-grand td { font-weight: 600; border-top: 2px solid var(--error); border-bottom: 2px solid var(--error); }
+.yoy-yoy td { font-weight: 600; }
+
+/* New/Existing row: split % under the counts, matching the mockup. */
+/* New / Existing: counts over % stacked (% on its own line), right-aligned like
+   the other value columns; the label stays top-aligned with the counts row. */
+.ss-ne td { vertical-align: top; white-space: nowrap; }
+.ss-ne-pct { display: block; font-size: 14px; color: var(--text); }
+
+/* Per-panel loading + error (independent of the page). */
+.ss-loading { display: flex; align-items: center; gap: 8px; padding: 16px; color: var(--text-3); font-size: 13.5px; }
+.ss-card-error { display: flex; align-items: center; gap: 8px; padding: 12px 15px; color: var(--error); font-size: 13px; }
+.ss-spinner {
+    width: 15px; height: 15px; border-radius: 50%;
+    border: 2px solid var(--line); border-top-color: var(--brand);
+    animation: ss-spin 0.7s linear infinite;
+}
+@keyframes ss-spin { to { transform: rotate(360deg); } }
+
+/* Home welcome line. */
+.welcome { font-size: 18px; color: var(--text); margin: 4px 0 0; }
+.welcome strong { font-weight: 600; }
+
+/* --- Main content --- */
+.app-main { grid-area: main; overflow: auto; padding: 20px 24px; }
+/* ⚠️ FREEZE-FRAMES ARE ANCHORED TO THE PANE, NOT TO .app-main. With working
+   tabs, .app-main contains EVERY open screen — including hidden ones — so
+   `.app-main:has(X)` matches whenever ANY tab contains X and then leaks its
+   rules into every other tab. That is not theoretical: anchored at .app-main,
+   an open lender tab's :has(.mdp2-fill) applied the fill chain to the Companies
+   list's own DxTabs, stretching them and shoving the grid to the bottom of the
+   page. .ws-pane-inner is the screen boundary now — keep new freeze-frames
+   there. (See the pane-level rules in the WORKING TABS block below.)
+
+   Freeze-frame for detail pages hosting a fill master-detail panel (Lender →
+   Rates): the chrome stays put and the panel takes exactly the remaining
+   height — no measured offsets, so no gap or page scrollbar at any zoom.
+   The flex chain has to run through the DevExpress tab containers (25.2 DOM:
+   dxbl-tabs > dxbl-tabs-container > dxbl-tabs-content > dxbl-tabs-content-panel
+   — verify against the theme css if a DevExpress upgrade breaks the fill). */
+.ws-pane-inner:has(.mdp2-fill) .detail-view { flex: 1; min-height: 0; }
+.ws-pane-inner:has(.mdp2-fill) .dxbl-tabs,
+.ws-pane-inner:has(.mdp2-fill) .dxbl-tabs-container,
+.ws-pane-inner:has(.mdp2-fill) .dxbl-tabs-content,
+.ws-pane-inner:has(.mdp2-fill) .dxbl-tabs-content-panel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.mdp2-fill { flex: 1; }
+
+.page-title { margin: 0 0 12px; font-size: 26px; font-weight: 600; color: #222; }
+/* A title can carry a RELATIONSHIP link (lead → its customer). It reads as the
+   title, not as a link, until you go near it — breadcrumbs are gone, so this is
+   where an edge in the data lives now. */
+.page-title a { color: inherit; text-decoration: none; }
+.page-title a:hover { color: var(--link); text-decoration: underline; }
+
+/* FocusOnNavigate (Routes.razor) focuses the page h1 after every navigation for
+   accessibility; suppress the browser focus ring it would otherwise draw.
+   (Same rule the stock Blazor template ships.) */
+h1:focus { outline: none; }
+.muted { color: #6b6b6b; font-size: 0.9rem; }
+.error { color: var(--error); }
+.claims { font-size: 0.9rem; }
+.claims code { background: #eee; padding: 0.05rem 0.3rem; border-radius: 4px; }
+
+/* ===========================================================================
+   List / search pages (DevExpress grid) with freeze-frame layout. */
+.list-view { flex: 1; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+
+.list-toolbar {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    border-bottom: 1px solid #e5e5e5;
+    padding-bottom: 8px;
+}
+.list-toolbar .page-title { margin: 0; margin-right: 24px; flex-shrink: 0; align-self: center; line-height: 1.1; }
+/* Title-only toolbar (pages with no command bar, e.g. Home): match a list page's
+   toolbar so the centred title + underline sit in the same position. A list
+   toolbar's height is driven by its search box (~55px) + 8px padding ≈ 64px on
+   one line; we lock that as a min-height (not fixed, so it can still grow) and
+   stretch full width for the underline. Verified live against Companies at
+   desktop widths: toolbar 64, title text-top 89 — identical. */
+.list-toolbar-titleonly {
+    align-self: stretch;
+    box-sizing: border-box;
+    min-height: 64px;
+}
+
+.list-commandbar { display: flex; gap: 4px; align-self: center; }
+.cmd-btn {
+    background: transparent;
+    border: 0;
+    padding: 6px 12px;
+    font-size: 14px;
+    color: #222;
+    cursor: pointer;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.cmd-btn:hover:not(:disabled) { background: #f0f0f0; }
+.cmd-btn:disabled { color: #999; cursor: default; }
+/* ===========================================================================
+   Master-detail panel (Components/Shared/MasterDetailPanel) — two cards
+   (master | detail) separated by a draggable splitter (js/splitPanel.js);
+   each card owns its own header so an action can't appear to span both
+   panes. Fixed height; both cards scroll internally. */
+.mdp2 { display: flex; align-items: stretch; min-height: 320px; margin-top: 16px; }
+.mdp-card {
+    border: 1px solid #d8d8d8;
+    border-radius: 4px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+}
+.mdp-card-master { flex-shrink: 0; }
+.mdp-card-detail { flex: 1; }
+.mdp-splitter {
+    flex: 0 0 14px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #b5b5b5;
+    user-select: none;
+    touch-action: none;
+}
+.mdp-splitter::after { content: "⋮"; font-size: 15px; }
+.mdp-splitter:hover,
+.mdp-splitter.dragging { color: var(--brand); }
+.mdp-card-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+}
+/* Counts are plain bracketed text in the same font as their header. */
+.mdp-card-title,
+.mdp-count { font-size: 14px; font-weight: 600; }
+.mdp-head-spacer { flex: 1; }
+/* Collection-level header actions (Add group / Manage rates). */
+.mdp-head-btn {
+    background: none;
+    border: 0;
+    color: var(--brand);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.mdp-head-btn:hover:not(:disabled) { background: var(--brand-tint-2); }
+.mdp-head-btn:disabled { color: #aaa; cursor: default; }
+.mdp-filterbar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 7px 12px;
+    border-bottom: 1px solid #e3e3e3;
+    font-size: 13px;
+}
+.mdp-filterbar .cmd-check { padding: 0; }
+.mdp-search { width: 200px; padding: 4px 10px; }
+.mdp-master-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+/* Selection banner — names the master row the detail belongs to, using the
+   same crimson treatment as the selected row; .empty = nothing selected. */
+.mdp-banner {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 8px 12px;
+    background: var(--brand-tint);
+    border-left: 3px solid var(--brand);
+    border-bottom: 1px solid #e3e3e3;
+}
+.mdp-banner.empty { background: none; border-left-color: transparent; }
+.mdp-banner-name { font-weight: 600; font-size: 14px; }
+.mdp-banner-sub { color: #888; font-size: 12px; }
+.mdp-tabstrip { padding: 0 6px; border-bottom: 1px solid #e3e3e3; }
+.mdp-detail-body { flex: 1; overflow-y: auto; min-height: 0; }
+.mdp-empty { padding: 24px 14px; color: #777; font-size: 13px; text-align: center; }
+
+/* Master pane: column header strip + rows (name / flags / updated / ⋮). */
+/* Lives INSIDE .mdp-master-scroll (sticky) so header and rows always share
+   the same width — otherwise the scrollbar appearing knocks the columns out
+   of line with the captions. */
+.mdp-colhead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: stretch;
+    padding: 0 12px 0 9px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 2px solid #d3d3d3;
+    background: #f5f5f5;
+}
+.mdp-col-name { flex: 1; }
+.mdp-col-flags { width: 142px; flex-shrink: 0; }
+.mdp-col-updated { width: 98px; flex-shrink: 0; }
+.mdp-col-menu { width: 26px; flex-shrink: 0; }
+.mdp-row {
+    display: flex;
+    align-items: stretch;
+    padding: 0 12px 0 6px;
+    border-left: 3px solid transparent;
+    border-bottom: 1px solid var(--grid-line);
+    font-size: var(--grid-font);
+    cursor: pointer;
+    position: relative;
+}
+.mdp-row:hover:not(.selected) { background: #f5f5f5; }
+.mdp-row.selected { border-left-color: var(--brand); background: var(--brand-tint); }
+.mdp-row.inactive .mdp-row-name { color: #999; }
+/* Column cells: every column in a hand-rolled grid is an .mdp-cell. Cells own
+   their horizontal padding (no flex gap) and stretch to the row height, so the
+   default vertical rule sits on the true cell edge and runs edge-to-edge —
+   matching the DevExpress grids' column lines. The last cell in a row has no
+   rule; non-cell trailing elements (the ⋮ menu column) sit after the final rule. */
+.mdp-cell {
+    border-right: 1px solid var(--grid-line);
+    min-width: 0;
+    padding: 7px 8px;
+}
+.mdp-cell:last-child { border-right: none; }
+/* Cells are block containers (text-overflow: ellipsis needs block formatting);
+   single-line cells that sit beside multi-line neighbours (the rates master's
+   flag strip and updated date) flex-centre themselves instead. */
+.mdp-row .mdp-flags.mdp-cell,
+.mdp-row .mdp-row-updated.mdp-cell { display: flex; align-items: center; }
+.mdp-row-main { flex: 1; min-width: 0; }
+.mdp-row-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Second line under the row name reuses the shared .sub-item (same as the
+   Companies grid); min-height keeps rows even when the line is empty. */
+.mdp-row .sub-item { min-height: 17px; }
+.mdp-row-updated { color: #666; }
+.mdp-flags { width: 142px; flex-shrink: 0; display: inline-flex; gap: 3px; }
+.mdp-flag {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 3px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ccc;
+}
+.mdp-flag.on { background: var(--brand-tint-2); color: var(--brand); }
+/* Hover legend on the Categories column header (labels from the desktop
+   Rate Group dialog). CSS-only: hover/focus the ⓘ to show the list. */
+.mdp-info { position: relative; display: inline-flex; margin-left: 3px; color: #999; cursor: help; }
+.mdp-info .bi { font-size: 12px; }
+.mdp-info:hover { color: var(--brand); }
+.mdp-info-tip {
+    display: none;
+    position: absolute;
+    top: 18px;
+    left: -8px;
+    z-index: 40;
+    background: #fff;
+    border: 1px solid #c8c8c8;
+    border-radius: 4px;
+    padding: 8px 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    font-size: 12px;
+    color: #333;
+    white-space: nowrap;
+    flex-direction: column;
+    gap: 3px;
+}
+.mdp-info:hover .mdp-info-tip { display: flex; }
+.mdp-row-menu-btn {
+    width: 26px;
+    flex-shrink: 0;
+    border: none;
+    background: none;
+    color: #999;
+    padding: 2px 4px;
+    cursor: pointer;
+}
+.mdp-row-menu-btn:hover { color: #333; }
+.mdp-row-menu {
+    position: absolute;
+    right: 8px;
+    top: 32px;
+    z-index: 30;
+    background: #fff;
+    border: 1px solid #c8c8c8;
+    border-radius: 4px;
+    min-width: 150px;
+    padding: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    display: flex;
+    flex-direction: column;
+}
+.mdp-row-menu button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    background: none;
+    text-align: left;
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: 3px;
+    cursor: pointer;
+    color: #222;
+}
+.mdp-row-menu button:hover:not(:disabled) { background: #f0f0f0; }
+.mdp-row-menu button:disabled { color: #999; cursor: default; }
+.mdp-row-menu button.danger:not(:disabled) { color: var(--error); }
+.mdp-menu-backdrop { position: fixed; inset: 0; z-index: 20; background: transparent; }
+
+/* Edit dialogs (DxPopup content) — label/control rows, error line, footer. */
+.dlg-form {
+    display: grid;
+    grid-template-columns: 130px 1fr;
+    gap: 12px;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 13px;
+}
+.dlg-form > label { color: #444; }
+.dlg-checks { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.dlg-checks label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.dlg-error { color: var(--error); font-size: 13px; margin-top: 10px; }
+
+/* Field-level validation (FieldError component + "dlg-invalid" on the control).
+   Composed per the brand error rules: field border + icon + message. In the
+   dialog grid the message sits directly under the control as its own grid row
+   (column 2, pulled up against the row gap), so an appearing error never
+   re-centres the label/control pair above it. */
+.dlg-invalid,
+.dlg-invalid .dxbl-text-edit {
+    border-color: var(--error) !important;
+    box-shadow: 0 0 0 2px rgba(176, 42, 55, 0.12);
+}
+.dlg-field-error {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    color: var(--error);
+    font-size: 12.5px;
+    font-weight: 600;
+}
+.dlg-field-error .bi { font-size: 12px; }
+.dlg-form .dlg-field-error { grid-column: 2; margin-top: -8px; }
+.dlg-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.dlg-btn {
+    border: 1px solid #c8c8c8;
+    background: #fff;
+    border-radius: 4px;
+    padding: 5px 18px;
+    font-size: 13px;
+    cursor: pointer;
+}
+.dlg-btn:hover:not(:disabled) { background: #f0f0f0; }
+.dlg-btn:disabled { color: #999; cursor: default; }
+.dlg-btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.dlg-btn.primary:hover:not(:disabled) { background: var(--brand-dark); }
+/* ConfirmDialog message row — tone badge (tinted circle) + message. */
+.confirm-body { display: flex; gap: 14px; align-items: center; font-size: 14px; padding: 8px 0 4px; }
+.confirm-body .bi {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 21px;
+    line-height: 1;
+}
+.confirm-body .bi.question { background: var(--brand-tint-2); color: var(--brand); }
+.confirm-body .bi.warning { background: #fdf3e0; color: var(--warning); }
+.confirm-body .bi.info { background: var(--brand-tint); color: var(--brand); }
+
+/* Detail pane rate-type tabs (Lease / HP / Loan) — smaller sibling of DxTabs. */
+.rate-tabs { display: flex; gap: 2px; }
+.rate-tab {
+    border: none;
+    background: none;
+    padding: 7px 16px;
+    font-size: 14px;
+    color: #555;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+}
+.rate-tab:hover { color: #111; }
+.rate-tab.active { color: #111; border-bottom-color: var(--navy); font-weight: 600; }
+
+/* Filter row under the page banner (e.g. Lenders search + "Active only"). */
+/* Checkbox filter beside a list search box (e.g. Lenders "Active only"). Sits to
+   the LEFT of the search, vertically aligned to it, so the toolbar stays the same
+   height as Companies/Contacts (a stacked filter would push the title + border
+   down). margin-left:auto pushes it + the search-wrap together to the right. */
+/* Checkbox sits immediately to the LEFT of the search box, on one row, so their
+   vertical centres line up automatically (align-items: center). The row hugs its
+   content and stays right-aligned in the toolbar; the status line sits below. */
+.list-search-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.list-search-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 14px;
+    color: var(--text-2);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+
+/* Inline checkbox filter (e.g. rate panels "Active only"). */
+.cmd-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-size: 14px;
+    color: #222;
+    cursor: pointer;
+    user-select: none;
+}
+
+.list-search-wrap { margin-left: auto; display: flex; flex-direction: column; gap: 4px; }
+.list-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid #c8c8c8;
+    border-radius: 6px;
+    padding: 5px 10px;
+    width: 280px;
+}
+.list-search:focus-within { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-tint-2); }
+.list-search i { color: #888; }
+.list-search input { border: 0; outline: none; flex: 1; font-size: 14px; background: transparent; }
+.search-clear {
+    background: transparent;
+    border: 0;
+    color: #888;
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 16px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+}
+.search-clear:hover { color: #222; }
+.list-search-status { font-size: 12px; color: #666; min-height: 16px; padding-left: 2px; }
+
+/* The grid fills remaining height and scrolls internally (the frozen frame). */
+.list-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.list-grid .dxbl-grid,
+.list-grid [class*="dxbl-grid-root"] { flex: 1; min-height: 0; }
+
+.grid-link { color: var(--link); text-decoration: none; font-weight: 500; }
+.grid-link:hover { text-decoration: underline; }
+.grid-name { color: #222; font-weight: 500; }
+.sub-item { font-size: 12px; color: #666; margin-top: 2px; }
+
+.tab-placeholder { padding: 28px 4px; color: #888; font-style: italic; }
+
+/* Search-match highlight inside grid cells. */
+.dxbl-grid mark,
+mark { background-color: #fff066; color: inherit; padding: 0; border-radius: 0; }
+
+/* ===========================================================================
+   DxTabs — plain text tabs, navy underline on the active tab. */
+.list-tabs { margin-top: -4px; }
+.dxbl-tabs,
+.dxbl-tabs [class*="dxbl-tabs-nav"] { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+.dxbl-tabs > [class*="dxbl-tabs-nav"] { border-bottom: 1px solid #f4f4f4 !important; }
+.dxbl-tabs [class*="dxbl-tabs-item"] {
+    background: transparent !important;
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    color: #222 !important;
+    font-weight: 400 !important;
+    padding: 8px 18px !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
+.dxbl-tabs [class*="dxbl-tabs-item"]:hover { color: #000 !important; background: transparent !important; }
+.dxbl-tabs [class*="dxbl-tabs-item"].dxbl-active,
+.dxbl-tabs [class*="dxbl-tabs-item-active"],
+.dxbl-tabs [class*="dxbl-tabs-item"][aria-selected="true"] {
+    color: #000 !important;
+    font-weight: 600 !important;
+    border-bottom: 2px solid var(--navy) !important;
+    background: transparent !important;
+    box-shadow: inset 0 -2px 0 var(--navy) !important;
+}
+.dxbl-tabs [class*="dxbl-tabs-item"].dxbl-active::after,
+.dxbl-tabs [class*="dxbl-tabs-item-active"]::after,
+.dxbl-tabs [class*="dxbl-tabs-item"][aria-selected="true"]::after {
+    background-color: var(--navy) !important;
+    border-color: var(--navy) !important;
+}
+.dxbl-tabs [class*="indicator"] {
+    background: var(--navy) !important;
+    background-color: var(--navy) !important;
+    border-color: var(--navy) !important;
+}
+.dxbl-tabs {
+    --dxbl-color-primary: var(--navy);
+    --dxbl-tabs-active-color: var(--navy);
+    --dxbl-tabs-active-border-color: var(--navy);
+    --dxbl-tabs-active-text-color: #000;
+    --dxbl-tabs-indicator-color: var(--navy);
+    --bs-primary: var(--navy);
+    --bs-link-color: var(--navy);
+}
+.dxbl-tabs-content { padding-top: 10px; }
+.list-tabs [class*="dxbl-tabs-item"] { padding-top: 4px !important; padding-bottom: 4px !important; }
+
+/* ===========================================================================
+   Detail view — breadcrumb + read-only info panels. */
+.detail-view { display: flex; flex-direction: column; gap: 12px; }
+
+.info-panels { max-width: 900px; display: flex; flex-direction: column; gap: 16px; }
+.info-panel { background: #fafafa; border: 1px solid #e5e5e5; border-radius: 4px; overflow: hidden; }
+.info-panel-header {
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #222;
+}
+.info-grid {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 10px 16px;
+    padding: 16px;
+    margin: 0;
+    background: #fff;
+}
+.info-grid-2col { grid-template-columns: 200px 1fr 200px 1fr; }
+.info-grid dt { color: #555; font-weight: 400; font-size: 14px; align-self: center; }
+.info-grid dd { margin: 0; color: #222; font-size: 14px; font-weight: 600; align-self: center; }
+.detail-grid { max-width: 100%; }
+
+/* Grid alignment helpers — TextAlignment is unusable on DevExpress.Blazor
+   25.2.7/net8 (see CLAUDE.md), so headers use HeaderCaptionTemplate with
+   these, and templated cells wrap content in cell-right / cell-center. */
+.dx-head-right { width: 100%; text-align: right; }
+.dx-head-center { width: 100%; text-align: center; }
+.cell-right { text-align: right; }
+.cell-center { text-align: center; }
+
+/* Manage Rates dialog styles live in Pages/LenderDetail/ManageRatesDialog.razor.css
+   (collocated CSS isolation — the component-CSS convention). */
+
+/* ===========================================================================
+   Error surfaces. #blazor-error-ui is revealed by blazor.web.js on fatal
+   circuit errors; .page-error is the in-page ErrorBoundary content. */
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    z-index: 2000;
+    background: var(--error);
+    color: #fff;
+    padding: 12px 40px 12px 16px;
+    font-size: 14px;
+    box-shadow: 0 -1px 4px rgba(0,0,0,0.3);
+}
+#blazor-error-ui .reload { color: #fff; text-decoration: underline; }
+#blazor-error-ui .dismiss {
+    position: absolute;
+    right: 14px; top: 10px;
+    cursor: pointer;
+}
+.page-error { max-width: 640px; padding: 40px 0; }
+.page-error h1 { font-size: 22px; margin-bottom: 12px; }
+.page-error h1 i { color: var(--error); margin-right: 6px; }
+.page-error .cmd-btn { display: inline-block; margin-top: 10px; border: 1px solid #c8c8c8; text-decoration: none; }
+
+/* Lead detail — lock bar, mirroring the desktop ucLockAlert colours:
+   crimson = locked by someone else, gold = locked by you. */
+.lock-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+}
+.lock-bar.blocked { background: #dc143c; color: #fff; }
+.lock-bar.mine    { background: #ffd700; color: #222; }
+.lock-bar .lock-elapsed { margin-left: auto; font-weight: 400; white-space: nowrap; }
+
+/* Lead detail — title row with status badge. */
+.lead-header-title { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.lead-header-title .page-title { margin-bottom: 0; }
+.lead-actions { margin-left: auto; display: flex; gap: 8px; align-self: center; }
+.lead-actions .cmd-btn { border: 1px solid #c8c8c8; }
+.lead-actions .cmd-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Salesperson lookup — web port of the desktop GridLookUpEdit. */
+.sp-lookup { width: 560px; max-width: 90vw; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.sp-lookup-filters { display: flex; align-items: center; gap: 12px; }
+.sp-lookup-search { width: 190px; }
+.sp-lookup-category { width: 190px; }
+/* Virtual scrolling (no paging) needs an explicit viewport height. */
+.sp-lookup-grid { height: 320px; }
+
+/* Lead detail — editing: unsaved-section marker + per-section save errors. */
+.dirty-marker { color: var(--warning); margin-left: 6px; }
+.save-error {
+    background: var(--error-bg);
+    border: 1px solid var(--error-border);
+    border-radius: 4px;
+    color: #6e1f19;
+    padding: 8px 14px;
+    font-size: 14px;
+}
+.lead-status-badge {
+    display: inline-block;
+    padding: 3px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    background: #e7f1e7;
+    color: #2e7d32;
+    white-space: nowrap;
+}
+.lead-status-badge.closed { background: #ececec; color: #666; }
+
+/* Lead detail — Status dates panel (left, like the desktop) + lead info panel. */
+.lead-panels { display: flex; gap: 16px; align-items: flex-start; max-width: 1200px; }
+.lead-panels .lead-status-panel { flex: 0 0 320px; }
+.lead-panels .lead-main-panel { flex: 1; }
+.status-grid { grid-template-columns: auto 1fr; gap: 6px 16px; }
+.status-grid dd { text-align: right; }
+.status-grid dt.empty { color: #a5a5a5; }
+.status-grid dd.empty { color: #a5a5a5; font-weight: 400; }
+
+/* Lead detail — Equipment tab: grid left, totals panel right (like the desktop). */
+.equip-layout { display: flex; gap: 16px; align-items: flex-start; }
+.equip-grid { flex: 1; min-width: 0; }
+.equip-totals { flex: 0 0 280px; }
+.totals-grid { grid-template-columns: auto 1fr; gap: 8px 16px; }
+.totals-grid dd { text-align: right; }
+
+/* Lead detail — Quotations tab: quote cards side by side within each group tab. */
+.quote-cards { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.quote-card { flex: 0 0 340px; }
+.quote-card.selected { border-color: #2e7d32; box-shadow: 0 0 0 1px #2e7d32; }
+.quote-card-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.quote-badges { display: flex; gap: 6px; }
+.quote-badge {
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.quote-badge.selected { background: #e7f1e7; color: #2e7d32; }
+.quote-badge.bespoke  { background: #fdf3e0; color: #a06a00; }
+.quote-grid { grid-template-columns: auto 1fr; gap: 5px 16px; }
+.quote-grid dd { text-align: right; }
+
+/* Leads tab toolbar: All / Live / Completed radios + column chooser button. */
+.lead-toolbar { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
+.lead-filter { display: flex; align-items: center; gap: 16px; font-size: 14px; }
+.lead-filter label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.lead-toolbar .cmd-btn { margin-left: auto; border: 1px solid #c8c8c8; }
+
+/* ===========================================================================
+   Login — solid PF-grey backdrop (the logo's grey), white card with the full
+   logo lockup. */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--pf-grey);
+    position: relative;
+    overflow: hidden;
+}
+.login-card {
+    position: relative;
+    z-index: 1;
+    width: 400px;
+    max-width: calc(100vw - 32px);
+    background: #ffffff;
+    border-radius: 6px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4);
+    padding: 32px 36px;
+}
+/* Brand logo lockup — the real PF wordmark + tagline + dot mark as one asset.
+   Fills the card's ~328px content width (400px card less 2×36px padding) while
+   keeping a small margin each side, so it reads as a full header, not crammed. */
+.pf-logo { display: flex; justify-content: center; margin: 4px 0 30px; }
+.pf-logo-img { display: block; width: 290px; max-width: 100%; height: auto; }
+.login-label { display: block; font-size: 13px; color: #444; margin-bottom: 5px; }
+.login-card input {
+    width: 100%;
+    height: 37px;
+    padding: 4px 12px;
+    margin-bottom: 15px;
+    border: 1px solid #c8c8c8;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 14px;
+    background: #fff;
+}
+.login-card input:focus {
+    outline: none;
+    border-color: var(--brand);
+    box-shadow: 0 0 0 2px var(--brand-tint-2);
+}
+/* Password field with reveal toggle — the wrapper carries the field's bottom
+   margin so the inner input doesn't stack its own; icon uses bi-eye/-slash. */
+.login-pw-wrap { position: relative; margin-bottom: 15px; }
+.login-pw-wrap input { margin-bottom: 0; padding-right: 40px; }
+.login-pw-toggle {
+    position: absolute;
+    top: 18px;
+    right: 4px;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 6px 8px;
+    cursor: pointer;
+    color: var(--text-3);
+    font-size: 15px;
+}
+.login-pw-toggle:hover { color: var(--brand); }
+.login-pw-toggle:focus-visible {
+    outline: 2px solid var(--brand-tint-2);
+    border-radius: 4px;
+}
+/* Failed sign-in — composed error (tinted panel + icon), per the palette rules. */
+.login-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--error-bg);
+    border: 1px solid var(--error-border);
+    border-radius: 4px;
+    color: var(--error);
+    padding: 8px 12px;
+    font-size: 13.5px;
+    margin-bottom: 15px;
+}
+/* Informational, NOT an error — the session ended while the user was away and
+   they did nothing wrong, so it must not borrow the red error treatment. */
+.login-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--brand-tint);
+    border: 1px solid var(--brand-tint-2);
+    border-radius: 4px;
+    color: var(--text);
+    padding: 8px 12px;
+    font-size: 13.5px;
+    margin-bottom: 15px;
+}
+.login-notice i { color: var(--brand); }
+.login-button {
+    width: 100%;
+    height: 41px;
+    font-size: 14.5px;
+    font-weight: 600;
+    font-family: inherit;
+    background: var(--brand);
+    border: 0;
+    border-radius: 4px;
+    color: #fff;
+    cursor: pointer;
+}
+.login-button:hover { background: var(--brand-dark); }
+.login-button:active { background: #1d3c6d; }
+
+/* ============================================================================
+   Finance Calculator (Tools ▸ Finance Calculator) — layout only; all colours
+   come from the shared tokens. Input cards sit in a column on the left, the
+   results card to their right, and the payment schedule spans full width below.
+   ========================================================================== */
+/* --fc-col = the single card width shared by all three input cards (Financial
+   Details / Calculation / Buy Rate-Fee Income) AND the Results card, so the whole
+   grid of cards lines up on one column width. */
+.fc-page { --fc-col: 340px; display: flex; flex-direction: column; gap: 12px; }
+
+/* Fill-to-bottom: the page fills its pane; the input row is natural height at the
+   top and the output row takes the remaining height, so the schedule grid scrolls
+   internally rather than the whole form. Follows the Lender→Rates .mdp2-fill
+   pattern, incl. overflow:auto (NOT hidden) so a broken flex chain degrades to a
+   page scrollbar instead of silently clipping content. The freeze-frame itself is
+   anchored at .ws-pane-inner (see the WORKING TABS block) — never at .app-main. */
+.fc-page.fc-fill { flex: 1; min-height: 0; }
+
+/* Vertical split: top zone (input cards) over bottom zone (results + schedule),
+   with a draggable horizontal bar (shared js/splitPanel.js, "vertical" mode) —
+   drag it UP to reveal more schedule. The container fills the page's remaining
+   height; each zone scrolls internally so the page itself never overspills. */
+.fc-split { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* Default height = the panels' own height (flex-basis:auto → content-sized), so the
+   splitter sits just below the group cards however tall the facility makes them.
+   Dragging sets an explicit px basis (splitPanel.js) which then overrides this. */
+.fc-split-top { flex: 0 0 auto; flex-basis: auto; min-height: 0; overflow: auto; }
+.fc-split-bottom { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.fc-vsplitter {
+    flex: 0 0 auto; height: 8px; cursor: row-resize; margin: 4px 0;
+    background: var(--line); border-radius: 4px;
+    background-clip: padding-box; border: 3px solid transparent;
+}
+.fc-vsplitter:hover, .fc-vsplitter.dragging { background: var(--line-strong); }
+
+/* The input cards sit in one row, all --fc-col wide (Financial Details |
+   Calculation | Buy Rate/Fee Income), with the Calculate button far right. They
+   stay that fixed width so they align with the output row; wrap when narrow. */
+.fc-inputs-row { display: flex; gap: 16px; align-items: stretch; flex-wrap: wrap; }
+.fc-inputs-row > .fc-card { flex: 0 0 var(--fc-col); display: flex; flex-direction: column; }
+.fc-inputs-row > .fc-card > .fc-card-body { flex: 1; }
+.fc-card-body { padding: 14px 16px; }
+
+/* Calculate button far right, top-aligned with the tops of the group cards. */
+.fc-actions { display: flex; align-items: flex-start; flex: 0 0 auto; }
+.fc-calc-btn { min-width: 120px; padding: 10px 22px; }
+
+/* A group-card header carrying a checkbox in its top-right (Buy Rate/Fee Income). */
+.fc-head-check { display: flex; align-items: center; justify-content: space-between; }
+.fc-head-toggle { display: inline-flex; align-items: center; margin: 0; cursor: pointer; }
+
+/* Greyed label for a disabled field (applies across all group boxes). */
+.fc-lbl-disabled { color: var(--text-disabled) !important; }
+
+/* A value that reveals more on hover (e.g. Settlement → its rebate breakdown):
+   link-blue but NOT underlined (so it doesn't read as a navigation link), with
+   the standard help cursor to signal "hover for detail". */
+.fc-hoverable { color: var(--link); cursor: help; }
+
+/* Results (left, --fc-col so it lines up under Financial Details) + schedule
+   (fills the rest of the width AND the remaining page height). */
+.fc-output-row { display: flex; gap: 16px; align-items: stretch; flex: 1; min-height: 0; margin-top: 4px; }
+
+/* Results + schedule fade in over 1s on each Calculate (the @key re-mounts this
+   element every calc, replaying the animation) so a fast recalc is visibly felt. */
+.fc-fade-in { animation: fc-fade 1s ease; }
+@keyframes fc-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .fc-fade-in { animation: none; } }
+.fc-results { flex: 0 0 var(--fc-col); }
+.fc-schedule-card { flex: 1 1 auto; min-width: 380px; display: flex; flex-direction: column; min-height: 0; }
+/* The DevExpress grid must be told to fill its card so its own scroll region
+   activates (the grid's internal virtual-scroll needs a bounded height). */
+/* Mirror the proven .list-grid fill pattern (Companies/Lenders): the CssClass
+   wrapper flexes, and so do the DevExpress grid root elements inside it, so the
+   grid's own virtual-scroll region engages within the bounded height. */
+.fc-schedule-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.fc-schedule-grid .dxbl-grid,
+.fc-schedule-grid [class*="dxbl-grid-root"] { flex: 1; min-height: 0; }
+
+/* Results: a two-column label / value list. */
+.fc-results-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px 18px;
+    font-size: 13.5px;
+    align-items: baseline;
+}
+.fc-results-grid > span { color: var(--text-2); }
+.fc-results-grid > b { font-weight: 600; color: var(--text-strong); font-variant-numeric: tabular-nums; text-align: right; }
+
+.fc-schedule-grid { --dxbl-grid-font-size: var(--grid-font); }
+
+/* Schedule Summary dialog — the editable payment-blocks table. Mirrors the
+   grid look used elsewhere (grid font + line tokens). */
+.fc-summary-table { width: 100%; border-collapse: collapse; margin: 12px 0 4px; font-size: var(--grid-font); }
+.fc-summary-table th {
+    text-align: left; font-size: 13px; font-weight: 600;
+    color: var(--text-2); padding: 6px 8px; border-bottom: 2px solid var(--grid-head-line);
+}
+.fc-summary-table td { padding: 4px 8px; border-bottom: 1px solid var(--grid-line); vertical-align: middle; }
+.fc-summary-total { text-align: right; font-variant-numeric: tabular-nums; }
+.fc-summary-table tfoot td { font-weight: 600; border-top: 2px solid var(--grid-head-line); border-bottom: none; }
+.fc-summary-empty { color: var(--text-3); font-style: italic; padding: 12px 8px; }
+.fc-summary-rowbtns { display: flex; gap: 2px; justify-content: flex-end; }
+.fc-summary-tools { display: flex; gap: 8px; margin-top: 6px; }
+
+/* Small icon buttons in the summary rows (move up/down, delete). */
+.fc-iconbtn {
+    border: 1px solid var(--line-strong); background: var(--surface);
+    border-radius: 4px; width: 26px; height: 26px; cursor: pointer;
+    color: var(--text-2); display: inline-flex; align-items: center; justify-content: center;
+}
+.fc-iconbtn:hover:not(:disabled) { background: var(--surface-alt); }
+.fc-iconbtn:disabled { color: var(--text-disabled); cursor: default; }
+.fc-iconbtn.fc-del:hover:not(:disabled) { color: var(--error); border-color: var(--error); }
+
+/* Per-row payment dialog: the read-only line-total row. */
+.fc-row-total { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Schedule Summary dialog (rebuilt): stacked cards — Payment Details band, the
+   display-only Simple Payment Summary grid, and the live Full Payment Summary. */
+.fc-ssd-band { margin-bottom: 12px; }
+/* label | control grid; the control column is capped to a sensible width so the
+   dropdowns/boxes don't stretch across the whole dialog. */
+.fc-ssd-details { display: grid; grid-template-columns: 130px minmax(0, 240px); gap: 10px 12px; align-items: center; justify-content: start; }
+.fc-ssd-details > .rate-tabs { justify-self: start; }
+.fc-ssd-details .dlg-field-error { grid-column: 2; }
+.fc-ssd-simple { margin-bottom: 12px; }
+.fc-ssd-sub { font-weight: 400; color: var(--text-3); font-size: 12px; }
+.fc-ssd-tools { display: inline-flex; gap: 6px; }
+.fc-ssd-irr { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.fc-ssd-irr b { color: var(--text-strong); }
+.fc-ssd-rowclick { cursor: pointer; }
+.fc-ssd-rowclick:hover { background: var(--brand-tint); }
+/* The live full-schedule grid gets a bounded, scrolling height inside the dialog. */
+.fc-ssd-fullbody { height: 260px; display: flex; flex-direction: column; padding: 8px; }
+.fc-ssd-fullbody .fc-schedule-grid { flex: 1; min-height: 0; }
+
+
+/* ===========================================================================
+   WORKING TABS (prototype) — Layout/TabStrip (the strip, hosted in the top bar)
+   + Layout/TabWorkspace (the panes).
+
+   Every open screen stays rendered for the circuit's life; only the active pane
+   is shown. Hiding is CSS-only and deliberately so: removing a pane from the
+   tree would dispose its components and lose the in-progress state that the
+   whole feature exists to keep.
+
+   DECIDED (prototype, Aug 2026): hide with display:none. The alternative —
+   keeping inactive panes stacked at full size and hiding them with visibility —
+   protects components that measure themselves while hidden, but costs a full
+   paint per open pane and was measurably no better here. It is safe because a
+   tab is always created ACTIVE, so nothing ever first-renders at zero size.
+   Two cases could still reach it: a window resize while a tab is backgrounded,
+   and a Blazor reconnect (which recreates every pane, hidden ones included).
+   If either shows up, fix it through TabHandle.ActiveChanged — re-measure on
+   activate — rather than by reverting to off-screen hiding.
+
+   Visibility and layout are split across two elements on purpose: .ws-pane owns
+   showing/hiding, .ws-pane-inner owns the page's own layout. Putting both on one
+   element makes the :has() freeze-frame rules below override the hiding and
+   inactive panes reappear. */
+
+/* --- The strip, sitting on the bottom edge of the top bar --- */
+.ws-strip {
+    flex: 1; min-width: 0;
+    display: flex; align-items: flex-end; gap: 2px;
+    /* The whole strip drops 1px so the active tab covers the bar's bottom rule.
+       Doing it here rather than on the tab keeps every child INSIDE the strip's
+       box — a child escaping it made overflow-y compute to auto and produced a
+       stray vertical scrollbar. */
+    margin-bottom: -1px;
+    /* Scrolled by the arrow buttons (js/hscroll.js), never by a visible bar —
+       but still a real scroll container, so trackpad and shift-wheel work. */
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+    --ws-tab-max: 210px;   /* comfortable width when few tabs are open */
+    --ws-tab-min: 148px;   /* floor: a readable width. Past this the strip scrolls
+                              and the overflow menu reaches the rest — shrinking
+                              further just makes every tab illegible. */
+}
+.ws-tab {
+    /* Tabs size to content up to the max, then SHRINK as more open (browser and
+       WinForms behaviour) until they hit the floor, at which point the strip
+       scrolls. flex-basis auto + max/min, not a fixed width. */
+    flex: 0 1 auto; min-width: var(--ws-tab-min); max-width: var(--ws-tab-max);
+    box-sizing: border-box;
+    display: flex; align-items: center; gap: 7px;
+    padding: 7px 8px 7px 12px;
+    /* Inactive tabs are tab-SHAPED too: their own surface with rounded tops,
+       one shade off the bar, so the strip reads as a row of documents rather
+       than as text with dividers. The bar is the darkest, inactive tabs sit
+       above it, and the active tab goes all the way to the content white. */
+    background: var(--surface-alt);
+    border: 1px solid var(--line-strong);
+    /* Inactive tabs are closed boxes; the active one opens at the bottom (below)
+       so it merges into the pane. Keeping a real 1px border on both — rather
+       than none on one — keeps every tab exactly the same height. */
+    border-radius: 5px 5px 0 0;
+    font-size: 13px; color: var(--text-2); white-space: nowrap; cursor: pointer;
+}
+.ws-tab:hover { background: var(--surface); }
+/* The active tab is the SAME surface as the pane below and overlaps the bar's
+   bottom rule, so the two read as one document rather than two panels. */
+.ws-tab-active {
+    background: var(--surface);
+    color: var(--text-strong); font-weight: 600;
+    /* Accent drawn INSIDE the outline (inset shadow, not a fat border) so every
+       tab keeps the same height and the outline stays unbroken. Same colour as
+       the left bar, tying the open document to the app frame rather than to the
+       in-page DxTabs underline. */
+    box-shadow: inset 0 3px 0 var(--sidebar-bg);
+    /* Painted, not transparent: the strip overlaps the bar's rule by 1px, and a
+       transparent border would let that rule show through under the tab. */
+    border-bottom-color: var(--surface);
+}
+.ws-tab-active:hover { background: var(--surface); }
+.ws-tab-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The icon is never truncated — at the floor width it is carrying the tab's
+   identity on its own. Same for the dirty marker and close button. */
+.ws-tab > i, .ws-tab-dirty, .ws-tab-close { flex: 0 0 auto; }
+.ws-tab-dirty { width: 8px; font-size: 15px; line-height: 1; color: var(--warning);   /* the app-wide dirty-marker colour (see .dirty-marker) */ }
+.ws-tab > i { color: var(--text-3); }
+.ws-tab-active > i { color: var(--text-2); }
+.ws-tab-close {
+    border: 0; background: none; padding: 0 3px; line-height: 1;
+    color: var(--text-3); border-radius: 3px; cursor: pointer;
+}
+.ws-tab-close:hover { background: var(--line); color: var(--text); }
+/* Reserved space either way, so nothing shifts as the pointer moves. */
+.ws-tab-close { visibility: hidden; }
+.ws-tab:hover .ws-tab-close, .ws-tab-active .ws-tab-close { visibility: visible; }
+
+
+/* --- The panes --- */
+.app-main:has(.ws-body) { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.ws-body { flex: 1; min-height: 0; position: relative; background: var(--surface); }
+.ws-pane { display: none; height: 100%; }
+.ws-pane-active { display: block; }
+
+.ws-pane-inner { height: 100%; overflow: auto; padding: 20px 24px; }
+/* Pane-level copies of the .app-main freeze-frames: the page's fill chain now
+   starts at the pane, not at main. Same rules, same reasons — see .app-main. */
+.ws-pane-inner:has(.list-view) { display: flex; flex-direction: column; overflow: hidden; }
+.ws-pane-inner:has(.mdp2-fill) { display: flex; flex-direction: column; overflow: auto; }
+.ws-pane-inner:has(.fc-fill)   { display: flex; flex-direction: column; overflow: auto; }
+
+/* Overflow menu — every open tab, not just the ones scrolled out of view, so it
+   also answers "what have I got open". Native <details>, same pattern as the
+   user menu. */
+.ws-overflow { flex: 0 0 auto; align-self: center; position: relative; }
+.ws-overflow > summary {
+    list-style: none;
+    display: flex; align-items: center; gap: 5px;
+    padding: 3px 7px; border: 1px solid var(--line-strong); border-radius: 4px;
+    background: var(--surface); color: var(--text-2); font-size: 12px;
+    cursor: pointer;
+}
+.ws-overflow > summary::-webkit-details-marker { display: none; }
+.ws-overflow > summary:hover { border-color: var(--text-3); }
+.ws-overflow-count { font-variant-numeric: tabular-nums; }
+.ws-overflow-menu {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 100;
+    width: 260px; max-height: 60vh; overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 6px;
+}
+.ws-overflow-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 4px;
+    font-size: 13px; color: var(--text); cursor: pointer;
+}
+.ws-overflow-item:hover { background: var(--surface-alt); }
+.ws-overflow-item > i { flex: 0 0 auto; color: var(--text-3); }
+.ws-overflow-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Same crimson edge the active tab carries, so the two agree on what's open. */
+.ws-overflow-item-active {
+    font-weight: 600;
+    box-shadow: inset 3px 0 0 var(--sidebar-bg);
+    border-radius: 0 4px 4px 0;
+}
+.ws-overflow-item .ws-tab-close { visibility: hidden; }
+.ws-overflow-item:hover .ws-tab-close { visibility: visible; }
+
+/* Arrow buttons in place of a scrollbar. js/hscroll.js sets data-off when there
+   is nothing further that way — an attribute Blazor never writes, so a
+   re-render can't fight the scroll handler over it. */
+.ws-strip::-webkit-scrollbar { display: none; }
+.ws-scroll {
+    flex: 0 0 auto; align-self: stretch;
+    border: 0; background: none; padding: 0 4px;
+    color: var(--text-2); font-size: 15px; cursor: pointer;
+}
+.ws-scroll:hover { color: var(--text); }
+.ws-scroll[data-off] { color: var(--text-disabled); cursor: default; pointer-events: none; }
+/* Nothing to scroll: the arrows vanish but KEEP their space. Removing them from
+   the flow would widen the strip, which can remove the overflow, which brings
+   them back — a flip-flop for any tab count sitting near the boundary. */
+.ws-scroll[data-idle] { display: none; }
+
+/* ===========================================================================
+   RECONNECT UI (#components-reconnect-modal, declared in App.razor).
+
+   blazor.web.js drives this entirely by toggling classes on the element; we
+   supply every pixel. Declaring it at all is the point — the framework's own
+   banner used ONE message ("Could not reconnect… Reload") for two situations
+   that could hardly be more different:
+
+     -show / -failed  still trying. Normally a ~4-second bfcache blip; every
+                      open tab and unsaved edit is safe. A quiet corner pill.
+     -rejected        the server refused: the circuit is gone and there is
+                      nothing to return to. A blocking card that ends the
+                      session honestly (sign out → login) instead of offering a
+                      "Reload" that silently closes every tab.
+     -hide            recovered. */
+#components-reconnect-modal { display: none; }
+#components-reconnect-modal.components-reconnect-show,
+#components-reconnect-modal.components-reconnect-failed { display: block; }
+#components-reconnect-modal.components-reconnect-rejected { display: block; }
+#components-reconnect-modal.components-reconnect-hide { display: none; }
+
+/* --- Still trying: dim the lot. Nothing behind this is working, so the screen
+   should not look as though it is. A corner pill and then a top banner were both
+   too easy to miss — people carried on clicking into a dead circuit. --- */
+#components-reconnect-modal .rc-busy {
+    position: fixed; inset: 0; z-index: 2000;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--overlay);
+}
+#components-reconnect-modal.components-reconnect-rejected .rc-busy { display: none; }
+.rc-busy-card {
+    display: flex; align-items: center; gap: 14px;
+    padding: 20px 30px;
+    background: var(--surface); border-radius: 8px;
+    font-size: 17px; color: var(--text-strong);
+}
+.rc-spinner {
+    flex: 0 0 auto;
+    width: 20px; height: 20px; border-radius: 50%;
+    border: 3px solid var(--line); border-top-color: var(--brand);
+    animation: rc-spin 0.8s linear infinite;
+}
+@keyframes rc-spin { to { transform: rotate(360deg); } }
+
+/* --- Session ended: blocking, because there is genuinely nothing behind it --- */
+#components-reconnect-modal .rc-ended { display: none; }
+#components-reconnect-modal.components-reconnect-rejected .rc-ended {
+    display: flex; align-items: center; justify-content: center;
+    position: fixed; inset: 0; z-index: 2000;
+    background: var(--overlay);
+}
+.rc-ended-card {
+    width: 380px; max-width: calc(100vw - 40px);
+    background: var(--surface); border-radius: 8px;
+    padding: 26px 28px; text-align: center;
+}
+.rc-ended-card i { font-size: 30px; color: var(--brand); }
+.rc-ended-card h2 { margin: 12px 0 8px; font-size: 19px; font-weight: 600; color: var(--text-strong); }
+.rc-ended-card p { margin: 0 0 20px; font-size: 14px; color: var(--text-2); line-height: 1.5; }
+/* Swap the wording when the sign-out can't reach the server (js/sessionEnd.js
+   adds rc-offline). The page deliberately stays put in that case. */
+.rc-msg-offline { display: none; }
+#components-reconnect-modal.rc-offline .rc-msg { display: none; }
+#components-reconnect-modal.rc-offline .rc-msg-offline { display: block; }
+.rc-signin {
+    width: 100%; padding: 9px 16px;
+    background: var(--brand); color: #fff;
+    border: 0; border-radius: 4px;
+    font: inherit; font-size: 14px; cursor: pointer;
+}
+.rc-signin:hover { background: var(--brand-dark); }
+
+/* Company detail — Accounts tab (CompanyAccountsPanel): the desktop Review tab as it is. The
+   verdict strip - headline, one line per reason / note, tinted by the answer - above the reviewed
+   figures beside the latest Creditsafe report row for row, marks in the gutter between them, and
+   the report + key dates to the right. */
+.accounts-verdict {
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 10px 14px;
+    font-size: 14px;
+    max-width: 1240px;
+}
+.accounts-verdict.error   { background: var(--error-bg);   border-color: var(--error-border); }
+.accounts-verdict.warning { background: var(--warning-bg); border-color: var(--warning-border); }
+.accounts-verdict.ok      { background: var(--success-bg); border-color: var(--success-border); }
+.accounts-headline { font-size: 15px; font-weight: 600; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.accounts-lines { list-style: none; margin: 8px 0 0 24px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.accounts-lines li { display: flex; align-items: center; gap: 8px; }
+.accounts-verdict .error, .accounts-lines .error { color: var(--error); }
+.accounts-verdict .warning, .accounts-lines .warning, .acc-grid .warning { color: var(--warning); }
+.accounts-verdict .ok { color: var(--success); }
+.accounts-lines .info, .acc-grid .info { color: var(--brand); }
+
+.accounts-columns { display: flex; gap: 16px; align-items: flex-start; max-width: 1240px; margin-top: 12px; }
+.accounts-side { flex: 0 0 400px; display: flex; flex-direction: column; gap: 16px; }
+.panel-actions { display: flex; gap: 4px; }
+.panel-actions .cmd-btn { padding: 2px 8px; font-size: 13px; }
+
+/* The latest report card: the desktop's, with the score coloured from the report's STORED pass flag. */
+.accounts-report { display: flex; align-items: flex-start; background: var(--surface); }
+.accounts-report .info-grid { flex: 1; }
+.accounts-report-grid { grid-template-columns: 130px 1fr; gap: 6px 12px; padding: 12px 16px; }
+.accounts-score { flex: 0 0 110px; text-align: center; padding: 12px 8px; }
+.accounts-score-value { font-size: 40px; font-weight: 700; line-height: 1; }
+.accounts-score-word { font-weight: 700; font-size: 14px; margin-top: 4px; }
+.accounts-score.pass .accounts-score-value, .accounts-score.pass .accounts-score-word { color: var(--success); }
+.accounts-score.fail .accounts-score-value, .accounts-score.fail .accounts-score-word { color: var(--error); }
+
+/* The figures: two cards with a gutter between them, all ONE grid (label | reviewed | gutter |
+   Creditsafe) so a row that grows - a field error under an editor - grows on both sides and the
+   marks stay level with their figures. The cards are drawn on the cells: a cell that spanned the
+   rows as a background would count as occupied and push every auto-placed row below it. */
+.acc-grid {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 200px 230px 64px 230px;
+    grid-auto-rows: minmax(34px, auto);
+    align-items: center;
+    font-size: 14px;
+}
+.acc-label, .acc-rev, .acc-cs, .acc-sub, .acc-card-head { background: var(--surface); }
+.acc-label, .acc-sub-rev, .acc-card-head-rev { border-left: 1px solid var(--line); }
+.acc-rev,   .acc-sub-rev, .acc-card-head-rev { border-right: 1px solid var(--line); }
+.acc-cs,    .acc-sub-cs,  .acc-card-head-cs  { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.acc-card-head { border-top: 1px solid var(--line); }
+.acc-last { border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.acc-card-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 8px 12px; font-size: 14px; font-weight: 600; color: var(--text);
+    background: var(--surface-alt); border-bottom: 1px solid var(--line);
+    align-self: stretch;
+}
+.acc-card-head-rev { grid-column: 1 / 3; }
+.acc-card-head-cs  { grid-column: 4 / 5; }
+.acc-sub { padding: 6px 12px 0; font-size: 13px; align-self: stretch; }
+.acc-sub-rev { grid-column: 1 / 3; display: flex; gap: 12px; align-items: center; }
+.acc-sub .dlg-error { margin: 0; }
+.acc-label { color: var(--text-2); padding: 3px 4px 3px 12px; align-self: stretch; display: flex; align-items: center; }
+.acc-rev, .acc-cs { color: var(--text); font-weight: 600; padding: 3px 12px 3px 4px; align-self: stretch; display: flex; flex-direction: column; justify-content: center; }
+.acc-gutter { display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; padding: 3px 2px; }
+.acc-gutter-head { align-self: stretch; display: flex; align-items: center; justify-content: center; }
+.acc-cs { padding-left: 12px; }
+.acc-inline { display: inline-flex; align-items: center; gap: 8px; }
+.acc-head { color: var(--brand); font-weight: 600; padding-top: 10px; }
+.acc-ratio-row { padding-top: 10px; padding-bottom: 10px; }
+.acc-label.acc-ratio-row { font-weight: 600; color: var(--text); }
+.acc-outside { }
+.acc-cs.acc-no-accounts { font-weight: 400; }
+.accounts-ratio-value { font-size: 15px; font-weight: 700; color: var(--brand); }
+.accounts-mismatch { margin-left: 8px; }
+.accounts-copy {
+    background: var(--surface); border: 1px solid var(--line-strong); border-radius: 3px;
+    color: var(--text); cursor: pointer; font-size: 15px; line-height: 1; padding: 1px 7px;
+}
+.accounts-copy:hover { background: var(--panel-head); }

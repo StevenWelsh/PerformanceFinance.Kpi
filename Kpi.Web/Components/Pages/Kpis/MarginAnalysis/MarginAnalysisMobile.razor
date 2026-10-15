@@ -1,0 +1,319 @@
+@using System.Globalization
+@using System.Text.RegularExpressions
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Margin Analysis on a phone, portrait: Division, a Years / Months / Last days switch (with the window under
+   it in the Last days view), then one row per year, month or window. Years and Months rows are a
+   dimension line between the buy and sell dots on one rate scale, the margin centred above it; the
+   Last days row adds its funding and AF. The page's own data and filters - nothing is loaded here. *@
+
+<KpiMobileFilters>
+    <div class="kpim-filters" style="--kpim-cols:1">
+        <KpiField Caption="Division" Value="@DivisionId.ToString(CultureInfo.InvariantCulture)"
+                  ValueChanged="DivisionChanged" Options="DivisionOptions" />
+    </div>
+</KpiMobileFilters>
+
+<KpiSegmented Label="View" Value="@_view" ValueChanged="SetView" Options="Views" />
+
+@if (_view == ViewDays)
+{
+    @* the window belongs to the Last days view, so it sits under its switch rather than with the filters *@
+    <div class="kpim-filters" style="--kpim-cols:1">
+        <KpiField Caption="Run over the last" Value="@Days.ToString(CultureInfo.InvariantCulture)"
+                  ValueChanged="DaysChanged" Options="DayOptions" />
+    </div>
+}
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else if (_view == ViewDays)
+{
+    <section class="kpim-card kpim-ma-rows">
+        @if (DaysRow is null)
+        {
+            <div class="kpim-empty">No own-book deals</div>
+        }
+        else
+        {
+            var d = DaysRow;
+            bool hasBuy = d.BuyRate > 0, hasSell = d.SellRate > 0;
+            <div class="kpim-ma-drow">
+                <div class="kpim-ma-dhead">
+                    <span class="kpim-ma-label">@RangeLabel(d.DateRange)</span>
+                    <span class="kpim-ma-dmargin @(hasSell ? "" : "kpim-ma-dmargin-none")">@Pct(d.Margin)</span>
+                </div>
+                @if (!hasBuy && !hasSell)
+                {
+                    <span class="kpim-ma-note">No own-book deals in this period</span>
+                }
+                @if (hasSell)
+                {
+                    double lo = At(Math.Min(d.BuyRate, d.SellRate)), hi = At(Math.Max(d.BuyRate, d.SellRate));
+                    <div class="kpim-ma-dtrack">
+                        <span class="kpim-ma-track"></span>
+                        @if (hasBuy)
+                        {
+                            <span class="kpim-ma-band" style="left:@(F(lo))%;width:@(F(hi - lo))%"></span>
+                            <span class="kpim-ma-dot kpim-ma-dot-buy" style="left:calc(@(F(At(d.BuyRate)))% - 6px)"></span>
+                        }
+                        <span class="kpim-ma-dot kpim-ma-dot-sell" style="left:calc(@(F(At(d.SellRate)))% - 6px)"></span>
+                    </div>
+                    <div class="kpim-ma-dfoot">
+                        <span>buy @Pct(d.BuyRate) · sell @Pct(d.SellRate)</span>
+                        <span>funding @Money(d.TotalFunding) · AF @Money(d.TotalAF ?? 0m)</span>
+                    </div>
+                    @if (!hasBuy)
+                    {
+                        <span class="kpim-ma-note">No funding recorded yet</span>
+                    }
+                }
+            </div>
+        }
+    </section>
+}
+else
+{
+    var rows = _view == ViewMonths ? MonthRows() : YearRows();
+    <section class="kpim-card kpim-ma-rows">
+        @if (rows.Count == 0)
+        {
+            <div class="kpim-empty">No own-book deals</div>
+        }
+        @foreach (var r in rows)
+        {
+            <div class="kpim-ma-row">
+                <span class="kpim-ma-label">@r.Label</span>
+                @if (r.Empty)
+                {
+                    <span class="kpim-ma-note">No own-book deals in this period</span>
+                }
+                @if (r.Drawn)
+                {
+                    <div class="kpim-ma-box @(r.Lifted ? "kpim-ma-lifted" : "")">
+                        <div class="kpim-ma-inner">
+                            @if (r.Full)
+                            {
+                                <span class="kpim-ma-dim" style="left:calc(@(F(r.LeftAt))% + 5px);width:calc(@(F(r.RightAt - r.LeftAt))% - 10px)"></span>
+                                <svg class="kpim-ma-head" style="left:@(F(r.LeftAt))%" width="6" height="7" viewBox="0 0 6 7" aria-hidden="true"><path d="M0 3.5L6 0V7Z"></path></svg>
+                                <svg class="kpim-ma-head" style="left:calc(@(F(r.RightAt))% - 6px)" width="6" height="7" viewBox="0 0 6 7" aria-hidden="true"><path d="M6 3.5L0 0V7Z"></path></svg>
+                            }
+                            <span class="kpim-ma-track"></span>
+                            @if (r.Full)
+                            {
+                                <span class="kpim-ma-band" style="left:@(F(r.LeftAt))%;width:@(F(r.RightAt - r.LeftAt))%"></span>
+                                <span class="kpim-ma-dot kpim-ma-dot-buy" style="left:calc(@(F(r.BuyAt))% - 6px)"></span>
+                                <span class="kpim-ma-val" style="@r.BuyStyle">buy @r.Buy</span>
+                            }
+                            <span class="kpim-ma-dot kpim-ma-dot-sell" style="left:calc(@(F(r.SellAt))% - 6px)"></span>
+                            <span class="kpim-ma-val" style="@r.SellStyle">sell @r.Sell</span>
+                        </div>
+                        @if (r.Full)
+                        {
+                            <span class="kpim-ma-margin" style="left:@(F((r.LeftAt + r.RightAt) / 2))%">@r.Margin</span>
+                        }
+                    </div>
+                    @if (r.NoFunding)
+                    {
+                        <span class="kpim-ma-note">No funding recorded yet</span>
+                    }
+                }
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public List<MarginYearRow> Years { get; set; } = new();
+    [Parameter] public List<MarginMonthRow> Months { get; set; } = new();
+    [Parameter] public MarginDaysRow? DaysRow { get; set; }
+    [Parameter] public List<(int Id, string Name)>? Divisions { get; set; }
+    [Parameter] public int DivisionId { get; set; } = -1;
+    [Parameter] public int Days { get; set; } = 15;
+    [Parameter] public DateTime? AsAt { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<string> DivisionChanged { get; set; }
+    [Parameter] public EventCallback<string> DaysChanged { get; set; }
+
+    private const string ViewYears = "Years", ViewMonths = "Months", ViewDays = "Days";
+    private string _view = ViewYears;
+
+    private static readonly IReadOnlyList<KpiOption> Views = new[]
+    {
+        new KpiOption(ViewYears, "Years"),
+        new KpiOption(ViewMonths, "Months"),
+        new KpiOption(ViewDays, "Last days")
+    };
+
+    private static readonly IReadOnlyList<KpiOption> DayOptions =
+        new[] { 7, 15, 30, 60, 90 }.Select(d => new KpiOption(d.ToString(CultureInfo.InvariantCulture), $"{d} days")).ToList();
+
+    private static readonly string[] Mon = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+
+    private IReadOnlyList<KpiOption> DivisionOptions =>
+        new[] { new KpiOption("-1", "All") }
+            .Concat((Divisions ?? new()).Select(d => new KpiOption(d.Id.ToString(CultureInfo.InvariantCulture), d.Name)))
+            .ToList();
+
+    private void SetView(string view) => _view = view;
+
+    // ---- The rate scale: ONE for every row of every view, so switching view never moves a dot.
+    // Whole percent either side of the lowest buy and highest sell the page holds, over an even span.
+    private double _lo, _hi = 10;
+
+    protected override void OnParametersSet()
+    {
+        var rates = new List<decimal>();
+        void Add(decimal buy, decimal sell)
+        {
+            if (buy > 0) rates.Add(buy);
+            if (sell > 0) rates.Add(sell);
+        }
+        foreach (var r in Years) Add(r.BuyRate, r.SellRate);
+        foreach (var r in ShownMonths()) Add(r.BuyRate, r.SellRate);
+        if (DaysRow is not null) Add(DaysRow.BuyRate, DaysRow.SellRate);
+
+        decimal lo = rates.Count > 0 ? Math.Floor(rates.Min() * 100m) - 1 : 0;
+        decimal hi = rates.Count > 0 ? Math.Ceiling(rates.Max() * 100m) + 1 : 10;
+        if (lo < 0) lo = 0;
+        if ((hi - lo) % 2 != 0) hi += 1;
+        _lo = (double)lo;
+        _hi = (double)hi;
+    }
+
+    /// <summary>A rate's place on the scale, as a percent of the track (0-100).</summary>
+    private double At(decimal rate) => Math.Max(0, Math.Min(100, ((double)rate * 100 - _lo) / (_hi - _lo) * 100));
+
+    private IEnumerable<MarginMonthRow> ShownMonths() => Months.Where(m => m.OrderInt < 13 && !m.IsFuture);
+
+    // ---- Years / Months rows, newest first ----
+    private List<Dumbbell> YearRows()
+    {
+        int year = AsAt?.Year ?? DateTime.Today.Year;
+        return Years.AsEnumerable().Reverse()
+            .Select(r => Build(r.YearInt == year ? $"{r.YearInt} to date" : r.YearInt.ToString(CultureInfo.InvariantCulture),
+                               r.BuyRate, r.SellRate, r.Margin))
+            .ToList();
+    }
+
+    private List<Dumbbell> MonthRows()
+    {
+        var asAt = AsAt ?? DateTime.Today;
+        var now = $"{Mon[asAt.Month - 1]} {asAt.Year}";
+        return ShownMonths().Reverse()
+            .Select(r => Build(r.MonthString == now ? $"{r.MonthString} to date" : r.MonthString, r.BuyRate, r.SellRate, r.Margin))
+            .ToList();
+    }
+
+    private sealed class Dumbbell
+    {
+        public string Label = "", Margin = "", Buy = "", Sell = "";
+        public bool Empty, Drawn, Full, NoFunding, Lifted;
+        public double BuyAt, SellAt, LeftAt, RightAt;      // percent of the track
+        public string BuyStyle = "", SellStyle = "";
+    }
+
+    // The layout was drawn for the 390px phone, where the track is 324px. Which way a label sits is
+    // decided at that width (the 6px gap between labels covers the narrowest phones); every position is
+    // then written as a percent of the track plus a pixel offset, so it lands on its dot at any width.
+    private const double Track = 324, DotR = 6, Gap = 6, Head = 6;
+
+    private Dumbbell Build(string label, decimal buyRate, decimal sellRate, decimal margin)
+    {
+        bool hasBuy = buyRate > 0, hasSell = sellRate > 0;
+        var d = new Dumbbell
+        {
+            Label = label, Margin = Pct(margin), Buy = Pct(buyRate), Sell = Pct(sellRate),
+            Empty = !hasBuy && !hasSell, Drawn = hasSell, Full = hasBuy && hasSell, NoFunding = hasSell && !hasBuy,
+            BuyAt = At(buyRate), SellAt = At(sellRate)
+        };
+        double bw = LabelWidth("buy", d.Buy), sw = LabelWidth("sell", d.Sell);
+        d.BuyStyle = Centred(d.BuyAt, bw);
+        d.SellStyle = Centred(d.SellAt, sw);
+        if (!d.Full) return d;
+
+        // Left and right dots (the buy dot is normally the left one).
+        bool buyLeft = d.BuyAt <= d.SellAt;
+        double lAt = buyLeft ? d.BuyAt : d.SellAt, rAt = buyLeft ? d.SellAt : d.BuyAt;
+        double lw = buyLeft ? bw : sw, rw = buyLeft ? sw : bw;
+        d.LeftAt = lAt;
+        d.RightAt = rAt;
+        double lx = lAt / 100 * Track, rx = rAt / 100 * Track;
+
+        // Labels centre on their dot, kept inside the track; if the two would collide they are nudged
+        // apart - the left one ends at its dot, the right one starts at its dot; at a track end the other
+        // label makes room.
+        double lTo = Math.Min(Math.Max(lx - lw / 2, 0), Track - lw) + lw;
+        double rFrom = Math.Min(Math.Max(rx - rw / 2, 0), Track - rw);
+        if (lTo + Gap > rFrom)
+        {
+            double midAt = (lAt + rAt) / 2;
+            bool close = rx - lx < 2 * DotR;
+            var lRight = close ? new Pos(midAt, -Gap / 2) : new Pos(lAt, DotR);
+            var rLeft = close ? new Pos(midAt, Gap / 2) : new Pos(rAt, -DotR);
+            bool lPinned = false;
+            if (lRight.Px < lw) { lRight = new Pos(0, lw); lPinned = true; }
+            if (rLeft.Px + rw > Track) rLeft = new Pos(100, -rw);
+            if (rLeft.Px < lRight.Px + Gap)
+            {
+                if (lPinned) rLeft = new Pos(0, lw + Gap);
+                else lRight = rLeft with { Offset = rLeft.Offset - Gap };
+            }
+            string lStyle = $"left:max({F(lw)}px, {lRight.Css});transform:translateX(-100%)";
+            string rStyle = $"left:min({rLeft.Css}, calc(100% - {F(rw)}px))";
+            d.BuyStyle = buyLeft ? lStyle : rStyle;
+            d.SellStyle = buyLeft ? rStyle : lStyle;
+        }
+
+        // The margin sits on the dimension line; when the gap is too narrow to show both arrowheads
+        // beside it, it lifts just above the line and the row grows.
+        double marginW = Digits(d.Margin) * 7.5 + 3.5 + 11 + 10;
+        d.Lifted = rx - lx < marginW + 2 * (Head + 6);
+        return d;
+    }
+
+    /// <summary>A place on the track: a percent of its width plus a pixel offset.</summary>
+    private readonly record struct Pos(double Pct, double Offset)
+    {
+        public double Px => Pct / 100 * Track + Offset;
+        public string Css => $"calc({F(Pct)}% + {F(Offset)}px)";
+    }
+
+    private static string Centred(double at, double w) =>
+        $"left:clamp({F(w / 2)}px, {F(at)}%, calc(100% - {F(w / 2)}px));transform:translateX(-50%)";
+
+    // The width of "buy 7.50%" at 12.5px with tabular figures: the word and space, 7px a digit, the
+    // point and the percent sign.
+    private static double LabelWidth(string word, string text) => (word == "buy" ? 24 : 26) + Digits(text) * 7 + 3.5 + 10.5;
+
+    private static int Digits(string text) => text.Count(char.IsDigit);
+
+    // "2026-09-28 - 2026-10-13" -> "28 Sep – 13 Oct 2026" (the first year only when it differs).
+    private static string RangeLabel(string range)
+    {
+        var m = Regex.Match(range ?? "", @"^(\d{4})-(\d{2})-(\d{2}) - (\d{4})-(\d{2})-(\d{2})$");
+        if (!m.Success) return range ?? "";
+        int ay = int.Parse(m.Groups[1].Value), am = int.Parse(m.Groups[2].Value), ad = int.Parse(m.Groups[3].Value);
+        int by = int.Parse(m.Groups[4].Value), bm = int.Parse(m.Groups[5].Value), bd = int.Parse(m.Groups[6].Value);
+        string first = ay == by ? $"{ad} {Mon[am - 1]}" : $"{ad} {Mon[am - 1]} {ay}";
+        return $"{first} – {bd} {Mon[bm - 1]} {by}";
+    }
+
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+
+    private static string Money(decimal v)
+    {
+        if (v == 0) return "£0";
+        if (v >= 999_500m) return "£" + Math.Round(v / 1_000_000m, 2).ToString("0.00") + "m";
+        return "£" + Math.Round(v / 1_000m).ToString("0") + "k";
+    }
+
+    private static string F(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
+}

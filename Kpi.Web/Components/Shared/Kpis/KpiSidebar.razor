@@ -1,0 +1,191 @@
+@implements IDisposable
+@using Kpi.Web.Data.Kpis
+@inject KpiFavourites Favourites
+
+@* Shared KPI-area sidebar. Used by every /kpis page (the landing page and each
+   report) so the nav is identical everywhere. Pass the current report's slug as
+   Active to highlight its item (KpiHome passes ""). Reuses the main app sidebar
+   styling (.app-sidebar / .nav-section-heading / .nav-item) via kpi-sidebar.
+
+   Collapsible: the toggle in the logo strip shrinks it to an icon-only rail and
+   back. Nav items carry an icon so they still read when collapsed; on hover a
+   collapsed item shows its label as a tooltip (title). *@
+
+<aside class="app-sidebar kpi-sidebar @(_collapsed ? "kpi-sidebar-collapsed" : "")">
+    <div class="sidebar-logo kpi-logo">
+        <a href="/kpis" aria-label="KPIs — home" class="kpi-logo-link">
+            <img src="img/pf-logo.png" alt="Performance Finance" class="sidebar-logo-img" />
+        </a>
+        <button type="button" class="kpi-collapse-btn" @onclick="Toggle"
+                aria-label="@(_collapsed ? "Expand sidebar" : "Collapse sidebar")">
+            <i class="bi @(_collapsed ? "bi-chevron-double-right" : "bi-chevron-double-left")"></i>
+        </button>
+    </div>
+    @* Favourites / All, as the phone's reports menu (the same choice, kept with the login: KpiFavourites) *@
+    @if (_view is not null && !_collapsed)
+    {
+        <div class="kpi-favswitch" role="group" aria-label="Show">
+            <button type="button" class="@(_view == KpiMenuView.Favourites ? "kpi-on" : "")" aria-pressed="@(_view == KpiMenuView.Favourites ? "true" : "false")"
+                    @onclick="() => Choose(KpiMenuView.Favourites)">
+                Favourites <span class="kpi-favcount">@FavouriteReports.Count</span>
+            </button>
+            <button type="button" class="@(_view == KpiMenuView.All ? "kpi-on" : "")" aria-pressed="@(_view == KpiMenuView.All ? "true" : "false")"
+                    @onclick="() => Choose(KpiMenuView.All)">All</button>
+        </div>
+    }
+    <nav class="app-nav">
+        @if (_view == KpiMenuView.Favourites)
+        {
+            @if (FavouriteReports.Count == 0)
+            {
+                @if (!_collapsed)
+                {
+                    <div class="kpi-favempty">No favourites yet. Star a report in All to keep it here.</div>
+                }
+            }
+            else
+            {
+                <div class="nav-section">
+                    <div class="nav-section-heading">Favourites</div>
+                    <ul class="nav-list">
+                        @foreach (var r in FavouriteReports) { @Row(r) }
+                    </ul>
+                </div>
+            }
+        }
+        else
+        {
+            @* only the reports this person may open, and a heading only when it has any (Settings > Users) *@
+            @foreach (var section in KpiReports.Sections)
+            {
+                var reports = _visible.Where(r => r.Section == section).ToList();
+                if (reports.Count == 0) continue;
+                <div class="nav-section">
+                    <div class="nav-section-heading">@section</div>
+                    <ul class="nav-list">
+                        @foreach (var r in reports) { @Row(r) }
+                    </ul>
+                </div>
+            }
+        }
+    </nav>
+</aside>
+
+@code {
+    /// <summary>Slug of the current report, to highlight its nav item. "" on the landing page.</summary>
+    [Parameter] public string Active { get; set; } = "";
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _collapsed;
+    private List<KpiReport> _visible = new();
+    private KpiMenuView? _view;     // null until the favourites are loaded: then the opening view is picked once
+
+    // the person's favourites, in the order they were added, that they may still open
+    private List<KpiReport> FavouriteReports => Favourites.Slugs
+        .Select(s => _visible.FirstOrDefault(r => r.Slug == s)).Where(r => r is not null).Select(r => r!).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Favourites.Changed += OnFavouritesChanged;
+        if (AuthState is null) return;
+        var user = (await AuthState).User;
+        _visible = KpiReports.All.Where(r => Kpi.Web.Account.KpiReportAccess.CanSee(user, r.Slug)).ToList();
+        await Favourites.EnsureLoadedAsync();
+        // the view last picked (Favourites only while there are any), else Favourites when there are any, else All -
+        // the phone menu's rule
+        _view = Favourites.MenuView == KpiMenuView.All || FavouriteReports.Count == 0 ? KpiMenuView.All : KpiMenuView.Favourites;
+    }
+
+    private Task Choose(KpiMenuView view)
+    {
+        _view = view;
+        return Favourites.SetMenuViewAsync(view);
+    }
+
+    private void OnFavouritesChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Favourites.Changed -= OnFavouritesChanged;
+
+    private void Toggle() => _collapsed = !_collapsed;
+
+    // a report's row: the link, and its star (hidden on the collapsed rail)
+    private RenderFragment Row(KpiReport r) => __builder =>
+    {
+        var fav = Favourites.Contains(r.Slug);
+        <li class="kpi-navrow">
+            @if (r.Slug == "sales-performance") { @NavItemSvg(r.Slug, r.Label, TargetDartSvg) } else { @NavItem(r.Slug, r.Label, r.Icon) }
+            @if (!_collapsed)
+            {
+                <button type="button" class="kpi-navstar @(fav ? "kpi-on" : "")" aria-pressed="@(fav ? "true" : "false")"
+                        aria-label="@(fav ? $"Remove {r.Label} from favourites" : $"Add {r.Label} to favourites")"
+                        @onclick="() => Favourites.ToggleAsync(r.Slug)">
+                    <i class="bi @(fav ? "bi-star-fill" : "bi-star")" aria-hidden="true"></i>
+                </button>
+            }
+        </li>
+    };
+
+    private RenderFragment NavItem(string slug, string label, string icon) => LinkItem($"/kpis/{slug}", label, icon, slug == Active);
+
+    // the link alone: its list item is the caller's (a report row also holds a star)
+    private RenderFragment LinkItem(string href, string label, string icon, bool active) => builder =>
+    {
+        var cls = "nav-item" + (active ? " active" : "");
+        builder.OpenElement(1, "a");
+        builder.AddAttribute(2, "class", cls);
+        builder.AddAttribute(3, "href", href);
+        builder.AddAttribute(4, "title", label);   // tooltip when collapsed
+        builder.OpenElement(5, "i");
+        builder.AddAttribute(6, "class", $"bi {icon}");
+        builder.CloseElement();
+        builder.OpenElement(7, "span");
+        builder.AddAttribute(8, "class", "nav-item-label");
+        builder.AddContent(9, label);
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    // Same as NavItem but the icon is inline SVG (currentColor, so it stays neutral like the bi
+    // icons) — for glyphs Bootstrap Icons doesn't carry, e.g. the target-and-dart mark.
+    private RenderFragment NavItemSvg(string slug, string label, RenderFragment svg) => builder =>
+    {
+        var cls = "nav-item" + (slug == Active ? " active" : "");
+        builder.OpenElement(1, "a");
+        builder.AddAttribute(2, "class", cls);
+        builder.AddAttribute(3, "href", $"/kpis/{slug}");
+        builder.AddAttribute(4, "title", label);
+        builder.OpenElement(5, "span");
+        builder.AddAttribute(6, "class", "bi nav-svgicon");   // .bi sizing, our SVG inside
+        builder.AddContent(7, svg);
+        builder.CloseElement();
+        builder.OpenElement(8, "span");
+        builder.AddAttribute(9, "class", "nav-item-label");
+        builder.AddContent(10, label);
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    // Our own "Sales Performance" mark (currentColor, neutral like the bi icons): a concentric
+    // target whose upper-right arc is left open where a dart passes through into the bullseye, with
+    // a small arrowhead + fletch. Drawn in a 16-unit box, tuned to read at 16px in the nav. The
+    // user's photo was a reference for the idea, not a trace.
+    private static readonly RenderFragment TargetDartSvg = builder =>
+    {
+        builder.AddMarkupContent(0,
+            "<svg viewBox=\"0 0 16 16\" width=\"1em\" height=\"1em\" fill=\"none\" " +
+            "stroke=\"currentColor\" stroke-width=\"1.15\" stroke-linecap=\"round\" stroke-linejoin=\"round\" " +
+            "xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\">" +
+            // outer ring, broken at top-right where the dart enters
+            "<path d=\"M11.7 3.1a5.4 5.4 0 1 0 1.2 1.2\"/>" +
+            // middle ring, also broken for the dart
+            "<path d=\"M9.9 5a3 3 0 1 0 1.1 1.1\"/>" +
+            // bullseye centre
+            "<circle cx=\"7.4\" cy=\"8.6\" r=\"0.85\" fill=\"currentColor\" stroke=\"none\"/>" +
+            // dart shaft into the centre from upper-right, arrowhead + fletch at the tail
+            "<path d=\"M7.4 8.6 13 3\"/>" +
+            "<path d=\"M9.1 6.9 7.4 8.6l1.7 0.2z\" fill=\"currentColor\" stroke=\"none\"/>" +
+            "<path d=\"M13 3l1.3-0.3-0.3 1.3z\" fill=\"currentColor\" stroke=\"none\"/>" +
+            "</svg>");
+    };
+}

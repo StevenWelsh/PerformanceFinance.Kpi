@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "kpi-web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Kpi.Web/Kpi.Web.csproj", "--launch-profile", "Kpi.Web", "--urls", "http://localhost:5241"],
+      "port": 5241,
+      "url": "http://localhost:5241"
+    }
+  ]
+}

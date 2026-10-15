@@ -1,0 +1,154 @@
+@page "/kpis/salesperson-summary"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Salesperson Summary — the same comparison cards as Sales Summary, but one column
+   per active salesperson (ordered by this-year TFI, highest first) instead of by
+   division. Reuses SalesSummaryPanel with its SalespersonId parameter, which also
+   drives the individual income scope (GFI + their SalesII). Where four columns
+   cannot fit, the grid shows two. *@
+
+<PageTitle>Salesperson Summary — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="salesperson-summary" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Salesperson Summary" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+            <div class="kpi-sps-page">
+                @if (_loading)
+                {
+                    <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+                }
+                else if (_people is not null)
+                {
+                    <div class="ss-grid" style="--ss-cols:@(_people.Count)">
+                        @foreach (var period in Periods)
+                        {
+                            @foreach (var p in _people)
+                            {
+                                <SalesSummaryPanel @key="Key(period, p.Id)"
+                                                   SalespersonId="p.Id" Title="@p.Name" Period="@period" Minimal="true" />
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Salesperson Summary" Active="salesperson-summary" AsAt="_asOf">
+    <SalespersonSummaryMobile People="_people" Loading="_loading" Error="@_error" />
+</KpiMobile>
+
+@code {
+    private static readonly string[] Periods = { "Year", "Quarter", "Month" };
+
+    private static string Key(string period, int salesId) => period + "-" + salesId;
+
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    // The result the page renders, as one cacheable payload (the ordered salesperson list).
+    private sealed record Payload(List<(int Id, string Name, string FullName)> People);
+
+    // active salespeople, ordered by this-year TFI descending (Name upper-cased; the phone shows FullName)
+    private List<(int Id, string Name, string FullName)>? _people;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            // Cached per report date (no page params). GetOrLoad is single-flight, so
+            // concurrent viewers load once; a repeat open / tab-flick is instant.
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("SalespersonSummary"),
+                LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    // Pure loader: opens a one-shot session, runs the query, returns the payload + its as-at.
+    // No component-field mutation here — that's Apply()'s job, so the cache can call this off
+    // the render path during a background refresh.
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+
+        // Salesperson Summary is always current year/quarter/month, so it only shows
+        // the current reportable salespeople. HARDCODED for now (Klipfolio uses a
+        // manual tick-list): Susan Marshall, Pete George, Ryan O'Dwyer, Stuart Burn.
+        // Ordered by this-year TFI (the league table's figure: the same sum), highest first.
+        int[] team = { 74, 68, 73, 82 };
+        var tfi = new SalesLeagueTableService(cms.Db).GetLeague(asAt.Year, "TFI")
+            .GroupBy(r => r.SalesId)
+            .ToDictionary(g => g.Key, g => g.Sum(r => r.MeasureValue));
+        var rows = cms.Db.Options("Salespeople")
+            .Where(s => team.Contains(s.Id))
+            .Select(s => new PersonRow { Id = s.Id, Name = s.Name, Tfi = tfi.GetValueOrDefault(s.Id) })
+            .OrderByDescending(r => r.Tfi).ThenBy(r => r.Name)
+            .ToList();
+
+        var people = rows.Select(r => (r.Id, r.Name.ToUpperInvariant(), r.Name)).ToList();
+        return (new Payload(people), asAt);
+    }
+
+    // Push a payload into the fields the markup renders. (_asOf comes from the cache entry's AsAt,
+    // set by the caller, not from the payload.)
+    private void Apply(Payload p)
+    {
+        _people = p.People;
+    }
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view. Re-run through the cache;
+    // if the data changed, refresh the fields and fade; otherwise just tick "Refreshed on".
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(
+                KpiCache.Key("SalespersonSummary"),
+                LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();  // gentle fade
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private class PersonRow
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public decimal Tfi { get; set; }
+    }
+}

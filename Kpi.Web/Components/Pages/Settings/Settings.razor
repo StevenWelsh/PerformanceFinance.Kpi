@@ -1,0 +1,58 @@
+@page "/settings"
+@layout EmptyLayout
+@attribute [Authorize(Policy = KpiPolicies.Settings)]
+@using Kpi.Web.Account
+
+@* Settings: the System Admin's alone (Oct 2026, Steve), laid out as DavidsonHR's - a menu of sections on the left
+   (a row of tabs on a phone), the section beside it, and the section in the address (?section=) so a link lands on
+   it. My Account is NOT here: it is everybody's, on its own page. *@
+
+<PageTitle>Settings — Performance Finance KPIs</PageTitle>
+
+<div class="kpi-shell acc-shell">
+    <KpiSidebar Active="" />
+
+    <main class="kpi-main">
+        <header class="kpi-topbar acc-topbar">
+            <a class="acc-back" href="/kpis"><i class="bi bi-chevron-left" aria-hidden="true"></i> Reports</a>
+            <h1>Settings</h1>
+            <KpiUserMenu />
+        </header>
+
+        <div class="set-layout">
+            <nav class="set-nav" aria-label="Settings">
+                @foreach (var s in Sections)
+                {
+                    <a href="/settings?section=@s.Key" class="@(s.Key == Current ? "set-on" : "")" aria-current="@(s.Key == Current ? "page" : null)">
+                        <i class="bi @s.Icon" aria-hidden="true"></i><span>@s.Label</span>
+                    </a>
+                }
+            </nav>
+            <section class="set-panel">
+                @switch (Current)
+                {
+                    case "integrations": <SettingsIntegrations />; break;
+                    case "sync": <SettingsSync />; break;
+                    case "audit": <SettingsAudit />; break;
+                    default: <SettingsUsers />; break;
+                }
+            </section>
+        </div>
+    </main>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "section")] public string? Section { get; set; }
+
+    private sealed record SectionItem(string Key, string Label, string Icon);
+
+    private static readonly SectionItem[] Sections =
+    {
+        new("users", "Users", "bi-people"),
+        new("integrations", "Integrations", "bi-plug"),
+        new("sync", "Data sync", "bi-arrow-repeat"),
+        new("audit", "Audit", "bi-journal-text")
+    };
+
+    private string Current => Sections.Any(s => s.Key == Section) ? Section! : "users";
+}

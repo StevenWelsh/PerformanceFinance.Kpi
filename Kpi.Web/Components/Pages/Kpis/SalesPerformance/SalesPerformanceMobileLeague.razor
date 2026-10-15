@@ -1,0 +1,84 @@
+@* The Sales League Table on a phone, for one year: the core salespeople ranked as the proc returns them,
+   the non-core with a value rolled into an Other row that opens in place, and the total - the full
+   view's rules. Compact = the tighter landscape rows, the header fixed while they scroll. *@
+
+<table class="kpim-table kpim-sp-league @(Compact ? "kpim-sp-compact" : "")">
+    <thead>
+        <tr>
+            <th scope="col" class="kpim-sp-rank"></th>
+            <th scope="col" class="kpim-left">Salesperson</th>
+            <th scope="col">@Measure</th>
+        </tr>
+    </thead>
+    <tbody>
+        @for (var i = 0; i < _core.Count; i++)
+        {
+            <tr>
+                <td class="kpim-sp-rank">@(i + 1)</td>
+                <td class="kpim-left">@_core[i].Salesperson</td>
+                <td>@Cur(_core[i].MeasureValue)</td>
+            </tr>
+        }
+        @if (_nonCore.Count > 0)
+        {
+            <tr>
+                <td class="kpim-sp-rank">–</td>
+                <td class="kpim-left kpim-sp-othername">
+                    <button type="button" class="kpim-sp-otherbtn" aria-expanded="@(_otherOpen ? "true" : "false")"
+                            @onclick="() => _otherOpen = !_otherOpen">
+                        Other <i class="bi @(_otherOpen ? "bi-chevron-up" : "bi-chevron-down")" aria-hidden="true"></i>
+                    </button>
+                </td>
+                <td class="kpim-muted">@Cur(_otherTotal)</td>
+            </tr>
+            @if (_otherOpen)
+            {
+                @foreach (var o in _nonCore)
+                {
+                    <tr class="kpim-sp-otherrow">
+                        <td class="kpim-sp-rank"></td>
+                        <td class="kpim-left kpim-sp-oname">@o.Salesperson</td>
+                        <td>@Cur(o.MeasureValue)</td>
+                    </tr>
+                }
+            }
+        }
+        <tr class="kpim-total">
+            <td class="kpim-sp-rank"></td>
+            <td class="kpim-left">Total</td>
+            <td>@Cur(_total)</td>
+        </tr>
+    </tbody>
+</table>
+
+@code {
+    /// <summary>Every salesperson the league proc returned for the year (core and non-core).</summary>
+    [Parameter] public IReadOnlyList<SalesLeagueRow> Rows { get; set; } = Array.Empty<SalesLeagueRow>();
+    [Parameter] public string Measure { get; set; } = "TFI";
+    [Parameter] public int Year { get; set; }
+
+    /// <summary>The landscape rows.</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    private List<SalesLeagueRow> _core = new();
+    private List<SalesLeagueRow> _nonCore = new();
+    private decimal _otherTotal;
+    private decimal _total;
+    private bool _otherOpen;
+    private string _shownFor = "";
+
+    protected override void OnParametersSet()
+    {
+        // a different year or measure closes Other
+        var key = $"{Year}|{Measure}";
+        if (key != _shownFor) { _otherOpen = false; _shownFor = key; }
+
+        _core = Rows.Where(x => x.IsCore).ToList();
+        _nonCore = Rows.Where(x => !x.IsCore && x.MeasureValue != 0)
+                       .OrderByDescending(x => x.MeasureValue).ToList();
+        _otherTotal = _nonCore.Sum(x => x.MeasureValue);
+        _total = _core.Sum(x => x.MeasureValue) + _otherTotal;
+    }
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+}

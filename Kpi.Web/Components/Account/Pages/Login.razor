@@ -1,0 +1,42 @@
+@page "/account/login"
+@layout EmptyLayout
+
+<PageTitle>Sign in — Performance Finance KPIs</PageTitle>
+
+<AuthCard>
+    <Messages Error="@ErrorText" Notice="@NoticeText" />
+
+    <form method="post" action="/account/login">
+        <AntiforgeryToken />
+        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+
+        <label class="login-label" for="email">Email</label>
+        <input id="email" name="email" type="email" autocomplete="username" autofocus required />
+
+        <PasswordInput Id="password" Name="password" />
+
+        <label class="acc-check"><input type="checkbox" name="rememberMe" value="true" /> Keep me signed in</label>
+
+        <button type="submit" class="login-button">Sign in</button>
+        <a class="acc-link" href="/account/forgot-password">Forgot password?</a>
+    </form>
+</AuthCard>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+    [SupplyParameterFromQuery(Name = "setupexpired")] public string? SetupExpired { get; set; }
+    [SupplyParameterFromQuery(Name = "reset")] public string? Reset { get; set; }
+    [SupplyParameterFromQuery(Name = "signedout")] public string? SignedOut { get; set; }
+
+    // One message for every refusal, including a right password on an account with no authenticator yet:
+    // a different message there would confirm the password.
+    private string? ErrorText => Error is null ? null
+        : "Email or password not recognised. Not set up yet? Use the link in your invitation email.";
+
+    private string? NoticeText =>
+        SetupExpired is not null ? "Setting up your authenticator has to be finished within an hour of following your email link. Follow the link again, or ask your System Admin for a new one."
+        : Reset is not null ? "Your password has been changed. Sign in with your new password."
+        : SignedOut is not null ? "You have signed out."
+        : null;
+}

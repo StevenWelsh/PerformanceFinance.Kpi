@@ -1,0 +1,12 @@
+@page "/kpis/business-analysis-lender"
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject NavigationManager Nav
+
+@* The "By Lender" view now lives ON the Business Analysis page as a Dimension, not as a
+   separate report. This old route is kept only so existing links/bookmarks don't 404 — it
+   redirects to the one page with the Lender dimension preselected. *@
+
+@code {
+    protected override void OnInitialized()
+        => Nav.NavigateTo("/kpis/business-analysis?dimension=Lender", replace: true);
+}

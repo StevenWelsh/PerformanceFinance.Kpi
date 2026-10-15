@@ -1,0 +1,376 @@
+@page "/kpis/margin-analysis"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiScripts Scripts
+@inject IJSRuntime JS
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@implements IAsyncDisposable
+@using System.Globalization
+@using Kpi.Web.Reports
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Margin Analysis — the funding margin: what we borrow at (buy rate, the AF×term-weighted
+   blended cost of funds across Blocks + both RCFs + IWFA) vs what we lend at (sell rate, the
+   AF×term-weighted lending IRR), and the gap between them. Own-book only. Four panels from the
+   WebKPI.spMarginAnalysisBy* shapers (a shared date-range engine): Annual to Date table + graph,
+   Last N Days, and the 12 Month Analysis table. Filters: Division, run-over-last-N-days, and
+   "Define months as" (current year vs rolling 12). Rates are fractions (0.075 = 7.5%). Margin
+   column highlighted. VERIFIED to the penny against the Klipfolio original. *@
+
+<PageTitle>Margin Analysis — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="margin-analysis" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Margin Analysis" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+          <div class="kpi-ma">
+            <div class="kpi-filters">
+                <KpiField Caption="Division" Value="@_divisionId.ToString(CultureInfo.InvariantCulture)"
+                          ValueChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" Options="DivisionOptions" />
+                <KpiField Caption="Run over last" Value="@_days.ToString(CultureInfo.InvariantCulture)"
+                          ValueChanged="@(v => OnDays(new ChangeEventArgs { Value = v }))" Options="DayFieldOptions" />
+                <KpiField Caption="Define months as" Value="@_rolling.ToString(CultureInfo.InvariantCulture)"
+                          ValueChanged="@(v => OnRolling(new ChangeEventArgs { Value = v }))" Options="RollingOptions" />
+            </div>
+
+            @if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+            else
+            {
+                <div class="ma-grid ma-fill">
+                  <div class="ma-col">
+                    @* ---- Annual to Date: table ---- *@
+                    <div class="ss-card ma-annualtable">
+                        <div class="ss-card-head">Annual to Date</div>
+                        <table class="ma-table">
+                            <thead>
+                                <tr>
+                                    <th class="ma-l">Year</th>
+                                    <th>Buy Rate</th><th>Sell Rate</th>
+                                    <th class="ma-margin">Margin</th>
+                                    <th>Total Funding</th><th>Lead AF</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var r in _years)
+                                {
+                                    <tr>
+                                        <td class="ma-l">@r.YearInt</td>
+                                        <td>@Pct(r.BuyRate)</td>
+                                        <td>@Pct(r.SellRate)</td>
+                                        <td class="ma-margin">@Pct(r.Margin)</td>
+                                        <td>@Cur(r.TotalFunding)</td>
+                                        <td>@Cur(r.TotalAF ?? 0m)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @* ---- Annual to Date: graph (Margin bars + Buy/Sell lines) ---- *@
+                    <div class="ss-card ma-graphcard">
+                        <div class="ss-card-head ma-graphhead">
+                            <span>Annual to Date</span>
+                            <ul class="ma-key">
+                                <li><span class="ma-swatch" style="background:var(--chart-2)"></span>Margin</li>
+                                <li><span class="ma-line" style="background:var(--chart-6)"></span>Buy Rate</li>
+                                <li><span class="ma-line" style="background:var(--chart-3)"></span>Sell Rate</li>
+                            </ul>
+                        </div>
+                        <div class="ma-graphhost" @ref="_graphHost"></div>
+                    </div>
+                  </div>
+
+                  <div class="ma-col">
+                    @* ---- Last N Days: table ---- *@
+                    <div class="ss-card ma-dayscard">
+                        <div class="ss-card-head">Last @_days Days</div>
+                        <div class="ma-daysbody">
+                            <table class="ma-table">
+                                <thead>
+                                    <tr>
+                                        <th class="ma-l">Date Range</th>
+                                        <th>Buy Rate</th><th>Sell Rate</th>
+                                        <th class="ma-margin">Margin</th>
+                                        <th>Total Funding</th><th>Lead AF</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @if (_days_row is not null)
+                                    {
+                                        <tr>
+                                            <td class="ma-l">@DateRange(_days_row.DateRange)</td>
+                                            <td>@Pct(_days_row.BuyRate)</td>
+                                            <td>@Pct(_days_row.SellRate)</td>
+                                            <td class="ma-margin">@Pct(_days_row.Margin)</td>
+                                            <td>@Cur(_days_row.TotalFunding)</td>
+                                            <td>@Cur(_days_row.TotalAF ?? 0m)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    @* ---- 12 Month Analysis: table ---- *@
+                    <div class="ss-card ma-monthcard">
+                        <div class="ss-card-head">12 Month Analysis</div>
+                        <div class="ma-monthbody">
+                            <table class="ma-table">
+                                <thead>
+                                    <tr>
+                                        <th class="ma-l">Month</th>
+                                        <th>Buy Rate</th><th>Sell Rate</th>
+                                        <th class="ma-margin">Margin</th>
+                                        <th>Total Funding</th><th>Lead AF</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var r in _months.Where(m => m.OrderInt < 13))
+                                    {
+                                        <tr class="@(r.IsFuture ? "ma-future" : "")">
+                                            <td class="ma-l">@r.MonthString</td>
+                                            <td>@Pct(r.BuyRate)</td>
+                                            <td>@Pct(r.SellRate)</td>
+                                            <td class="ma-margin">@Pct(r.Margin)</td>
+                                            <td>@Cur(r.TotalFunding)</td>
+                                            <td>@Cur(r.TotalAF)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    @{ var overall = _months.FirstOrDefault(m => m.OrderInt == 13); }
+                                    @if (overall is not null)
+                                    {
+                                        <tr class="ma-overall">
+                                            <td class="ma-l">Overall</td>
+                                            <td>@Pct(overall.BuyRate)</td>
+                                            <td>@Pct(overall.SellRate)</td>
+                                            <td class="ma-margin">@Pct(overall.Margin)</td>
+                                            <td>@Cur(overall.TotalFunding)</td>
+                                            <td>@Cur(overall.TotalAF)</td>
+                                        </tr>
+                                    }
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                  </div>
+                </div>
+            }
+          </div>
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Margin Analysis" Active="margin-analysis" AsAt="_asOf" Hint="KpiMobileHint.ChartAndTable">
+    <ChildContent>
+        <MarginAnalysisMobile Years="_years" Months="_months" DaysRow="_days_row" Divisions="_divisions"
+                              DivisionId="_divisionId" Days="_days" AsAt="_asOf" Loading="_loading" Error="@_error"
+                              DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))"
+                              DaysChanged="@(v => OnDays(new ChangeEventArgs { Value = v }))" />
+    </ChildContent>
+    <Landscape>
+        <MarginAnalysisMobileLandscape Years="_years" Divisions="_divisions" DivisionId="_divisionId"
+                                       Loading="_loading" Error="@_error"
+                                       DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" />
+    </Landscape>
+</KpiMobile>
+
+@code {
+    private int _divisionId = -1;
+    private int _days = 15;
+    private int _rolling = 0;                 // 0 = current year, 1 = rolling 12
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    // The result the page renders, as one cacheable payload (all three shaper results).
+    // _asOf is NOT part of the payload — it comes from the cache entry's AsAt.
+    private sealed record Payload(
+        List<MarginYearRow> Years,
+        List<MarginMonthRow> Months,
+        MarginDaysRow? DaysRow);
+
+    private List<(int Id, string Name)>? _divisions;
+    private List<MarginYearRow> _years = new();
+    private List<MarginMonthRow> _months = new();
+    private MarginDaysRow? _days_row;
+
+    private static readonly IReadOnlyList<KpiOption> DayFieldOptions =
+        new[] { 7, 15, 30, 60, 90 }.Select(d => new KpiOption(d.ToString(CultureInfo.InvariantCulture), $"{d} days")).ToList();
+
+    private static readonly IReadOnlyList<KpiOption> RollingOptions = new[]
+    {
+        new KpiOption("0", "Current year"),
+        new KpiOption("1", "Rolling 12 months")
+    };
+
+    private IReadOnlyList<KpiOption> DivisionOptions =>
+        new[] { new KpiOption("-1", "All") }
+            .Concat((_divisions ?? new()).Select(d => new KpiOption(d.Id.ToString(CultureInfo.InvariantCulture), d.Name)))
+            .ToList();
+
+    private ElementReference _graphHost;
+    private IJSObjectReference? _module;
+    private bool _graphDirty;
+
+    // The graph's host is only on the page while the figures are (not loading, no error).
+    private bool GraphShown => !_loading && _error is null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) { await Load(firstLoad: true); return; }
+        if (_graphDirty && GraphShown) { _graphDirty = false; await DrawGraph(); }
+    }
+
+    private async Task Load(bool firstLoad = false)
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            // One-time bootstrap: the Division dropdown fill. It mutates a field and runs once,
+            // is not part of the cached report result, so it stays OUT of LoadPayload — a fresh
+            // session, guarded by firstLoad (param-change reloads never refetch it).
+            if (firstLoad)
+            {
+                using var cms = await SessionFactory.BeginAsync();
+                var divs = cms.Db.Report<DivRow>("Rpt.spFilterOptions", new { List = "Divisions" })
+                    .ToList().OrderBy(d => d.Name).ToList();
+                _divisions = divs.Select(d => (d.Id, d.Name)).ToList();
+            }
+
+            // Cached per (division + days + rolling + report date): instant on a repeat open /
+            // tab-flick, one DB hit the first time. GetOrLoad is single-flight, so concurrent
+            // viewers load once. A param change is a different key => a correct cold load.
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("MarginAnalysis", _divisionId, _days, _rolling),
+                LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            _graphDirty = _error is null;
+            StateHasChanged();
+        }
+    }
+
+    // Pure loader: opens a one-shot session, runs the three shapers, returns the payload + its
+    // as-at. No component-field mutation here — that's Apply()'s job, so the cache can call this
+    // off the render path during a background refresh.
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var svc = new MarginAnalysisService(cms.Db);
+        var years = svc.GetByYear(_divisionId);
+        var months = svc.GetByMonth(_divisionId, _rolling);
+        var daysRow = svc.GetByDays(_days, _divisionId);
+        return (new Payload(years, months, daysRow), asAt);
+    }
+
+    // Push a payload into the fields the markup renders. (_asOf comes from the cache entry's AsAt,
+    // set by the caller, not from the payload.)
+    private void Apply(Payload p)
+    {
+        _years = p.Years;
+        _months = p.Months;
+        _days_row = p.DaysRow;
+    }
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view. Re-run through the cache;
+    // if the data changed, refresh the fields, redraw the graph and fade it; otherwise just tick
+    // "Refreshed on".
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(
+                KpiCache.Key("MarginAnalysis", _divisionId, _days, _rolling),
+                LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                _graphDirty = true;       // redraw the annual graph off the new _years
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();  // gentle chart fade
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task OnDivision(ChangeEventArgs e)
+    { _divisionId = int.TryParse(e.Value?.ToString(), out var v) ? v : -1; await Load(); }
+    private async Task OnDays(ChangeEventArgs e)
+    { _days = int.TryParse(e.Value?.ToString(), out var v) ? v : 15; await Load(); }
+    private async Task OnRolling(ChangeEventArgs e)
+    { _rolling = int.TryParse(e.Value?.ToString(), out var v) ? v : 0; await Load(); }
+
+    // hand the annual series to the JS chart (Margin bars + Buy/Sell lines)
+    private async Task DrawGraph()
+    {
+        _module ??= await JS.InvokeAsync<IJSObjectReference>(
+            "import", Scripts.Url("./Components/Pages/Kpis/MarginAnalysis/MarginAnalysis.razor.js"));
+        var data = new
+        {
+            points = _years.Select(r => new
+            {
+                label = r.YearInt.ToString(),
+                margin = (double)r.Margin,
+                buy = (double)r.BuyRate,
+                sell = (double)r.SellRate
+            }),
+            marginColour = "#F59E0B",   // amber (var --chart-2)
+            buyColour = "#06B6D4",      // teal  (var --chart-6)
+            sellColour = "#10B981"      // green (var --chart-3)
+        };
+        await _module.InvokeVoidAsync("renderMarginChart", _graphHost, data);
+    }
+
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+
+    // "2026-09-28 - 2026-10-13" as printed, each date kept whole, so a narrow card wraps it between the dates only
+    private static RenderFragment DateRange(string? range)
+    {
+        var parts = (range ?? "").Split(" - ");
+        if (parts.Length != 2) return @<text>@range</text>;
+        return @<text><span class="ma-date">@parts[0]</span> - <span class="ma-date">@parts[1]</span></text>;
+    }
+
+    private class DivRow { public int Id { get; set; } public string Name { get; set; } = ""; }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("dispose", _graphHost);
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException) { }
+        }
+    }
+}

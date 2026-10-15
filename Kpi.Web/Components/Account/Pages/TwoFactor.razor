@@ -1,0 +1,29 @@
+@page "/account/two-factor"
+@layout EmptyLayout
+
+<PageTitle>Authenticator code — Performance Finance KPIs</PageTitle>
+
+<AuthCard Title="Authenticator code">
+    <Messages Error="@(Error is null ? null : "That code wasn't recognised. Codes change every 30 seconds - try the one showing now.")" />
+    <p class="acc-text">Open your authenticator app and enter the six-digit code for Performance Finance KPIs.</p>
+
+    <form method="post" action="/account/two-factor">
+        <AntiforgeryToken />
+        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+        <input type="hidden" name="rememberMe" value="@(RememberMe == "true" ? "true" : "false")" />
+
+        <label class="login-label" for="code">Code</label>
+        <input id="code" name="code" class="acc-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" autofocus required />
+
+        <label class="acc-check"><input type="checkbox" name="rememberDevice" value="true" /> Don't ask again on this device for 30 days</label>
+
+        <button type="submit" class="login-button">Sign in</button>
+        <a class="acc-link" href="/account/login">Back to sign in</a>
+    </form>
+</AuthCard>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery] public string? RememberMe { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+}

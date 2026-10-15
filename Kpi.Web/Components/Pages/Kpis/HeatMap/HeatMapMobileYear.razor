@@ -1,0 +1,46 @@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+@implements IDisposable
+
+@* The Heat Map's Year filter on a phone: several years at once, so a button in the field look that opens the year
+   chips (HeatMapMobile) rather than a single-choice picker. Inside the fold-away filter box it reports its choice
+   for the folded summary line, as a KpiField does. *@
+
+<button type="button" class="kpim-field kpim-hm-year @(Enabled ? "" : "kpim-field-off") @(Open ? "kpim-on" : "")"
+        disabled="@(!Enabled)" aria-expanded="@(Open ? "true" : "false")" @onclick="Toggle">
+    <span class="kpim-field-caption">Year</span>
+    <span class="kpim-field-value">
+        <span>@(Enabled ? Text : "–")</span>
+        @if (Enabled)
+        {
+            <i class="bi @(Open ? "bi-chevron-up" : "bi-chevron-down")" aria-hidden="true"></i>
+        }
+    </span>
+</button>
+
+@code {
+    /// <summary>False for the capital measures, which have no year (shows "–").</summary>
+    [Parameter] public bool Enabled { get; set; } = true;
+
+    /// <summary>The ticked years as shown ("2026, 2025" or "4 years").</summary>
+    [Parameter] public string Text { get; set; } = "";
+
+    /// <summary>The year chips are open.</summary>
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback Toggle { get; set; }
+
+    // the phone's fold-away filter box this field sits in
+    [CascadingParameter] public KpiMobileFilters? FilterBox { get; set; }
+
+    // the open chips hold the box open, so ticked-but-not-Done years never fold out of sight
+    protected override void OnParametersSet()
+    {
+        FilterBox?.Report(this, Enabled ? Text : "");
+        FilterBox?.KeepOpen(this, Open);
+    }
+
+    public void Dispose()
+    {
+        FilterBox?.KeepOpen(this, false);
+        FilterBox?.Forget(this);
+    }
+}

@@ -1,0 +1,41 @@
+@* The salesperson picker on a phone report: previous / next either side of the person's initials,
+   name and place in the list. Salesperson Summary and Sales Productivity both use it; Sales
+   Productivity's full view puts the same initials (InitialsOf) on each person's card. *@
+
+<div class="kpim-sps-picker">
+    <button type="button" class="kpim-sps-step" aria-label="Previous salesperson" @onclick="() => OnPrevious.InvokeAsync()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+    </button>
+    <div class="kpim-sps-who">
+        <span class="kpim-sps-avatar" aria-hidden="true">@InitialsOf(Name)</span>
+        <div class="kpim-sps-names">
+            <span class="kpim-sps-name">@Name</span>
+            <span class="kpim-sps-pos">@Position</span>
+        </div>
+    </div>
+    <button type="button" class="kpim-sps-step" aria-label="Next salesperson" @onclick="() => OnNext.InvokeAsync()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+    </button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    /// <summary>"2 of 4".</summary>
+    [Parameter] public string Position { get; set; } = "";
+
+    [Parameter] public EventCallback OnPrevious { get; set; }
+    [Parameter] public EventCallback OnNext { get; set; }
+
+    /// <summary>A person's initials: the first letter of the first and last names.</summary>
+    public static string InitialsOf(string name)
+    {
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length == 0) return "";
+        var first = words[0][..1];
+        var last = words.Length > 1 ? words[^1][..1] : "";
+        return (first + last).ToUpperInvariant();
+    }
+}

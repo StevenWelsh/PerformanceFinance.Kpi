@@ -1,0 +1,163 @@
+@using System.Globalization
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Sales Performance on a phone, from the page's own league and targets (loaded per measure and year).
+   The phone shows one year at a time - the report year unless another is chosen, from 2020 on - and the
+   page holds that choice (it loads the year), so portrait and landscape share it. Measure is the page's own
+   and reloads as the full view's field does. Portrait: Measure and Year, then the Sales League Table.
+   Landscape: the same fields and a switch between the league table, the Sales Target Performance chart and
+   the timelapse (the full view's race, SalesPerformanceMobileRace). The fields fold away
+   (KpiMobileFilters) in both. *@
+
+<KpiMobile Title="Sales Performance" Active="sales-performance" AsAt="AsAt" Hint="KpiMobileHint.LandscapeOnly">
+    <ChildContent>
+        <KpiMobileFilters>
+            <div class="kpim-filters" style="--kpim-cols:2">
+                @Fields
+            </div>
+        </KpiMobileFilters>
+        @if (Loading)
+        {
+            <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+        }
+        else if (Error is not null)
+        {
+            <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+        }
+        else
+        {
+            <section class="kpim-card" aria-label="@ShownYear - Sales League Table">
+                <h2 class="kpim-card-head">@ShownYear - Sales League Table</h2>
+                <SalesPerformanceMobileLeague Rows="YearRows" Measure="@Measure" Year="ShownYear" />
+            </section>
+        }
+    </ChildContent>
+    <Landscape>
+        <div class="kpim-sp-bar">
+            <KpiMobileFilters Compact="true">
+                <div class="kpim-filters kpim-compact" style="--kpim-cols:2">
+                    @Fields
+                </div>
+            </KpiMobileFilters>
+            <div class="kpim-sp-seg">
+                <KpiSegmented Label="View" Compact="true" Value="@_view" ValueChanged="@(v => _view = v)" Options="ViewOptions" />
+            </div>
+        </div>
+        @if (Loading)
+        {
+            <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+        }
+        else if (Error is not null)
+        {
+            <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+        }
+        else
+        {
+            var chart = _view == "chart";
+            var race = _view == "race";
+            var bars = ChartBars();
+            <section class="kpim-card kpim-fill kpim-sp-card">
+                <div class="kpim-sp-head">
+                    <h2>@ShownYear - @(race ? $"{Measure} Timelapse" : chart ? "Sales Target Performance" : "Sales League Table")</h2>
+                    @* the key, only when this year has targets *@
+                    @if (chart && bars.Any(b => b.Year > 0))
+                    {
+                        <span class="kpim-sp-key">
+                            <span>
+                                <svg width="22" height="6" viewBox="0 0 22 6" aria-hidden="true"><line class="kpim-sp-tick-ytd" x1="2" y1="3" x2="20" y2="3" /></svg>
+                                YTD target
+                            </span>
+                            <span>
+                                <svg width="22" height="6" viewBox="0 0 22 6" aria-hidden="true"><line class="kpim-sp-tick-year" x1="2" y1="3" x2="20" y2="3" /></svg>
+                                Year target
+                            </span>
+                        </span>
+                    }
+                </div>
+                @if (race)
+                {
+                    <SalesPerformanceMobileRace Year="ShownYear" Measure="@Measure" LoadRace="LoadRace" />
+                }
+                else if (chart)
+                {
+                    <SalesPerformanceMobileChart Bars="bars" Measure="@Measure" Year="ShownYear"
+                                                 AxisLabel="AxisLabel" NiceStep="NiceStep" FirstName="FirstName" />
+                }
+                else
+                {
+                    <div class="kpim-sp-scroll">
+                        <SalesPerformanceMobileLeague Rows="YearRows" Measure="@Measure" Year="ShownYear" Compact="true" />
+                    </div>
+                }
+            </section>
+        }
+    </Landscape>
+</KpiMobile>
+
+@code {
+    [Parameter] public DateTime? AsAt { get; set; }
+
+    /// <summary>The page's measure (TFI / AF) and its handler, which reloads.</summary>
+    [Parameter] public string Measure { get; set; } = "TFI";
+    [Parameter] public EventCallback<string> MeasureChanged { get; set; }
+
+    /// <summary>The years on offer (2020 to the report year, oldest first).</summary>
+    [Parameter] public IReadOnlyList<int> Years { get; set; } = Array.Empty<int>();
+
+    /// <summary>The year shown and the page's handler, which loads it.</summary>
+    [Parameter] public int Year { get; set; }
+    [Parameter] public EventCallback<int> YearChanged { get; set; }
+
+    /// <summary>Every year the page has loaded: its league and targets.</summary>
+    [Parameter] public IReadOnlyDictionary<int, List<SalesLeagueRow>> League { get; set; } = new Dictionary<int, List<SalesLeagueRow>>();
+    [Parameter] public IReadOnlyDictionary<int, List<SalesTargetRow>> Targets { get; set; } = new Dictionary<int, List<SalesTargetRow>>();
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    /// <summary>The page's timelapse for a year (the current measure), for the landscape Timelapse view.</summary>
+    [Parameter, EditorRequired] public Func<int, Task<(object Payload, bool HasTargets)>> LoadRace { get; set; } = default!;
+
+    // the full view's chart rules, handed on to the phone chart
+    [Parameter, EditorRequired] public Func<double, string> AxisLabel { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<double, int, double> NiceStep { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<string, string> FirstName { get; set; } = default!;
+
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    private static readonly KpiOption[] MeasureOptions = { new("TFI", "TFI"), new("AF", "AF") };
+    private static readonly KpiOption[] ViewOptions =
+    {
+        new("league", "League table", "bi-list-ul"),
+        new("chart", "Target performance", "bi-bar-chart"),
+        new("race", "Timelapse", "bi-play-circle")
+    };
+
+    private string _view = "league";
+
+    private int ShownYear => Year;
+
+    private IReadOnlyList<SalesLeagueRow> YearRows
+        => League.TryGetValue(ShownYear, out var rows) ? rows : Array.Empty<SalesLeagueRow>();
+
+    private RenderFragment Fields => __builder =>
+    {
+        <KpiField Caption="Measure" Value="@Measure" ValueChanged="MeasureChanged" Options="MeasureOptions" />
+        <KpiField Caption="Year" Value="@ShownYear.ToString(Inv)" ValueChanged="OnYear" Enabled="Years.Count > 0"
+                        Options="@(Years.Select(y => new KpiOption(y.ToString(Inv), y.ToString(Inv))).ToList())" />
+    };
+
+    private Task OnYear(string value)
+        => int.TryParse(value, NumberStyles.Integer, Inv, out var y) ? YearChanged.InvokeAsync(y) : Task.CompletedTask;
+
+    // the year's core salespeople in league order with their targets, as the full view's chart takes them
+    private List<(string Name, decimal Actual, decimal Year, decimal Ytd)> ChartBars()
+    {
+        var targets = (Targets.TryGetValue(ShownYear, out var t) ? t : new())
+            .GroupBy(x => x.SalesId).ToDictionary(g => g.Key, g => g.First());
+        return YearRows.Where(x => x.IsCore)
+            .Select(p => (p.Salesperson,
+                          p.MeasureValue,
+                          targets.TryGetValue(p.SalesId, out var a) ? a.YearTarget : 0m,
+                          targets.TryGetValue(p.SalesId, out var b) ? b.YtdTarget : 0m))
+            .ToList();
+    }
+}

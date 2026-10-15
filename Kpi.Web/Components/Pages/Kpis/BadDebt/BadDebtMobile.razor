@@ -1,0 +1,85 @@
+@* Bad Debt on a phone, portrait: the summary - the latest year's write-offs against the book beside the
+   year before's, and bad debt / book size for each of the latest ten years. The full table is the
+   landscape view (BadDebtMobileLandscape). No filters here: it follows the Applications choice made there. *@
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else if (Years.Count == 0)
+{
+    <div class="kpim-card kpim-empty">No bad debt figures.</div>
+}
+else
+{
+    var shown = Years.TakeLast(YearsShown).ToList();
+    var now = shown.FirstOrDefault(y => IsCurrent(y)) ?? shown[^1];
+    var prev = shown.FirstOrDefault(y => y.BadDebtYear == now.BadDebtYear - 1);
+    // the bars' scale: the largest year, rounded up to the next 0.2%
+    var top = Math.Max(20m, Math.Ceiling(shown.Max(y => Bp(y)) / 20m) * 20m);
+
+    <section class="kpim-card kpim-bd-sum">
+        <h2 class="kpim-bd-title">@(IsCurrent(now) ? $"{now.BadDebtYear} to date" : now.BadDebtYear.ToString())</h2>
+        <div class="kpim-bd-stats">
+            <div class="kpim-bd-stat">
+                <span class="kpim-bd-label">Written off</span>
+                <span class="kpim-bd-big">@Cur(now.WrittenOffAmount)</span>
+                <span class="kpim-bd-under">@(now.WrittenOffLeadCount.ToString("N0") + (now.WrittenOffLeadCount == 1 ? " lead" : " leads"))</span>
+            </div>
+            <div class="kpim-bd-stat kpim-bd-stat-end">
+                <span class="kpim-bd-label">of the book</span>
+                <span class="kpim-bd-big kpim-bd-accent">@Pct(now.BadDebtPercentage)</span>
+                @if (prev is not null)
+                {
+                    <span class="kpim-bd-under">@($"{prev.BadDebtYear}: {Pct(prev.BadDebtPercentage)}")</span>
+                }
+            </div>
+        </div>
+        <div class="kpim-bd-facts">
+            <div><span class="kpim-bd-label">Recovered</span><span class="kpim-bd-fact">@Cur(now.RecoveredAmount)</span></div>
+            <div><span class="kpim-bd-label">Net bad debt</span><span class="kpim-bd-fact">@($"{Cur(now.NetBadDebt)} · {Pct(now.NetBadDebtPercent)}")</span></div>
+            <div><span class="kpim-bd-label">Outstanding capital</span><span class="kpim-bd-fact">@("£" + (now.RemainingCapital / 1_000_000m).ToString("0.00") + "m")</span></div>
+            <div><span class="kpim-bd-label">Active leads</span><span class="kpim-bd-fact">@now.ActiveLeadCount.ToString("N0")</span></div>
+        </div>
+    </section>
+
+    <section class="kpim-card kpim-bd-bars">
+        <h2 class="kpim-bd-title">Bad debt / book size by year</h2>
+        @foreach (var y in shown.AsEnumerable().Reverse())
+        {
+            <div class="kpim-bd-bar @(IsCurrent(y) ? "kpim-bd-cur" : "")">
+                <span class="kpim-bd-year">@(IsCurrent(y) ? $"{y.BadDebtYear}*" : y.BadDebtYear.ToString())</span>
+                <div class="kpim-bd-track"><div class="kpim-bd-fill" style="width:@Width(y, top)"></div></div>
+                <span class="kpim-bd-value">@Pct(y.BadDebtPercentage)</span>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    /// <summary>Every year the page loaded, oldest first.</summary>
+    [Parameter] public List<BadDebtYearRow> Years { get; set; } = new();
+
+    [Parameter] public DateTime? AsOf { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    // The full view's latest ten.
+    private const int YearsShown = 10;
+
+    // The year the report is "as at" has not ended.
+    private bool IsCurrent(BadDebtYearRow r) => AsOf is not null && r.BadDebtYear == AsOf.Value.Year;
+
+    // Bad debt / book size in hundredths of a percent (the ratio is held to 4dp).
+    private static decimal Bp(BadDebtYearRow r) => r.BadDebtPercentage * 10000m;
+
+    private static string Width(BadDebtYearRow r, decimal top)
+        => (Math.Max(0m, Bp(r)) / top * 100m).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+}

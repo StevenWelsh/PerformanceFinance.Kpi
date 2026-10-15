@@ -1,0 +1,190 @@
+@using System.Globalization
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Margin Analysis on a phone, landscape: Division, a Chart / Table switch, and the Annual to Date chart or table.
+   The chart is drawn as the
+   full view's chart draws it (MarginAnalysis.razor.js) - Margin as bars, Buy and Sell Rate as lines with
+   dots, 0 up to a nice ceiling with five gridlines - in markup: the plot box keeps the full view's paddings
+   and everything inside it is placed by percent, so it fills whatever width the phone has. Tap or
+   hover a year for its figures. *@
+
+<div class="kpim-compact kpim-ma-lbar">
+    <KpiMobileFilters Compact="true">
+        <div class="kpim-filters" style="--kpim-cols:1">
+            <KpiField Caption="Division" Value="@DivisionId.ToString(CultureInfo.InvariantCulture)"
+                      ValueChanged="DivisionChanged" Options="DivisionOptions" />
+        </div>
+    </KpiMobileFilters>
+    <KpiSegmented Label="View" Value="@_view" ValueChanged="v => _view = v" Options="Views" Compact="true" />
+</div>
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else if (_view == ViewTable)
+{
+    <section class="kpim-card kpim-fill kpim-ma-tablecard">
+        <h2 class="kpim-card-head">Annual to Date</h2>
+        @if (Years.Count == 0)
+        {
+            <div class="kpim-empty">No own-book deals</div>
+        }
+        else
+        {
+            <div class="kpim-ma-tscroll">
+                <table class="kpim-table kpim-sticky kpim-ma-table">
+                    <thead>
+                        <tr><th>Year</th><th>Buy Rate</th><th>Sell Rate</th><th class="kpim-ma-mcol">Margin</th><th>Total Funding</th><th>Lead AF</th></tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in Years)
+                        {
+                            <tr>
+                                <td>@r.YearInt</td>
+                                <td>@Pct(r.BuyRate)</td>
+                                <td>@Pct(r.SellRate)</td>
+                                <td class="kpim-ma-mcol">@Pct(r.Margin)</td>
+                                <td>@Money(r.TotalFunding)</td>
+                                <td>@Money(r.TotalAF ?? 0m)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+else
+{
+    <section class="kpim-ma-chartcard kpim-fill">
+        <div class="kpim-ma-charthead">
+            <h2>Annual to Date</h2>
+            <ul class="kpim-ma-key">
+                <li><span class="kpim-ma-sw"></span>Margin</li>
+                <li><span class="kpim-ma-ln kpim-ma-ln-buy"></span>Buy Rate</li>
+                <li><span class="kpim-ma-ln kpim-ma-ln-sell"></span>Sell Rate</li>
+            </ul>
+        </div>
+        @if (Years.Count == 0)
+        {
+            <div class="kpim-empty">No own-book deals</div>
+        }
+        else
+        {
+            int n = Years.Count;
+            double top = NiceCeil(Years.SelectMany(r => new[] { (double)r.BuyRate, (double)r.SellRate, (double)r.Margin }).Append(0.01).Max());
+            double Y(decimal rate) => (1 - (double)rate / top) * 100;      // percent down the plot
+            double Cx(int i) => (i + 0.5) / n * 100;                 // percent across the plot
+            <div class="kpim-ma-chart">
+                <div class="kpim-ma-plot">
+                    @for (int i = 0; i <= 5; i++)
+                    {
+                        double v = top * i / 5;
+                        double y = (1 - v / top) * 100;
+                        <span class="kpim-ma-gl" style="top:@(F(y))%"></span>
+                        <span class="kpim-ma-yl" style="top:@(F(y))%">@(Math.Round(v * 100, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture))%</span>
+                    }
+                    @for (int i = 0; i < n; i++)
+                    {
+                        var r = Years[i];
+                        double h = Math.Max(0, (double)r.Margin / top * 100);
+                        <span class="kpim-ma-bar" style="left:@(F(Cx(i)))%;height:@(F(h))%;width:min(@(F(50.0 / n))%, 46px)"></span>
+                        <span class="kpim-ma-xl" style="left:@(F(Cx(i)))%">@r.YearInt</span>
+                    }
+                    <svg class="kpim-ma-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                        <polyline class="kpim-ma-pl-buy" points="@(string.Join(" ", Years.Select((r, i) => $"{F(Cx(i))},{F(Y(r.BuyRate))}")))"></polyline>
+                    </svg>
+                    @for (int i = 0; i < n; i++)
+                    {
+                        <span class="kpim-ma-pt kpim-ma-pt-buy" style="left:@(F(Cx(i)))%;top:@(F(Y(Years[i].BuyRate)))%"></span>
+                    }
+                    <svg class="kpim-ma-lines" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                        <polyline class="kpim-ma-pl-sell" points="@(string.Join(" ", Years.Select((r, i) => $"{F(Cx(i))},{F(Y(r.SellRate))}")))"></polyline>
+                    </svg>
+                    @for (int i = 0; i < n; i++)
+                    {
+                        <span class="kpim-ma-pt kpim-ma-pt-sell" style="left:@(F(Cx(i)))%;top:@(F(Y(Years[i].SellRate)))%"></span>
+                    }
+                    @for (int i = 0; i < n; i++)
+                    {
+                        int at = i;
+                        <button type="button" class="kpim-ma-hit" style="left:@(F(100.0 * i / n))%;width:@(F(100.0 / n))%"
+                                aria-label="@Years[i].YearInt" @onclick="() => ShowTip(at)" @onmouseenter="() => ShowTip(at)"
+                                @onmouseleave="HideTip"></button>
+                    }
+                    @if (_tipAt >= 0 && _tipAt < n)
+                    {
+                        var t = Years[_tipAt];
+                        double cx = Cx(_tipAt);
+                        // Beside the year, level with its Sell Rate dot, on the side with room.
+                        string side = cx < 50 ? $"left:calc({F(cx)}% + 12px)" : $"right:calc({F(100 - cx)}% + 12px)";
+                        <div class="kpim-tip kpim-ma-tip @(_tipOn ? "kpim-on" : "")" role="tooltip"
+                             style="@side;top:clamp(-14px, calc(@(F(Y(t.SellRate)))% - 10px), calc(100% - 55px))">
+                            <div>@t.YearInt</div>
+                            <div>Margin: @Pct(t.Margin)</div>
+                            <div>Buy Rate: @Pct(t.BuyRate)</div>
+                            <div>Sell Rate: @Pct(t.SellRate)</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public List<MarginYearRow> Years { get; set; } = new();
+    [Parameter] public List<(int Id, string Name)>? Divisions { get; set; }
+    [Parameter] public int DivisionId { get; set; } = -1;
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<string> DivisionChanged { get; set; }
+
+    private IReadOnlyList<KpiOption> DivisionOptions =>
+        new[] { new KpiOption("-1", "All") }
+            .Concat((Divisions ?? new()).Select(d => new KpiOption(d.Id.ToString(CultureInfo.InvariantCulture), d.Name)))
+            .ToList();
+
+    // Chart or table - two views of the same years, so a switch, not a filter.
+    private const string ViewChart = "Chart", ViewTable = "Table";
+    private string _view = ViewChart;
+    private static readonly IReadOnlyList<KpiOption> Views = new[]
+    {
+        new KpiOption(ViewChart, "Chart", "bi-bar-chart"),
+        new KpiOption(ViewTable, "Table", "bi-table")
+    };
+
+    // as the full view's table: £ and whole pounds
+    private static string Money(decimal v) => "£" + v.ToString("N0");
+
+    // The year last tapped / hovered. Leaving fades the tooltip where it is; new figures hide it.
+    private int _tipAt = -1;
+    private bool _tipOn;
+    private List<MarginYearRow>? _shown;
+
+    protected override void OnParametersSet()
+    {
+        if (!ReferenceEquals(_shown, Years)) { _shown = Years; _tipAt = -1; _tipOn = false; }
+    }
+
+    private void ShowTip(int i) { _tipAt = i; _tipOn = true; }
+    private void HideTip() => _tipOn = false;
+
+    // A rate fraction rounded up to a clean % ceiling (…, 10%, 12.5%, 15%, 20%), as the full view's chart.
+    private static double NiceCeil(double v)
+    {
+        double pct = v * 100;
+        double[] steps = { 1, 2, 2.5, 5, 7.5, 10, 12.5, 15, 20, 25, 30, 40, 50 };
+        foreach (var s in steps) if (pct <= s) return s / 100;
+        return Math.Ceiling(pct / 10) * 10 / 100;
+    }
+
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+
+    private static string F(double v) => v.ToString("0.###", CultureInfo.InvariantCulture);
+}

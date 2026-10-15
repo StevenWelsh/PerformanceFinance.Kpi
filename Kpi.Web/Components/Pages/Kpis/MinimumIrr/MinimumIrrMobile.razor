@@ -1,0 +1,126 @@
+@using System.Globalization
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Minimum IRR on a phone, portrait: Period and Division, the period's deals below the minimum
+   IRR with its totals, then a card per salesperson, largest AF first. The page's own data and filters. *@
+
+<KpiMobileFilters>
+    <div class="kpim-filters" style="--kpim-cols:2">
+        <KpiField Caption="Period" Value="@Period" ValueChanged="PeriodChanged" Options="MinimumIrrMobileLandscape.PeriodOptions" />
+        <KpiField Caption="Division" Value="@DivisionId.ToString(CultureInfo.InvariantCulture)"
+                  ValueChanged="DivisionChanged" Options="DivisionOptions" />
+    </div>
+</KpiMobileFilters>
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else
+{
+    var rows = Rows;
+    var total = rows.FirstOrDefault(r => r.IsTotal);
+    var people = rows.Where(r => !r.IsTotal).OrderByDescending(r => r.AFTotal).ToList();
+    var periodName = MinimumIrrMobileLandscape.PeriodName(Period);
+
+    <section class="kpim-card kpim-card-pad kpim-mi-card">
+        <h2 class="kpim-mi-h">@periodName · below the minimum IRR</h2>
+        @if (total is null)
+        {
+            <div class="kpim-mi-sum kpim-mi-sum-none">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12h8"></path></svg>
+                <div class="kpim-mi-sum-text">
+                    <span class="kpim-mi-headline">No deals @periodName.ToLowerInvariant()</span>
+                    <span class="kpim-mi-sub">No own-book deals paid out yet</span>
+                </div>
+            </div>
+        }
+        else if (total.TransactionsUnderMinIRR > 0)
+        {
+            <div class="kpim-mi-sum kpim-mi-sum-below">
+                <div class="kpim-mi-sum-text">
+                    <span class="kpim-mi-headline">@Deals(total.TransactionsUnderMinIRR) · @Money(total.AFUnderMinIRR)</span>
+                    <span class="kpim-mi-sub">@Pct1(total.PercentTransactionsUnderMinIRR) of deals · @Pct1(total.PercentAFUnderMinIRR) of AF</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="kpim-mi-sum kpim-mi-sum-clear">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M8 12.5l2.7 2.7L16 9.8"></path></svg>
+                <div class="kpim-mi-sum-text">
+                    <span class="kpim-mi-headline">None below the minimum</span>
+                    <span class="kpim-mi-sub">Every deal met its minimum IRR</span>
+                </div>
+            </div>
+        }
+        <div class="kpim-mi-totals">
+            <div><span class="kpim-mi-cap">Deals</span><span class="kpim-mi-fig">@(total is null ? "0" : total.TransactionsTotal.ToString("N0"))</span></div>
+            <div><span class="kpim-mi-cap">AF</span><span class="kpim-mi-fig">@(total is null ? "£0" : Money(total.AFTotal))</span></div>
+            <div><span class="kpim-mi-cap">Average IRR</span><span class="kpim-mi-fig">@(total is null ? "–" : Pct(total.IRRAverage))</span></div>
+        </div>
+    </section>
+
+    <section class="kpim-card kpim-mi-people">
+        <h2 class="kpim-mi-h">By salesperson</h2>
+        @foreach (var r in people)
+        {
+            bool below = r.TransactionsUnderMinIRR > 0;
+            <div class="kpim-mi-person">
+                <div class="kpim-mi-person-top">
+                    <span class="kpim-mi-name">@r.Salesperson</span>
+                    <span class="kpim-mi-div">@r.SalesDivision</span>
+                </div>
+                <div class="kpim-mi-line">
+                    <span>@Deals(r.TransactionsTotal) · @Money(r.AFTotal)</span>
+                    <span>average IRR <strong>@Pct(r.IRRAverage)</strong></span>
+                </div>
+                <span class="kpim-mi-chip @(below ? "kpim-mi-chip-below" : "")">@(below ? $"{r.TransactionsUnderMinIRR:N0} below minimum · {Money(r.AFUnderMinIRR)} ({Pct1(r.PercentAFUnderMinIRR)} of AF)" : "None below minimum")</span>
+            </div>
+        }
+        @if (people.Count == 0)
+        {
+            <div class="kpim-mi-none">@MinimumIrrMobileLandscape.EmptyNote(Period, DivisionName)</div>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public List<MinIRRRow> Month { get; set; } = new();
+    [Parameter] public List<MinIRRRow> Quarter { get; set; } = new();
+    [Parameter] public List<MinIRRRow> Year { get; set; } = new();
+    [Parameter] public List<(int Id, string Name)>? Divisions { get; set; }
+    [Parameter] public int DivisionId { get; set; } = -1;
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback<string> DivisionChanged { get; set; }
+
+    /// <summary>Month, Quarter or Year - shared with the landscape view, so turning the phone keeps it.</summary>
+    [Parameter] public string Period { get; set; } = "Year";
+    [Parameter] public EventCallback<string> PeriodChanged { get; set; }
+
+    private List<MinIRRRow> Rows => Period switch { "Month" => Month, "Quarter" => Quarter, _ => Year };
+
+    private string? DivisionName => Divisions?.Where(d => d.Id == DivisionId).Select(d => d.Name).FirstOrDefault();
+
+    private IReadOnlyList<KpiOption> DivisionOptions =>
+        new[] { new KpiOption("-1", "All") }
+            .Concat((Divisions ?? new()).Select(d => new KpiOption(d.Id.ToString(CultureInfo.InvariantCulture), d.Name)))
+            .ToList();
+
+    private static string Deals(int n) => n.ToString("N0") + (n == 1 ? " deal" : " deals");
+
+    private static string Money(decimal v)
+    {
+        if (v == 0) return "£0";
+        if (v >= 999_500m) return "£" + Math.Round(v / 1_000_000m, 2).ToString("0.00") + "m";
+        return "£" + Math.Round(v / 1_000m).ToString("0") + "k";
+    }
+
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+    private static string Pct1(decimal fraction) => Math.Round(fraction * 100m, 1).ToString("0.0") + "%";
+}

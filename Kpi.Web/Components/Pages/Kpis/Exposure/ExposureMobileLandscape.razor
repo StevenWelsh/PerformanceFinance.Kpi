@@ -1,0 +1,119 @@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Exposure Top 10 on a phone, landscape: the full view's table (header and Total held in place while the
+   ten scroll), with the remaining capital and the top ten's share beside its two filters, which drive
+   the page's own filters and load. *@
+
+<div class="kpim-ex-bar">
+    <KpiMobileFilters Compact="true">
+        <div class="kpim-filters kpim-compact" style="--kpim-cols:2">
+            <KpiField Caption="Grouping" Value="@Grouping.ToString()" ValueChanged="GroupingChanged" Options="@GroupingOptions" />
+            <KpiField Caption="Fund lender" Value="@(FundLenderId?.ToString() ?? "")" ValueChanged="FundLenderChanged" Options="@LenderOptions" />
+        </div>
+    </KpiMobileFilters>
+    @if (!Loading && Error is null)
+    {
+        <div class="kpim-ex-sums">
+            <span>Own book remaining capital <strong>@("£" + (Shown.FirstOrDefault()?.TotalRemainingCapital ?? 0m).ToString("N0"))</strong></span>
+            @if (Shown.Count > 0)
+            {
+                <span>Top 10 hold <strong>@Pct(Shown.Sum(r => r.PercentRemainingCapital))</strong></span>
+            }
+        </div>
+    }
+</div>
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else
+{
+    var shown = Shown;
+    <section class="kpim-fill kpim-ex-wrap">
+        <table class="kpim-ex-table">
+            <thead>
+                <tr>
+                    <th scope="col" class="kpim-ex-rankcol"></th>
+                    <th scope="col" class="kpim-ex-l">@ColumnName</th>
+                    <th scope="col">Lead Count</th>
+                    <th scope="col">Remaining Capital</th>
+                    <th scope="col">% Total Remaining Capital</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in shown)
+                {
+                    <tr>
+                        <td class="kpim-ex-rankcol">@r.RowNumber</td>
+                        <td class="kpim-ex-l">
+                            @if (Grouping == ExposureGrouping.Combined && r.CustomerType == 2)
+                            {
+                                @(r.Name + " ")<span class="kpim-ex-tag">business group</span>
+                            }
+                            else
+                            {
+                                @r.Name
+                            }
+                        </td>
+                        <td>@r.LeadCount.ToString("N0")</td>
+                        <td>@Cur(r.RemainingCapital)</td>
+                        <td class="kpim-ex-strong">@Pct(r.PercentRemainingCapital)</td>
+                    </tr>
+                }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td class="kpim-ex-rankcol"></td>
+                    <td class="kpim-ex-l">Total</td>
+                    <td>@shown.Sum(r => r.LeadCount).ToString("N0")</td>
+                    <td>@Cur(shown.Sum(r => r.RemainingCapital))</td>
+                    <td>@Pct(shown.Sum(r => r.PercentRemainingCapital))</td>
+                </tr>
+            </tfoot>
+        </table>
+    </section>
+}
+
+@code {
+    /// <summary>The page's rows, largest first (the top ten are shown).</summary>
+    [Parameter] public List<ExposureRow> Rows { get; set; } = new();
+
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    [Parameter] public ExposureGrouping Grouping { get; set; }
+    [Parameter] public EventCallback<string> GroupingChanged { get; set; }
+
+    [Parameter] public List<ExposureFundOptionResult> FundLenders { get; set; } = new();
+    [Parameter] public int? FundLenderId { get; set; }
+    [Parameter] public EventCallback<string> FundLenderChanged { get; set; }
+
+    private List<ExposureRow> Shown => Rows.Take(10).ToList();
+
+    private static readonly IReadOnlyList<KpiOption> GroupingOptions = new[]
+    {
+        new KpiOption(ExposureGrouping.Combined.ToString(), "Combined"),
+        new KpiOption(ExposureGrouping.Customer.ToString(), "Customer"),
+        new KpiOption(ExposureGrouping.BusinessGroup.ToString(), "Business Group"),
+    };
+
+    private IReadOnlyList<KpiOption> LenderOptions => FundLenders
+        .Select(l => new KpiOption(l.Id.ToString(), l.Name))
+        .Prepend(new KpiOption("", "All fund lenders")).ToList();
+
+
+    private string ColumnName => Grouping switch
+    {
+        ExposureGrouping.Customer => "Customer",
+        ExposureGrouping.BusinessGroup => "Business Group",
+        _ => "Customer / Business Group"
+    };
+
+    private static string Cur(decimal v) => "£" + v.ToString("N2");
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+}

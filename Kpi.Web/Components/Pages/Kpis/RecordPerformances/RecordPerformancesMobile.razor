@@ -1,0 +1,211 @@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+
+@* Record Performances on a phone: the page's Division filter, then one of the full
+   view's eight tables at a time - a record type (deal, month, quarter, year) and either the all-time
+   top 10 or the best of each year. Records come from the same cache entries as the full view's
+   RecordTables, ranked the same way; a record from this year carries the trophy and the highlight in
+   the top 10. *@
+
+@if (Divisions is null)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else
+{
+    <KpiMobileFilters>
+        <div class="kpim-filters" style="--kpim-cols:1">
+            <KpiField Caption="Division" Value="@DivisionId.ToString()" ValueChanged="DivisionChanged" Options="@DivisionOptions" />
+        </div>
+    </KpiMobileFilters>
+
+    <div class="kpim-rp-seg">
+        <KpiSegmented Label="Record type" Value="@_grain" ValueChanged="OnGrain" Options="@GrainOptions" />
+    </div>
+    <div class="kpim-rp-seg">
+        <KpiSegmented Label="View" Value="@_view" ValueChanged="v => _view = v" Options="@ViewOptions" />
+    </div>
+
+    <section class="kpim-card kpim-rp-list">
+        <h2 class="kpim-rp-title">@Heading</h2>
+        @if (_loading)
+        {
+            <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+        }
+        else if (_error is not null)
+        {
+            <div class="kpim-rp-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @_error</div>
+        }
+        else if (_all.Count == 0)
+        {
+            <div class="kpim-empty">No records.</div>
+        }
+        else if (_view == "Top")
+        {
+            var rank = 0;
+            foreach (var r in _all.OrderByDescending(r => r.TFI).Take(10))
+            {
+                rank++;
+                var current = r.Yr == _curYear;
+                @Row(rank.ToString(), PeriodText(r), r.Salesperson, r.TFI, current)
+            }
+        }
+        else
+        {
+            // the best record of each year, latest year first, last ten years (as RecordTable)
+            foreach (var r in _all.GroupBy(r => r.Yr)
+                                  .Select(g => g.OrderByDescending(r => r.TFI).First())
+                                  .OrderByDescending(r => r.Yr)
+                                  .Take(10))
+            {
+                @Row(r.Yr.ToString(), r.Salesperson, PeriodText(r), r.TFI, false)
+            }
+        }
+    </section>
+}
+
+@code {
+    /// <summary>The page's divisions (null until the page has loaded them).</summary>
+    [Parameter] public IReadOnlyList<(int Id, string Name)>? Divisions { get; set; }
+
+    /// <summary>The page's division (-1 = all); changing it goes through the page, as the full view's select does.</summary>
+    [Parameter] public int DivisionId { get; set; } = -1;
+    [Parameter] public EventCallback<string> DivisionChanged { get; set; }
+
+    private static readonly IReadOnlyList<KpiOption> GrainOptions = new KpiOption[]
+    {
+        new("Transaction", "Deal"), new("Month", "Month"), new("Quarter", "Quarter"), new("Annual", "Year")
+    };
+
+    private static readonly IReadOnlyList<KpiOption> ViewOptions = new KpiOption[]
+    {
+        new("Top", "Top 10"), new("Best", "Best each year")
+    };
+
+    private string _grain = "Month";
+    private string _view = "Top";
+
+    private bool _loading = true;
+    private string? _error;
+    private int _curYear;
+    private List<RecordRow> _all = new();
+
+    private bool _rendered;
+    private string? _shownKey;   // the grain / division on screen (or loading)
+    private int _version;        // the latest load; an older one finishing late is dropped
+
+    private IReadOnlyList<KpiOption> DivisionOptions =>
+        new[] { new KpiOption("-1", "All") }
+            .Concat((Divisions ?? Array.Empty<(int Id, string Name)>()).Select(d => new KpiOption(d.Id.ToString(), d.Name)))
+            .ToList();
+
+    private string Heading
+    {
+        get
+        {
+            var (plural, single) = _grain switch
+            {
+                "Transaction" => ("transactions", "transaction"),
+                "Quarter" => ("quarters", "quarter"),
+                "Annual" => ("years", "year"),
+                _ => ("months", "month")
+            };
+            return _view == "Top" ? $"Top 10 {plural} of all time" : $"Best {single} in each year";
+        }
+    }
+
+    // "Oct-2018" shows as "Oct 2018"; a year in progress as "2026 to date"
+    private string PeriodText(RecordRow r) =>
+        _grain == "Annual"
+            ? (r.Yr == _curYear ? $"{r.Yr} to date" : r.Yr.ToString())
+            : ReplaceFirst(r.Period, "-", " ");
+
+    private static string ReplaceFirst(string s, string find, string with)
+    {
+        var at = s.IndexOf(find, StringComparison.Ordinal);
+        return at < 0 ? s : s[..at] + with + s[(at + find.Length)..];
+    }
+
+    private string LoadKey => _grain + "|" + DivisionId;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _rendered = true;
+        await Load();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_rendered && LoadKey != _shownKey) await Load();
+    }
+
+    private async Task OnGrain(string grain)
+    {
+        _grain = grain;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        var (grain, divisionId) = (_grain, DivisionId);
+        _shownKey = LoadKey;
+        var version = ++_version;
+        _loading = true; _error = null;
+        StateHasChanged();
+        try
+        {
+            // the same key, data and loader as the full view's RecordTable, so the two share one load
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("RecordTable", grain, divisionId),
+                () => LoadRecords(grain, divisionId));
+            if (version != _version) return;
+            _curYear = entry.AsAt.Year;
+            _all = entry.Data;
+        }
+        catch (Exception ex)
+        {
+            if (version == _version) _error = ex.Message;
+        }
+        finally
+        {
+            if (version == _version)
+            {
+                _loading = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task<(List<RecordRow>, DateTime)> LoadRecords(string grain, int divisionId)
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var all = new RecordPerformancesService(cms.Db).GetRecords(grain, divisionId);
+        return (all, asAt);
+    }
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+
+    // one record: the rank (or year) badge, what and who, the trophy for this year's records, the TFI
+    private RenderFragment Row(string badge, string main, string sub, decimal tfi, bool current) => __builder =>
+    {
+        <div class="kpim-rp-row @(current ? "kpim-rp-current" : "")">
+            <span class="kpim-rp-badge">@badge</span>
+            <div class="kpim-rp-what">
+                <span class="kpim-rp-main">@main</span>
+                <span class="kpim-rp-sub">@sub</span>
+            </div>
+            @if (current)
+            {
+                <svg class="kpim-rp-trophy" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="1.8"
+                     stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="New record this year">
+                    <path class="kpim-rp-cup" d="M8 4h8v5a4 4 0 0 1-8 0z"></path>
+                    <path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 21h8M10 17h4"></path>
+                </svg>
+            }
+            <span class="kpim-rp-value">@Cur(tfi)</span>
+        </div>
+    };
+}

@@ -1,0 +1,10 @@
+@page "/Error"
+@layout EmptyLayout
+
+<PageTitle>Something went wrong — Performance Finance KPIs</PageTitle>
+
+@* Outside Development an unhandled error lands here. The detail goes to the log, never to the page. *@
+<AuthCard Title="Something went wrong">
+    <Messages Notice="The page hit an unexpected error. Please try again." />
+    <a class="acc-link" href="/kpis">Back to the reports</a>
+</AuthCard>

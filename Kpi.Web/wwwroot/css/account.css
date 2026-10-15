@@ -1,0 +1,247 @@
+/* The KPI site's own pages: the account screens (sign-in card bits beyond CMS.Web's .login-*), the avatar menu,
+   My Account and Settings. Colours come only from app.css's tokens. */
+
+/* The favourite star's gold: the SAME token and value as kpi.css (loaded only on report pages), so the star is one
+   colour in the phone menu, the sidebar and My Account. */
+:root { --kpim-star: #f5b301; }
+
+/* ---- account screens (inside CMS.Web's .login-card) -------------------------------------------------------- */
+.acc-title { font-size: 19px; font-weight: 600; color: var(--text); margin: -10px 0 16px; text-align: center; }
+.acc-text { font-size: 14px; color: var(--text-2); margin: 0 0 14px; line-height: 1.45; }
+.acc-hint { font-size: 12.5px; color: var(--text-3); margin: -6px 0 14px; line-height: 1.4; }
+.acc-check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-2); margin: 0 0 16px; cursor: pointer; }
+/* a tick box keeps its own size wherever the text-box rules below would stretch it */
+.acc-check input[type=checkbox], .login-card .acc-check input[type=checkbox] { width: auto; height: auto; margin: 0; padding: 0; flex: 0 0 auto; }
+.acc-link { display: block; text-align: center; margin-top: 14px; font-size: 13.5px; color: var(--link, var(--brand)); text-decoration: none; }
+.acc-link:hover { text-decoration: underline; }
+.acc-link-btn { width: 100%; background: none; border: 0; cursor: pointer; font-family: inherit; padding: 0; }
+.acc-code { letter-spacing: 0.25em; font-size: 18px !important; text-align: center; }
+.acc-steps { font-size: 13.5px; color: var(--text-2); padding-left: 20px; margin: 0 0 14px; line-height: 1.45; }
+.acc-steps li { margin-bottom: 6px; }
+.acc-qr { display: block; width: 190px; height: 190px; margin: 0 auto 10px; }
+.acc-key { font-size: 12.5px; color: var(--text-3); text-align: center; margin: 0 0 16px; }
+.acc-key code { font-size: 13px; color: var(--text); letter-spacing: 0.06em; word-break: break-all; }
+
+/* ---- the avatar, top right, and its menu (CMS.Web's user menu look) ---------------------------------------- */
+.um { position: relative; margin-left: 14px; flex: 0 0 auto; }
+.um-avatar {
+    width: 34px; height: 34px; border-radius: 50%; border: 0; padding: 0;
+    background: var(--sidebar-bg); color: var(--surface);
+    font: 600 13px/1 inherit; display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.um-avatar:hover { filter: brightness(1.12); }
+.um-avatar[aria-expanded="true"] { outline: 2px solid var(--brand-tint-2); }
+.um-backdrop { position: fixed; inset: 0; z-index: 99; }
+.um-menu {
+    position: absolute; top: calc(100% + 8px); right: 0; width: 250px; z-index: 100;
+    background: var(--surface); color: var(--text); border: 1px solid var(--line-strong); border-radius: 8px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15); padding: 8px;
+}
+.um-head { padding: 6px 8px 10px; border-bottom: 1px solid var(--line); margin-bottom: 6px; }
+.um-name { font-weight: 600; }
+.um-email { font-size: 12px; color: var(--text-2); margin-top: 2px; word-break: break-all; }
+.um-role { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+.um-menu a, .um-menu button {
+    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 4px;
+    background: transparent; border: 0; font: inherit; font-size: 14px; color: var(--text); text-decoration: none; text-align: left; cursor: pointer;
+}
+.um-menu a:hover, .um-menu button:hover { background: var(--panel-head); }
+.um-menu form { margin: 0; }
+/* in the phone menu's head, beside the close button */
+.kpim-menu-head .um { margin-left: auto; margin-right: 6px; }
+.kpim-menu-page .kpim-menu-head .um { margin-right: 0; }
+
+/* the KPI home's header, above "Select a report" */
+.kpi-main > .kpi-topbar + .kpi-empty { height: calc(100% - 60px); }
+
+/* ---- My Account and Settings: the KPI shell, with a phone layout of their own ------------------------------ */
+.acc-back { display: none; align-items: center; gap: 4px; font-size: 14px; color: var(--brand); text-decoration: none; margin-right: 10px; }
+.acc-topbar h1 { flex: 1; }
+.acc-page { max-width: 760px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.acc-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; }
+.acc-card h2 { font-size: 16px; font-weight: 600; margin: 0 0 12px; color: var(--text); }
+.acc-facts { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; margin: 0 0 12px; font-size: 14px; }
+.acc-facts dt { color: var(--text-3); font-weight: 400; }
+.acc-facts dd { margin: 0; color: var(--text); word-break: break-word; }
+.acc-form { max-width: 380px; }
+.acc-form input, .set-form input, .set-form select, .set-dialog input, .set-dialog select {
+    width: 100%; height: 37px; padding: 4px 12px; margin-bottom: 15px; border: 1px solid var(--line-strong);
+    border-radius: 4px; font-family: inherit; font-size: 14px; background: var(--surface);
+}
+.acc-form input:focus, .set-form input:focus, .set-dialog input:focus, .set-dialog select:focus {
+    outline: none; border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-tint-2);
+}
+.acc-form .login-pw-wrap input { margin-bottom: 0; }
+.acc-form .login-button { width: auto; padding: 0 22px; }
+.acc-favs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+.acc-fav {
+    width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--line);
+    border-radius: 6px; background: var(--surface); font: inherit; font-size: 14px; color: var(--text); cursor: pointer; text-align: left;
+}
+.acc-fav:hover { background: var(--surface-alt); }
+.acc-fav .bi-star, .acc-fav .bi-star-fill { color: var(--text-3); font-size: 16px; }
+.acc-fav.acc-on { border-color: var(--brand-tint-2); background: var(--brand-tint); }
+.acc-fav.acc-on .bi-star-fill { color: var(--kpim-star); }
+.acc-fav-icon { color: var(--text-3); }
+
+.acc-btn, .acc-btn-secondary {
+    display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border-radius: 4px;
+    font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.acc-btn { background: var(--brand); color: var(--surface); border: 0; }
+.acc-btn:hover { background: var(--brand-dark); }
+.acc-btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--line-strong); }
+.acc-btn-secondary:hover { background: var(--panel-head); }
+.acc-btn:disabled, .acc-btn-secondary:disabled { opacity: 0.55; cursor: default; }
+
+/* ---- Settings ------------------------------------------------------------------------------------------------ */
+.set-layout { display: flex; align-items: flex-start; gap: 20px; padding: 20px; }
+.set-nav { flex: 0 0 200px; display: flex; flex-direction: column; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+.set-nav a { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 5px; color: var(--text); text-decoration: none; font-size: 14px; }
+.set-nav a:hover { background: var(--surface-alt); }
+.set-nav a.set-on { background: var(--brand-tint-2); color: var(--text-strong); font-weight: 600; }
+.set-panel { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; }
+.set-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.set-head h2 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+.set-head .acc-hint { margin: 0; }
+.set-filter { height: 34px; padding: 4px 10px; border: 1px solid var(--line-strong); border-radius: 4px; font: inherit; font-size: 14px; width: 220px; max-width: 100%; }
+
+.set-table-wrap { overflow-x: auto; }
+.set-table { width: 100%; border-collapse: collapse; font-size: var(--grid-font, 14px); }
+.set-table th { text-align: left; font-size: 13px; font-weight: 600; color: var(--text-strong); padding: 6px 10px; border-bottom: 2px solid var(--grid-line); white-space: nowrap; }
+.set-table td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.set-strong { font-weight: 600; }
+.set-sub { font-size: 12.5px; color: var(--text-3); }
+.set-nowrap { white-space: nowrap; }
+.set-error-cell { max-width: 420px; color: var(--error); font-size: 13px; }
+.set-actions { white-space: nowrap; text-align: right; }
+.set-act { background: none; border: 0; padding: 2px 6px; color: var(--brand); font: inherit; font-size: 13px; cursor: pointer; }
+.set-act:hover { text-decoration: underline; }
+.set-act-danger { color: var(--error); }
+.set-bad { color: var(--error); }
+
+.set-pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--panel-head); color: var(--text-2); white-space: nowrap; }
+.set-pill-active, .set-pill-connected { background: var(--success-bg); color: var(--success); }
+.set-pill-disabled, .set-pill-needsattention, .set-pill-inviteexpired { background: var(--error-bg); color: var(--error); }
+.set-pill-invited, .set-pill-settingup, .set-pill-authenticatorreset, .set-pill-switchedoff { background: var(--warning-bg); color: var(--warning); }
+
+.set-link { position: relative; border: 1px solid var(--brand-tint-2); background: var(--brand-tint); border-radius: 6px; padding: 10px 40px 10px 12px; margin-bottom: 14px; font-size: 13.5px; }
+.set-link p { margin: 0 0 8px; display: flex; gap: 8px; align-items: flex-start; }
+.set-link-ok { border-color: var(--success-border); background: var(--success-bg); }
+.set-link-ok p { margin: 0; }
+.set-link-row { display: flex; gap: 8px; }
+.set-link-row input { flex: 1; min-width: 0; height: 34px; padding: 4px 10px; border: 1px solid var(--line-strong); border-radius: 4px; font-size: 12.5px; background: var(--surface); }
+.set-link-close { position: absolute; top: 6px; right: 6px; background: none; border: 0; color: var(--text-3); cursor: pointer; padding: 4px 6px; }
+
+.set-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); z-index: 200; }
+.set-dialog {
+    position: fixed; z-index: 201; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 440px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow-y: auto;
+    background: var(--surface); border-radius: 8px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.3); padding: 20px 22px;
+}
+.set-dialog h3 { font-size: 17px; font-weight: 600; margin: 0 0 14px; }
+.set-dialog-buttons, .set-buttons { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.set-buttons { justify-content: flex-start; }
+.set-confirm { margin-top: 12px; padding: 12px; border: 1px solid var(--error-border); background: var(--error-bg); border-radius: 6px; font-size: 13.5px; }
+.set-confirm p { margin: 0 0 10px; }
+.set-confirm .acc-btn { margin-left: 6px; }
+
+.set-card { border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; }
+.set-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.set-card-head h3 { font-size: 16px; font-weight: 600; margin: 0 0 4px; display: flex; gap: 8px; align-items: center; }
+.set-card-head .acc-hint { margin: 0; }
+.set-form { max-width: 420px; }
+
+.set-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.set-tile { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; }
+.set-tile-bad { border-color: var(--error-border); background: var(--error-bg); }
+.set-tile-label { font-size: 12.5px; color: var(--text-3); }
+.set-tile-value { font-size: 17px; font-weight: 600; color: var(--text-strong); }
+.set-tile-note { font-size: 12.5px; color: var(--text-2); }
+.set-tile-bad .set-tile-note { color: var(--error); }
+
+/* ---- a phone: no sidebar, a back link, the settings menu as a row of tabs ------------------------------------ */
+@media (max-width: 599px) {
+    .acc-shell .kpi-sidebar { display: none; }
+    .acc-shell .kpi-topbar { padding: 0 12px; }
+    .acc-shell .kpi-topbar h1 { font-size: 19px; }
+    .acc-back { display: inline-flex; }
+    .acc-page { padding: 12px; gap: 12px; }
+    .acc-card { padding: 14px; }
+    .acc-facts { grid-template-columns: 80px 1fr; }
+    .acc-form .login-button { width: 100%; }
+    .set-layout { flex-direction: column; padding: 12px; gap: 12px; }
+    .set-nav { flex: none; flex-direction: row; overflow-x: auto; width: 100%; }
+    .set-nav a { flex: 0 0 auto; }
+    .set-panel { width: 100%; padding: 14px; }
+    .set-head { flex-direction: column; }
+    .set-filter { width: 100%; }
+}
+
+/* ---- the account screens on a phone: a tighter card from the top, and 16px fields - an iPhone zooms the whole
+   page into any field whose text is smaller than that ------------------------------------------------------- */
+@media (max-width: 599px) {
+    .login-page { justify-content: flex-start; padding: 20px 0; }
+    .login-card { padding: 22px 20px; }
+    .pf-logo { margin-bottom: 20px; }
+    .pf-logo-img { width: 230px; }
+    .login-card input, .acc-form input, .set-form input, .set-form select,
+    .set-dialog input, .set-dialog select, .set-filter, .set-link-row input { font-size: 16px; }
+    .acc-qr { width: 170px; height: 170px; }
+}
+
+/* ---- a report's title bar: "As at" / "Refreshed" docked right, beside the avatar ------------------------------ */
+.kpi-topbar > .kpi-dateline { margin-left: auto; }
+.kpi-topbar > .um { margin-left: 20px; }
+
+/* ---- the avatar in the phone's reports menu sits on crimson, so it turns round: white, crimson initials --------- */
+.kpim-menu-head .um-avatar { background: var(--surface); color: var(--sidebar-bg); }
+
+/* ---- the sidebar's Favourites / All switch and stars (the phone menu's, on the full view) ---------------------- */
+.kpi-favswitch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 10px 12px 2px; padding: 3px;
+    border-radius: 8px; background: var(--sidebar-hover); }
+.kpi-favswitch button { height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--sidebar-fg);
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.kpi-favswitch button.kpi-on { background: var(--surface); color: var(--sidebar-bg); }
+.kpi-favcount { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 9px; background: var(--sidebar-hover); }
+.kpi-favswitch button.kpi-on .kpi-favcount { background: var(--panel-head); }
+.kpi-favempty { margin: 12px 14px 4px; padding: 12px; border: 1px dashed var(--sidebar-fg-faint); border-radius: 8px;
+    color: var(--sidebar-fg); font-size: 13px; line-height: 1.4; white-space: normal; }
+.kpi-navrow { display: flex; align-items: center; }
+.kpi-navrow > .nav-item { flex: 1; min-width: 0; padding-right: 4px; }
+.kpi-navrow .nav-item-label { overflow: hidden; text-overflow: ellipsis; }
+.kpi-navstar { flex: 0 0 auto; width: 30px; height: 30px; margin-right: 8px; border: 0; border-radius: 6px;
+    background: transparent; color: var(--sidebar-fg-faint); cursor: pointer; display: flex; align-items: center;
+    justify-content: center; font-size: 14px; }
+.kpi-navstar:hover { background: var(--sidebar-hover); color: var(--sidebar-fg); }
+.kpi-navstar.kpi-on { color: var(--kpim-star); }
+
+/* ---- Settings > Users: the report ticks ------------------------------------------------------------------------ */
+.set-reports { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px 4px; max-height: 340px; overflow-y: auto; margin-bottom: 14px; }
+.set-reports .acc-check { margin: 0 0 7px; }
+.set-reports-all { font-weight: 600; color: var(--text) !important; }
+.set-reports-head { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); margin: 8px 0 6px; }
+
+/* ---- Settings on a phone: the tabs fit without their icons; the user list reads as cards ---------------------- */
+@media (max-width: 599px) {
+    .set-nav a i { display: none; }
+    .set-nav a { padding: 8px 10px; }
+    .set-cards thead { display: none; }
+    .set-cards tr { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin-bottom: 10px; }
+    .set-cards td { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border: 0; padding: 5px 0; }
+    .set-cards td[data-label]::before { content: attr(data-label); color: var(--text-3); font-size: 12.5px; flex: 0 0 auto; }
+    .set-cards td[data-label] > * { text-align: right; }
+    .set-cards td.set-actions { justify-content: flex-start; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--line); margin-top: 4px; }
+    .set-cards .set-act { padding: 6px 8px 6px 0; }
+}
+
+/* An unstarred report's star shows only while the mouse is over the sidebar (Steve); a starred one always shows. Only
+   where there IS a mouse: a touch screen has no hover, so there every star stays visible. */
+@media (hover: hover) {
+    .kpi-navstar:not(.kpi-on) { opacity: 0; transition: opacity 0.15s ease; }
+    .kpi-sidebar:hover .kpi-navstar, .kpi-navstar:focus-visible { opacity: 1; }
+}
+
+/* "As at" when the copy from CMS has stopped: amber, with a warning icon and the reason on hover */
+.kpi-asof.kpi-stale, .kpim-bar-dates .kpi-stale { color: var(--warning); font-weight: 600; }
+.kpi-stale i { margin-right: 3px; }

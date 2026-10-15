@@ -1,0 +1,96 @@
+@page "/account/authenticator"
+@layout EmptyLayout
+@using System.Text
+@using System.Text.Encodings.Web
+@using Kpi.Data
+@using Kpi.Data.Auth
+@using Microsoft.AspNetCore.Identity
+@using QRCoder
+@inject UserManager<KpiUser> Users
+@inject SignInManager<KpiUser> SignIn
+@inject KpiDbContext Db
+@inject NavigationManager Nav
+@inject IWebHostEnvironment Env
+
+<PageTitle>Set up your authenticator — Performance Finance KPIs</PageTitle>
+
+<AuthCard Title="Set up your authenticator">
+    @if (_closed)
+    {
+        <Messages Notice="Setting up an authenticator has to be done within an hour of following your email link, in the same browser. Follow the link again, or ask your System Admin for a new one." />
+    }
+    else if (_qr is not null)
+    {
+        <Messages Error="@(Error is null ? null : "That code wasn't recognised. Codes change every 30 seconds - try the one showing now.")" />
+        <ol class="acc-steps">
+            <li>Install an authenticator app on your phone if you don't have one: <b>Microsoft Authenticator</b> or <b>Google Authenticator</b> are free.</li>
+            <li><b>Microsoft Authenticator:</b> tap <b>+</b> (Add account), choose <b>Other account (Google, Facebook, etc.)</b>, then point the camera at this code.<br />
+                <b>Google Authenticator:</b> tap <b>+</b>, then <b>Scan a QR code</b>.</li>
+            <li>Type the six-digit code the app now shows for Performance Finance KPIs.</li>
+        </ol>
+        <img class="acc-qr" src="@_qr" alt="QR code for your authenticator app" />
+        <p class="acc-key">Can't scan it? Enter this key in the app instead:<br /><code>@_key</code></p>
+
+        <form method="post" action="/account/authenticator/enable">
+            <AntiforgeryToken />
+            <label class="login-label" for="code">Code from the app</label>
+            <input id="code" name="code" class="acc-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" required />
+            <button type="submit" class="login-button">Finish</button>
+        </form>
+    }
+
+    @* No Cancel: there is nowhere to go until this is done. Signing out leaves the account as it was. *@
+    <form method="post" action="/account/logout">
+        <AntiforgeryToken />
+        <button type="submit" class="acc-link acc-link-btn">Sign out</button>
+    </form>
+</AuthCard>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+
+    private bool _closed;
+    private string? _qr;
+    private string? _key;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await Users.GetUserAsync(HttpContext.User);
+        if (user is null) { Nav.NavigateTo("/account/login"); return; }
+        if (user.TwoFactorEnabled) { Nav.NavigateTo("/"); return; }
+
+        // only inside the one-hour window an emailed link (or My Account's new phone) opened in this browser
+        if (!await new Kpi.Web.Account.AccountSetup(Db, Users).IsOpenAsync(user.Id, Kpi.Web.Account.SetupCookie.Read(HttpContext)))
+        {
+            _closed = true;
+            return;
+        }
+
+        // A key exists once someone has started: a refresh part-way through must not break what they scanned.
+        var key = await Users.GetAuthenticatorKeyAsync(user);
+        if (string.IsNullOrEmpty(key))
+        {
+            await Users.ResetAuthenticatorKeyAsync(user);
+            key = await Users.GetAuthenticatorKeyAsync(user);
+            await SignIn.RefreshSignInAsync(user);   // minting a key rolled the stamp: keep this session
+        }
+        if (string.IsNullOrEmpty(key)) return;
+
+        _key = Format(key);
+        var issuer = Env.IsProduction() ? "Performance Finance KPIs" : $"Performance Finance KPIs ({Env.EnvironmentName})";
+        var uri = $"otpauth://totp/{UrlEncoder.Default.Encode(issuer)}:{UrlEncoder.Default.Encode(user.Email ?? "")}" +
+                  $"?secret={key}&issuer={UrlEncoder.Default.Encode(issuer)}&digits=6";
+        using var generator = new QRCodeGenerator();
+        using var data = generator.CreateQrCode(uri, QRCodeGenerator.ECCLevel.Q);
+        _qr = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(new SvgQRCode(data).GetGraphic(4)));
+    }
+
+    // in fours, as every authenticator app shows a key
+    private static string Format(string key)
+    {
+        var sb = new StringBuilder();
+        for (var i = 0; i < key.Length; i += 4) sb.Append(key.AsSpan(i, Math.Min(4, key.Length - i))).Append(' ');
+        return sb.ToString().Trim().ToUpperInvariant();
+    }
+}

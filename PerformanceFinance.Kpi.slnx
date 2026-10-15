@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Kpi.Data/Kpi.Data.csproj" />
+  <Project Path="Kpi.Push/Kpi.Push.csproj" />
+  <Project Path="Kpi.Tools/Kpi.Tools.csproj" />
+  <Project Path="Kpi.Web/Kpi.Web.csproj" />
+</Solution>

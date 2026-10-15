@@ -1,0 +1,12 @@
+<Router AppAssembly="@typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.EmptyLayout)">
+            <NotAuthorized>
+                <div class="kpi-placeholder">
+                    <i class="bi bi-lock"></i>
+                    <p>You don't have access to this report.</p>
+                </div>
+            </NotAuthorized>
+        </AuthorizeRouteView>
+    </Found>
+</Router>

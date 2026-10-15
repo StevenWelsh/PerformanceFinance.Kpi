@@ -1,0 +1,303 @@
+@using Kpi.Data.Auth
+@using Kpi.Web.Account
+@using Kpi.Web.Integrations
+@using Kpi.Web.Data.Kpis
+@inject UserAdmin Admin
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@* Settings > Users: everyone who can sign in, and the System Admin's tools - invite, change role and reports,
+   send an invitation again or withdraw it, reset a lost phone, disable. Emailed links go through Resend; when an email
+   can't be sent the link is shown here to pass on by hand. *@
+
+<div class="set-head">
+    <div>
+        <h2>Users</h2>
+        <p class="acc-hint">A System Admin sees every report and Settings. A User sees the reports ticked for them; the rest are hidden from their menus.</p>
+    </div>
+    <button type="button" class="acc-btn" @onclick="StartInvite"><i class="bi bi-person-plus" aria-hidden="true"></i> Invite</button>
+</div>
+
+@if (_error is not null)
+{
+    <div class="login-error" role="alert"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+}
+@if (_link is not null)
+{
+    <div class="set-link @(_link.Mail == MailOutcome.Sent ? "set-link-ok" : "")">
+        <p><i class="bi @(_link.Mail == MailOutcome.Sent ? "bi-check-circle" : "bi-info-circle")" aria-hidden="true"></i> @LinkMessage(_link.Mail)</p>
+        @if (_link.Mail != MailOutcome.Sent)
+        {
+            <div class="set-link-row">
+                <input readonly value="@_link.Link" aria-label="Link" />
+                <button type="button" class="acc-btn-secondary" @onclick="CopyLink">@(_copied ? "Copied" : "Copy")</button>
+            </div>
+        }
+        <button type="button" class="set-link-close" aria-label="Dismiss" @onclick="() => _link = null"><i class="bi bi-x-lg"></i></button>
+    </div>
+}
+
+@if (_rows is null)
+{
+    <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+}
+else
+{
+    <div class="set-table-wrap">
+        <table class="set-table set-cards">
+            <thead>
+                <tr><th>Name</th><th>Role</th><th>Reports</th><th>Status</th><th>Last sign-in</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var u in _rows)
+                {
+                    @* data-label: on a phone each row is a card, labelled by these *@
+                    <tr>
+                        <td data-label="Name"><div class="set-strong">@u.Name@(u.IsMe ? " (you)" : "")</div><div class="set-sub">@u.Email</div></td>
+                        <td data-label="Role">@KpiRoles.Label(u.Role)</td>
+                        <td data-label="Reports" title="@ReportsTitle(u)">@ReportsText(u)</td>
+                        <td data-label="Status"><span class="set-pill set-pill-@(u.Status.Replace(" ", "").ToLowerInvariant())">@u.Status</span></td>
+                        <td data-label="Last sign-in">@Kpi.Web.Data.UkTime.Show(u.LastSignInUtc)</td>
+                        <td class="set-actions">
+                            <button type="button" class="set-act" @onclick="() => StartEdit(u)">Edit</button>
+                            @if (u.Status is "Invited" or "Invite expired" or "Setting up")
+                            {
+                                <button type="button" class="set-act" @onclick="() => Run(() => Admin.ResendInviteAsync(User, u.Id, Nav.BaseUri))">Send again</button>
+                                <button type="button" class="set-act set-act-danger" @onclick="() => ConfirmWithdraw(u)">Withdraw</button>
+                            }
+                            else if (!u.IsMe)
+                            {
+                                @if (u.Status != "Disabled")
+                                {
+                                    <button type="button" class="set-act" @onclick="() => StartReset(u)">Reset authenticator</button>
+                                    <button type="button" class="set-act set-act-danger" @onclick="() => ConfirmDisable(u)">Disable</button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="set-act" @onclick="() => Run(() => Admin.SetDisabledAsync(User, u.Id, false))">Enable</button>
+                                }
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@* ---- dialogs ---- *@
+@if (_dialog is not null)
+{
+    <div class="set-backdrop" @onclick="Close"></div>
+    <div class="set-dialog" role="dialog" aria-modal="true" aria-labelledby="set-dlg-title">
+        <h3 id="set-dlg-title">@_dialog</h3>
+        @if (_dialogError is not null)
+        {
+            <div class="login-error" role="alert"><i class="bi bi-exclamation-triangle-fill"></i> @_dialogError</div>
+        }
+
+        @if (_dialog is "Invite someone" or "Edit user")
+        {
+            <label class="login-label" for="u-name">Name</label>
+            <input id="u-name" @bind="_name" />
+            @if (_dialog == "Invite someone")
+            {
+                <label class="login-label" for="u-email">Email</label>
+                <input id="u-email" type="email" @bind="_email" />
+            }
+            <label class="login-label" for="u-role">Role</label>
+            <select id="u-role" @bind="_role" disabled="@_editingSelf">
+                <option value="@KpiRoles.User">User - the reports ticked below</option>
+                <option value="@KpiRoles.SystemAdmin">System Admin - every report, and Settings</option>
+            </select>
+            @if (_role == KpiRoles.User)
+            {
+                <div class="set-reports">
+                    <label class="acc-check set-reports-all"><input type="checkbox" @bind="_allReports" /> All reports, including new ones</label>
+                    @if (!_allReports)
+                    {
+                        @foreach (var section in KpiReports.Sections)
+                        {
+                            <div class="set-reports-section">
+                                <div class="set-reports-head">@section</div>
+                                @foreach (var r in KpiReports.All.Where(r => r.Section == section))
+                                {
+                                    <label class="acc-check">
+                                        <input type="checkbox" checked="@_reports.Contains(r.Slug)" @onchange="e => Tick(r.Slug, e)" /> @r.Label
+                                    </label>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            }
+            @if (_editingSelf)
+            {
+                <p class="acc-hint">You can't change your own role.</p>
+            }
+        }
+        else if (_dialog == "Reset authenticator")
+        {
+            <p class="acc-text">Use this when @_target?.Name has lost or replaced their phone. Their authenticator stops working at once,
+               and they're emailed a link (it lasts a day) to set it up again with their password.</p>
+            <p class="acc-text"><b>This is the one way round two-factor, so check it really is them first</b> - a phone call to a number you already have, or in person.</p>
+            <label class="login-label" for="u-how">How did you check it was them?</label>
+            <input id="u-how" @bind="_how" placeholder="e.g. phoned them on their mobile" />
+        }
+        else if (_confirmText is not null)
+        {
+            <p class="acc-text">@_confirmText</p>
+        }
+
+        <div class="set-dialog-buttons">
+            <button type="button" class="acc-btn-secondary" @onclick="Close">Cancel</button>
+            <button type="button" class="acc-btn" disabled="@_busy" @onclick="Ok">@(_dialog switch
+            {
+                "Invite someone" => "Send invitation",
+                "Edit user" => "Save",
+                "Reset authenticator" => "Reset and email them",
+                _ => "Yes"
+            })</button>
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+    private System.Security.Claims.ClaimsPrincipal User = new();
+
+    private List<UserAdmin.UserRow>? _rows;
+    private string? _error;
+    private UserAdmin.LinkResult? _link;
+    private bool _copied;
+
+    // the open dialog: its title, and what it is working on
+    private string? _dialog;
+    private string? _dialogError;
+    private bool _busy;
+    private UserAdmin.UserRow? _target;
+    private string _name = "", _email = "", _role = KpiRoles.User, _how = "";
+    private bool _allReports, _editingSelf;
+    private HashSet<string> _reports = new();
+    private string? _confirmText;
+    private Func<Task>? _confirmAction;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null) User = (await AuthState).User;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        try { _rows = await Admin.ListAsync(User); }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private void StartInvite() => Open("Invite someone", null, "", "", KpiRoles.User, false, Array.Empty<string>());
+
+    private void StartEdit(UserAdmin.UserRow u) => Open("Edit user", u, u.Name, u.Email,
+        string.IsNullOrEmpty(u.Role) ? KpiRoles.User : u.Role, u.AllReports, u.Reports);
+
+    private void StartReset(UserAdmin.UserRow u)
+    {
+        Open("Reset authenticator", u, "", "", "", false, Array.Empty<string>());
+        _how = "";
+    }
+
+    private void Tick(string slug, ChangeEventArgs e)
+    {
+        if (e.Value is true) _reports.Add(slug); else _reports.Remove(slug);
+    }
+
+    private void ConfirmWithdraw(UserAdmin.UserRow u) =>
+        Confirm($"Withdraw {u.Name}'s invitation? Their account is removed.", () => Admin.WithdrawInviteAsync(User, u.Id));
+
+    private void ConfirmDisable(UserAdmin.UserRow u) =>
+        Confirm($"Disable {u.Name}? They can no longer sign in, and any open session ends within a minute.", () => Admin.SetDisabledAsync(User, u.Id, true));
+
+    private void Confirm(string text, Func<Task> action)
+    {
+        Open("Are you sure?", null, "", "", "", false, Array.Empty<string>());
+        _confirmText = text;
+        _confirmAction = action;
+    }
+
+    private void Open(string dialog, UserAdmin.UserRow? target, string name, string email, string role, bool allReports,
+                      IEnumerable<string> reports)
+    {
+        _dialog = dialog; _target = target; _dialogError = null; _confirmText = null; _confirmAction = null;
+        _name = name; _email = email; _role = role; _allReports = allReports; _reports = reports.ToHashSet();
+        _editingSelf = target?.IsMe == true;
+    }
+
+    private void Close() => _dialog = null;
+
+    private async Task Ok()
+    {
+        _busy = true;
+        _dialogError = null;
+        try
+        {
+            switch (_dialog)
+            {
+                case "Invite someone":
+                    _link = await Admin.InviteAsync(User, _name, _email, _role, _allReports, _reports, Nav.BaseUri);
+                    break;
+                case "Edit user":
+                    await Admin.UpdateAsync(User, _target!.Id, _name, _role, _allReports, _reports);
+                    break;
+                case "Reset authenticator":
+                    _link = await Admin.ResetTwoFactorAsync(User, _target!.Id, _how, Nav.BaseUri);
+                    break;
+                default:
+                    if (_confirmAction is not null) await _confirmAction();
+                    break;
+            }
+            _copied = false;
+            _dialog = null;
+            await Load();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException) { _dialogError = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    // an action with no dialog: its result, or what went wrong, shows above the list
+    private async Task Run(Func<Task<UserAdmin.LinkResult>> action)
+    {
+        _error = null;
+        try { _link = await action(); _copied = false; await Load(); }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException) { _error = ex.Message; }
+    }
+
+    private async Task Run(Func<Task> action)
+    {
+        _error = null;
+        try { await action(); await Load(); }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException) { _error = ex.Message; }
+    }
+
+    private async Task CopyLink()
+    {
+        if (_link is null) return;
+        try { await JS.InvokeVoidAsync("navigator.clipboard.writeText", _link.Link); _copied = true; }
+        catch (JSException) { }
+    }
+
+    private static string ReportsText(UserAdmin.UserRow u) =>
+        u.Role == KpiRoles.SystemAdmin || u.AllReports ? "All"
+        : u.Reports.Count == 0 ? "None" : $"{u.Reports.Count} of {KpiReports.All.Length}";
+
+    // the reports themselves, on hover
+    private static string? ReportsTitle(UserAdmin.UserRow u) =>
+        u.Role == KpiRoles.SystemAdmin || u.AllReports || u.Reports.Count == 0 ? null
+        : string.Join(", ", u.Reports.Select(slug => KpiReports.All.FirstOrDefault(r => r.Slug == slug)?.Label ?? slug));
+
+    private static string LinkMessage(MailOutcome mail) => mail switch
+    {
+        MailOutcome.Sent => "Emailed.",
+        MailOutcome.NotConfigured => "Email isn't set up yet (Integrations), so nothing was sent. Copy the link and send it to them yourself.",
+        MailOutcome.NoTestAddress => "This isn't the live site and Resend has no test address, so nothing was sent. Copy the link and send it to them yourself.",
+        _ => "The email couldn't be sent (see Integrations). Copy the link and send it to them yourself."
+    };
+}

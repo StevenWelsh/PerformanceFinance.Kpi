@@ -1,0 +1,56 @@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
+
+@* Sales Summary on a phone: the Sales Office and one division at a time (the full view shows every
+   division side by side), then Year, Quarter and Month to date in one scroll. Each card loads its own
+   figures, as on the full view. *@
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else if (Divisions is not null)
+{
+    var division = Divisions.FirstOrDefault(d => d.Id == _divisionId);
+    if (division.Title is null) division = Divisions[0];
+
+    <KpiMobileFilters>
+        <div class="kpim-filters" style="--kpim-cols:2">
+            <KpiOfficeField Changed="OfficeChanged" />
+            <KpiField Caption="Division" Value="@division.Id.ToString()" ValueChanged="OnDivision"
+                      Options="@Divisions.Select(d => new KpiOption(d.Id.ToString(), d.Name)).ToList()" />
+        </div>
+    </KpiMobileFilters>
+
+    @if (!Office.ShowsData)
+    {
+        <KpiOfficeEmpty />
+    }
+    else
+    {
+        @foreach (var period in Periods)
+        {
+            <SalesSummaryMobileCard @key="period" Period="@period" DivisionId="division.Id" Title="@division.Title" />
+        }
+    }
+}
+
+@code {
+    private static readonly string[] Periods = { "Year", "Quarter", "Month" };
+
+    /// <summary>"All" (-1) first, then each division: Title upper-cased for the card headings, Name as chosen.</summary>
+    [Parameter] public IReadOnlyList<(int Id, string Title, string Name)>? Divisions { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    /// <summary>The page's re-render, after a Sales Office choice (the full view follows it too).</summary>
+    [Parameter] public EventCallback OfficeChanged { get; set; }
+
+    private int _divisionId = -1;
+
+    private void OnDivision(string value) => _divisionId = int.TryParse(value, out var v) ? v : -1;
+}

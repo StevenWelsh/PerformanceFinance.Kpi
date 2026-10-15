@@ -1,0 +1,134 @@
+@using Kpi.Web.Reports
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+
+@* One Sales Summary comparison card: a division (or "All") over one period, this
+   year vs last. Loads its own data so nine of these can tile a grid independently.
+   Params: DivisionId (-1 = all), Title (heading label), Period (Year|Quarter|Month).
+   Styled as the phone's card (kpi.css, Sales Summary): it tightens itself when narrow, so the
+   % column always shows. *@
+
+<div class="ss-card kpi-ss-card">
+    <div class="ss-card-head">@Title: @PeriodLabel</div>
+
+    @if (_loading)
+    {
+        <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+    }
+    else if (_error is not null)
+    {
+        <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+    }
+    else if (_now is not null && _prev is not null)
+    {
+        <table class="ss-table">
+            <thead>
+                <tr><th></th><th>@_prev.AnalysisPeriodName</th><th>@_now.AnalysisPeriodName</th><th>%</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>TFI</td><td>@Cur(_prev.TFI)</td><td>@Cur(_now.TFI)</td>@Delta(_prev.TFI, _now.TFI)</tr>
+                <tr><td>@(Minimal ? "AF" : "Amount Financed")</td><td>@Cur(_prev.AF)</td><td>@Cur(_now.AF)</td>@Delta(_prev.AF, _now.AF)</tr>
+                <tr><td>Margin</td><td>@Pct(_prev.Margin)</td><td>@Pct(_now.Margin)</td>@Delta(_prev.Margin, _now.Margin)</tr>
+                <tr><td>Leads</td><td>@_prev.Leads.ToString("N0")</td><td>@_now.Leads.ToString("N0")</td>@Delta(_prev.Leads, _now.Leads)</tr>
+                <tr class="ss-ne">
+                    <td>@(Minimal ? "New / Exist" : "New / Existing")</td>
+                    <td>@NewExisting(_prev)<span class="ss-ne-pct">@Split(_prev)</span></td>
+                    <td>@NewExisting(_now)<span class="ss-ne-pct">@Split(_now)</span></td>
+                    <td></td>
+                </tr>
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    [Parameter] public int DivisionId { get; set; } = -1;
+    [Parameter] public int SalespersonId { get; set; } = -1;   // -1 = not filtered by person
+    [Parameter] public string Title { get; set; } = "All";
+    [Parameter] public string Period { get; set; } = "Year";
+    [Parameter] public bool Minimal { get; set; }   // short labels for narrow panels (AF, New / Exist)
+
+    private bool _loading = true;
+    private string? _error;
+    private SalesSummaryRow? _now;
+    private SalesSummaryRow? _prev;
+
+    // Cached payload for this cell: this-period vs prior-period rows.
+    private sealed record Rows(SalesSummaryRow? Now, SalesSummaryRow? Prev);
+
+    // Pure loader — runs the proc, returns the two rows + the report date. No field mutation.
+    private async Task<(Rows, DateTime)> LoadRows()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var rows = new SalesSummaryService(cms.Db).GetSummary(Period, divisionId: DivisionId, salespersonId: SalespersonId);
+        return (new Rows(rows.FirstOrDefault(r => r.PeriodId == 1),
+                         rows.FirstOrDefault(r => r.PeriodId == 2)), asAt);
+    }
+
+    private string PeriodLabel => Period switch
+    {
+        "Quarter" => "Quarter to date",
+        "Month" => "Month to date",
+        _ => "Year to date"
+    };
+
+    // Render the spinner on first paint, THEN load — so all panels show their
+    // spinner instantly and their queries run without blocking the initial render.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        try
+        {
+            // Cached per (period + division + salesperson + report date): with ~24 of these cells
+            // tiling the Sales Summary grid, this makes a repeat open / tab-flick instant instead of
+            // re-running every cell's proc. GetOrLoad is single-flight, so the grid's cells that share
+            // a key (they don't here — each cell is a distinct combination) would load once.
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("SalesSummaryPanel", Period, DivisionId, SalespersonId),
+                LoadRows);
+            _now = entry.Data.Now;
+            _prev = entry.Data.Prev;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+    // proc returns Margin as a fraction (Income/AF, e.g. 0.0336) -> show as 3.36%
+    private static string Pct(decimal v) => (v * 100m).ToString("N2") + "%";
+
+    // lead counts carry thousands separators, as on the phone
+    private static string NewExisting(SalesSummaryRow r) => r.NewLeads.ToString("N0") + " / " + r.ExistingLeads.ToString("N0");
+
+    // "30% / 70%" split shown under the counts (blank when there's no data)
+    private static string Split(SalesSummaryRow r)
+    {
+        var total = r.NewLeads + r.ExistingLeads;
+        if (total == 0) return "";
+        var newPct = (int)Math.Round(100m * r.NewLeads / total);
+        return $"{newPct}% / {100 - newPct}%";
+    }
+
+    // percentage-change cell, as the phone's: signed, blue up / amber down (the sign carries the direction)
+    private RenderFragment Delta(decimal prev, decimal now) => builder =>
+    {
+        builder.OpenElement(0, "td");
+        if (prev != 0m)
+        {
+            var pct = (now - prev) / Math.Abs(prev) * 100m;
+            var up = pct >= 0;
+            builder.AddAttribute(1, "class", up ? "ss-up" : "ss-down");
+            builder.AddContent(2, (up ? "+" : "") + pct.ToString("N1") + "%");
+        }
+        builder.CloseElement();
+    };
+}

@@ -1,0 +1,118 @@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Supplier Development on a phone: one of the full view's salesperson cards at a time (the Salesperson
+   field) - the report year's totals beside the year before's, the top ten, and the six-year trend of the
+   top ten, newest first. *@
+
+<KpiMobileFilters>
+    <div class="kpim-filters" style="--kpim-cols:1">
+        <KpiField Caption="Salesperson" Value="@(Selected?.SalesId.ToString() ?? "")" ValueChanged="PickSalesperson" Options="@People" Enabled="@(Cards.Count > 0)" />
+    </div>
+</KpiMobileFilters>
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else if (Selected is { } card && card.Years.Count > 0)
+{
+    var current = card.Years[0];
+    var last = card.Years.Count > 1 ? card.Years[1] : null;
+    var peak = Math.Max(1m, card.Years.Max(y => y.Top10AmountFinanced));
+
+    <section class="kpim-card kpim-sd-facts">
+        <h2 class="kpim-sd-title">@($"{card.Year} to date")</h2>
+        <div class="kpim-sd-stats">
+            <div class="kpim-sd-stat">
+                <span class="kpim-sd-label">Total AF in period</span>
+                <span class="kpim-sd-big">@Cur(current.TotalAmountFinanced)</span>
+                @if (last is not null)
+                {
+                    <span class="kpim-sd-prev">@($"{last.Year}: {Cur(last.TotalAmountFinanced)}")</span>
+                }
+            </div>
+            <div class="kpim-sd-stat kpim-sd-stat-end">
+                <span class="kpim-sd-label">Active in period</span>
+                <span class="kpim-sd-big kpim-sd-accent">@current.ActiveSuppliers</span>
+                @if (last is not null)
+                {
+                    <span class="kpim-sd-prev">@($"{last.Year}: {last.ActiveSuppliers}")</span>
+                }
+            </div>
+        </div>
+    </section>
+
+    <section class="kpim-card kpim-sd-top">
+        <h2 class="kpim-sd-title kpim-sd-top-title">@($"Top 10 — {card.Year} to date")</h2>
+        @if (card.Top10.Count == 0)
+        {
+            <p class="kpim-sd-empty">@($"No business through {card.Salesperson.Split(' ')[0]}’s suppliers yet this year.")</p>
+        }
+        @foreach (var line in card.Top10)
+        {
+            <div class="kpim-sd-row">
+                <span class="kpim-sd-rank">@line.Rank</span>
+                <div class="kpim-sd-who">
+                    <span class="kpim-sd-name" title="@line.Supplier">@line.Supplier</span>
+                    <span class="kpim-sd-prof">@line.Profession</span>
+                </div>
+                <span class="kpim-sd-af">@Cur(line.AmountFinanced)</span>
+            </div>
+        }
+        <div class="kpim-sd-total">
+            <span class="kpim-sd-rank"></span>
+            <span class="kpim-sd-total-label">Total Top 10</span>
+            <span class="kpim-sd-af">@Cur(current.Top10AmountFinanced)</span>
+        </div>
+    </section>
+
+    <section class="kpim-card kpim-sd-trend">
+        <div class="kpim-sd-trend-head">
+            <h2 class="kpim-sd-title">Top 10 supplier trend</h2>
+            <span class="kpim-sd-peak">@($"peak {Cur(peak)}")</span>
+        </div>
+        @foreach (var y in card.Years)
+        {
+            var isCurrent = y.Year == card.Year;
+            <div class="kpim-sd-year @(isCurrent ? "kpim-sd-cur" : "")" role="img"
+                 aria-label="@($"{y.Year}: top 10 {Cur(y.Top10AmountFinanced)}, {Suppliers(y.ActiveSuppliers)}, {Cur(y.TotalAmountFinanced)} total")">
+                <div class="kpim-sd-yline">
+                    <span class="kpim-sd-yr">@y.Year</span>
+                    <div class="kpim-sd-track"><div class="kpim-sd-fill" style="width:@Width(y.Top10AmountFinanced, peak)"></div></div>
+                    <span class="kpim-sd-yval">@Cur(y.Top10AmountFinanced)</span>
+                </div>
+                <span class="kpim-sd-detail">@($"{Suppliers(y.ActiveSuppliers)} · {Cur(y.TotalAmountFinanced)} total AF{(isCurrent ? " · to date" : "")}")</span>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    /// <summary>The full view's salesperson cards, in its order.</summary>
+    [Parameter] public List<SupplierDevelopmentResult> Cards { get; set; } = new();
+
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    // The salesperson shown; null = the first card.
+    private int? _salesId;
+
+    private SupplierDevelopmentResult? Selected => Cards.FirstOrDefault(c => c.SalesId == _salesId) ?? Cards.FirstOrDefault();
+
+    private IReadOnlyList<KpiOption> People => Cards
+        .Select(c => new KpiOption(c.SalesId.ToString(), c.Salesperson)).ToList();
+
+    private void PickSalesperson(string value) => _salesId = int.TryParse(value, out var id) ? id : null;
+
+    // The full view's bar size: at least 1%, to 1dp, of the six years' largest top ten.
+    private static string Width(decimal value, decimal peak)
+        => Math.Max(1m, Math.Round(Math.Max(0m, value) / peak * 100m, 1)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    private static string Suppliers(int n) => n + (n == 1 ? " active supplier" : " active suppliers");
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+}

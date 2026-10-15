@@ -1,0 +1,203 @@
+@using System.Security.Claims
+@using Kpi.Data.Auth
+@using Kpi.Data.Cfg
+@using Kpi.Web.Integrations
+@using Microsoft.AspNetCore.Identity
+@inject IntegrationStore Store
+@inject Mailer Mail
+@inject IServiceScopeFactory Scopes
+
+@* Settings > Integrations: the services the site talks to, one card each, as DavidsonHR. Resend sends the account
+   emails (invitations, password resets). The API key is encrypted on the server and never shown back: a blank box
+   keeps the saved one. The test address catches every email while testing; outside the live site nothing is sent
+   without one. *@
+
+<div class="set-head">
+    <div>
+        <h2>Integrations</h2>
+        <p class="acc-hint">Keys are encrypted on the server and never shown again once saved.</p>
+    </div>
+</div>
+
+@if (_row is null)
+{
+    <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+}
+else
+{
+    <div class="set-card">
+        <div class="set-card-head">
+            <div>
+                <h3><i class="bi bi-envelope" aria-hidden="true"></i> Resend</h3>
+                <p class="acc-hint">Sends invitations, authenticator resets and password emails. Get a key at resend.com, with the sending domain verified there.</p>
+            </div>
+            <span class="set-pill set-pill-@StatusClass">@StatusText</span>
+        </div>
+
+        @if (_message is not null)
+        {
+            <div class="@(_messageOk ? "login-notice" : "login-error")" role="status">
+                <i class="bi @(_messageOk ? "bi-check-circle" : "bi-exclamation-triangle-fill")"></i> @_message
+            </div>
+        }
+
+        @if (!_editing)
+        {
+            <dl class="acc-facts">
+                <dt>From</dt><dd>@(_settings is null ? "-" : $"{_settings.FromName} <{_settings.FromAddress}>")</dd>
+                <dt>API key</dt><dd>@(_settings?.KeyHint ?? "-")</dd>
+                <dt>Test address</dt><dd>@(_row.RedirectTo ?? "None - emails go to the real people")</dd>
+                <dt>Last worked</dt><dd>@Kpi.Web.Data.UkTime.Show(_row.LastOkUtc)</dd>
+                @if (_row.LastErrorUtc is not null && (_row.LastOkUtc is null || _row.LastErrorUtc > _row.LastOkUtc))
+                {
+                    <dt>Last problem</dt><dd class="set-bad">@Kpi.Web.Data.UkTime.Show(_row.LastErrorUtc): @_row.LastError</dd>
+                }
+            </dl>
+            <div class="set-buttons">
+                <button type="button" class="acc-btn" @onclick="StartEdit">@(_row.Status == IntegrationStatus.Connected ? "Change" : "Connect")</button>
+                @if (_row.Status == IntegrationStatus.Connected)
+                {
+                    <button type="button" class="acc-btn-secondary" disabled="@_busy" @onclick="SendTest">Send me a test email</button>
+                    <button type="button" class="acc-btn-secondary set-act-danger" @onclick="() => _confirmDisconnect = true">Disconnect</button>
+                }
+            </div>
+            @if (_confirmDisconnect)
+            {
+                <div class="set-confirm">
+                    <p>Disconnect Resend? The saved key is deleted and no email is sent until it is connected again.</p>
+                    <button type="button" class="acc-btn-secondary" @onclick="() => _confirmDisconnect = false">Cancel</button>
+                    <button type="button" class="acc-btn" @onclick="Disconnect">Disconnect</button>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="set-form">
+                <label class="login-label" for="r-from">From address</label>
+                <input id="r-from" type="email" @bind="_fromAddress" placeholder="kpi@performancefinance.co.uk" />
+                <label class="login-label" for="r-name">From name</label>
+                <input id="r-name" @bind="_fromName" placeholder="Performance Finance KPIs" />
+                <label class="login-label" for="r-key">API key</label>
+                <input id="r-key" type="password" @bind="_apiKey" autocomplete="off"
+                       placeholder="@(_settings is null ? "re_..." : "Leave blank to keep the saved key")" />
+                <label class="login-label" for="r-test">Test address</label>
+                <input id="r-test" type="email" @bind="_redirectTo" placeholder="While testing, every email goes here instead" />
+                <label class="acc-check"><input type="checkbox" @bind="_enabled" /> Send emails</label>
+                <div class="set-buttons">
+                    <button type="button" class="acc-btn-secondary" @onclick="() => _editing = false">Cancel</button>
+                    <button type="button" class="acc-btn-secondary" disabled="@_busy" @onclick="CheckKey">Check the key</button>
+                    <button type="button" class="acc-btn" disabled="@_busy" @onclick="Save">Save</button>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private Integration? _row;
+    private ResendSettings? _settings;
+    private bool _editing, _busy, _confirmDisconnect, _messageOk;
+    private string? _message;
+    private string _fromAddress = "", _fromName = "Performance Finance KPIs", _apiKey = "", _redirectTo = "";
+    private bool _enabled = true;
+
+    private string StatusText => _row?.Status switch
+    {
+        IntegrationStatus.Connected when _row.Enabled => "Connected",
+        IntegrationStatus.Connected => "Switched off",
+        IntegrationStatus.NeedsAttention => "Needs attention",
+        _ => "Not connected"
+    };
+
+    private string StatusClass => StatusText.Replace(" ", "").ToLowerInvariant();
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _row = await Store.GetAsync(IntegrationProviders.Resend);
+        _settings = IntegrationStore.ReadSettings<ResendSettings>(_row);
+    }
+
+    private void StartEdit()
+    {
+        _fromAddress = _settings?.FromAddress ?? "";
+        _fromName = _settings?.FromName ?? "Performance Finance KPIs";
+        _redirectTo = _row?.RedirectTo ?? "";
+        _enabled = _row?.Enabled ?? true;
+        _apiKey = "";
+        _message = null;
+        _editing = true;
+    }
+
+    private async Task Save()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            if (!_fromAddress.Contains('@')) throw new InvalidOperationException("Enter the address emails come from.");
+            await Store.SaveResendAsync(await ActorAsync(), _fromAddress, _fromName, _apiKey, _redirectTo, _enabled);
+            _editing = false;
+            Say(true, "Saved.");
+            await Load();
+        }
+        catch (InvalidOperationException ex) { Say(false, ex.Message); }
+        finally { _busy = false; }
+    }
+
+    // the typed key, or the saved one when the box is blank
+    private async Task CheckKey()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            var key = _apiKey.Trim();
+            if (key.Length == 0 && _row is not null) key = Store.ReadSecrets<ResendSecrets>(_row)?.ApiKey ?? "";
+            if (key.Length == 0) { Say(false, "Enter the API key."); return; }
+            var problem = await Mail.VerifyKeyAsync(key);
+            Say(problem is null, problem ?? "Resend accepted the key.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IntegrationSecretsUnreadableException) { Say(false, ex.Message); }
+        finally { _busy = false; }
+    }
+
+    private async Task SendTest()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            var me = (await AuthState!).User.FindFirstValue(ClaimTypes.Email) ?? "";
+            var outcome = await Mail.TestAsync(me);
+            Say(outcome == MailOutcome.Sent, outcome switch
+            {
+                MailOutcome.Sent => _row?.RedirectTo is { } r ? $"Sent - to the test address, {r}." : $"Sent to {me}.",
+                MailOutcome.NotConfigured => "Not sent: Resend is switched off.",
+                MailOutcome.NoTestAddress => "Not sent: this isn't the live site, so emails only go to a test address. Set one under Change.",
+                _ => "Not sent: see Last problem."
+            });
+            await Load();
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task Disconnect()
+    {
+        await Store.DisconnectAsync(IntegrationProviders.Resend, await ActorAsync());
+        _confirmDisconnect = false;
+        Say(true, "Disconnected.");
+        await Load();
+    }
+
+    private void Say(bool ok, string message) { _messageOk = ok; _message = message; }
+
+    private async Task<KpiUser> ActorAsync()
+    {
+        var principal = (await AuthState!).User;
+        if (!principal.IsInRole(KpiRoles.SystemAdmin)) throw new InvalidOperationException("Only a System Admin can change integrations.");
+        await using var scope = Scopes.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<UserManager<KpiUser>>().GetUserAsync(principal)
+               ?? throw new InvalidOperationException("Your account could not be found.");
+    }
+}

@@ -1,0 +1,198 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject Kpi.Web.Data.Kpis.KpiScripts Scripts
+@inject Kpi.Web.Data.Kpis.KpiRefreshStatus RefreshStatus
+@inject Kpi.Web.Data.Kpis.KpiDataStatus DataStatus
+
+@* Shared chrome + refresh behaviour for every KPI report. Owns the topbar
+   (title + "As at" + "Refreshed on" with an in-place spinner) and the refresh
+   rules: a 10-min timer that runs ONLY while the tab is visible, a return-to-view
+   staleness check, and a gentle fade over the chart when data actually changes.
+   The page supplies its title, the two timestamps, and a RefreshRequested callback
+   that re-runs its load through KpiCache; KpiPanel decides WHEN to call it, and the
+   page calls back FlashChanged() to fade the chart on a real change. The chart is
+   the child content, wrapped so the fade can apply. *@
+
+<header class="kpi-topbar">
+    <h1>@Title</h1>
+    <div class="kpi-dateline">
+        @if (AsAt is not null)
+        {
+            @* the business date, and the time the figures were copied from CMS - amber when that copy has stopped *@
+            var status = DataStatus.Get();
+            var stale = Kpi.Web.Data.Kpis.KpiDataStatus.StaleNote(status);
+            <div class="kpi-asof @(stale is null ? "" : "kpi-stale")" title="@stale">
+                @if (stale is not null) { <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> }
+                As at @Kpi.Web.Data.Kpis.KpiDataStatus.AsAtText(AsAt.Value, status)
+            </div>
+        }
+        <div class="kpi-refreshed">
+            @if (_refreshing)
+            {
+                <span class="kpi-mini-spinner"></span> <span>Refreshing…</span>
+            }
+            else if (RefreshedOn is not null)
+            {
+                <span>Refreshed on @RefreshedOn.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+            }
+        </div>
+    </div>
+    <KpiUserMenu />
+</header>
+
+<div class="kpi-body">
+    <div class="kpi-fade @(_fading ? "kpi-fading" : "")">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    // ---- What the page supplies ----
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public DateTime? AsAt { get; set; }           // business date (from fnReportDate)
+    [Parameter] public DateTime? RefreshedOn { get; set; }    // wall-clock of last fetch (UTC)
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>
+    /// KpiPanel calls this on the timer / return-to-view. The page re-runs its load
+    /// through KpiCache, updates its bound data + timestamps, and calls back
+    /// <see cref="FlashChanged"/> if the data actually changed (to trigger the fade).
+    /// </summary>
+    [Parameter] public EventCallback RefreshRequested { get; set; }
+
+    // ---- Internal UI state (never bound by the page) ----
+    private bool _refreshing;      // date-line spinner
+    private bool _fading;          // chart fade
+    private bool _visible = true;  // Page Visibility
+    private DateTime _lastCheckedUtc = DateTime.UtcNow;
+
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource? _timerCts;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<KpiPanel>? _selfRef;
+    private readonly string _id = Guid.NewGuid().ToString("N");
+
+    // Refresh cadence. Defaults to 10 minutes; a "Kpi:RefreshSeconds" config value can
+    // shorten it (used only for local testing — production leaves it unset, so 600s).
+    [Inject] private IConfiguration Config { get; set; } = default!;
+    private int _intervalSeconds;
+
+    protected override void OnInitialized()
+        => _intervalSeconds = Config.GetValue("Kpi:RefreshSeconds", 600);
+
+    // The phone bar shows the same as the date line (KpiRefreshStatus).
+    protected override void OnParametersSet() => RefreshStatus.Report(RefreshedOn, _refreshing);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _module = await JS.InvokeAsync<IJSObjectReference>(
+            "import", Scripts.Url("./Components/Shared/Kpis/KpiPanel.razor.js"));
+        _selfRef = DotNetObjectReference.Create(this);
+        await _module.InvokeVoidAsync("register", _id, _selfRef);  // reports initial visibility
+        StartTimer();
+
+        // First-load staleness catch-up. Opening a KPI hits the durable shared cache and paints
+        // instantly — but if that cached entry was fetched long ago (e.g. reopened an hour later,
+        // or on a fresh circuit after being away), neither the in-view timer nor the return-to-view
+        // event would have fired, so the page would sit on stale data. If the data we've just
+        // painted is already older than the refresh interval, kick off a background refresh now
+        // (spinner on the date line → re-fetch → fade if changed) — the same path the timer uses.
+        if (_visible && RefreshedOn is DateTime shown &&
+            DateTime.UtcNow - shown.ToUniversalTime() >= TimeSpan.FromSeconds(_intervalSeconds))
+        {
+            await DoRefresh();
+        }
+    }
+
+    // ---- The 10-min (or dev-short) in-view timer ----
+    private void StartTimer()
+    {
+        StopTimer();
+        _timerCts = new CancellationTokenSource();
+        _timer = new PeriodicTimer(TimeSpan.FromSeconds(_intervalSeconds));
+        _ = RunTimer(_timer, _timerCts.Token);
+    }
+
+    private async Task RunTimer(PeriodicTimer timer, CancellationToken ct)
+    {
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                if (_visible) await DoRefresh();   // only refresh while actually being looked at
+            }
+        }
+        catch (OperationCanceledException) { /* timer stopped */ }
+    }
+
+    private void StopTimer()
+    {
+        _timerCts?.Cancel();
+        _timer?.Dispose();
+        _timerCts?.Dispose();
+        _timer = null; _timerCts = null;
+    }
+
+    // ---- Page Visibility: pause when hidden, catch up on return ----
+    [JSInvokable]
+    public async Task OnVisibilityChanged(bool visible)
+    {
+        var wasHidden = !_visible;
+        _visible = visible;
+        // Returning to view is treated like a re-open: if we've gone stale while
+        // hidden, refresh now rather than waiting for the next tick.
+        if (visible && wasHidden &&
+            DateTime.UtcNow - _lastCheckedUtc >= TimeSpan.FromSeconds(_intervalSeconds))
+        {
+            await DoRefresh();
+        }
+    }
+
+    // ---- The refresh: spinner on the date line, ask the page, fade only if changed ----
+    private async Task DoRefresh()
+    {
+        if (_refreshing) return;
+        _refreshing = true;
+        RefreshStatus.Report(RefreshedOn, true);
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            // The page re-runs its load through KpiCache; it calls FlashChanged() itself if changed.
+            await RefreshRequested.InvokeAsync();
+        }
+        finally
+        {
+            _lastCheckedUtc = DateTime.UtcNow;
+            _refreshing = false;
+            RefreshStatus.Report(RefreshedOn, false);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    /// <summary>Called BY THE PAGE after its data updated, to trigger the chart fade on a real change.</summary>
+    public async Task FlashChanged()
+    {
+        _fading = true;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(300);
+        _fading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        StopTimer();
+        try
+        {
+            if (_module is not null)
+            {
+                await _module.InvokeVoidAsync("unregister", _id);
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException) { /* circuit already gone */ }
+        _selfRef?.Dispose();
+    }
+}

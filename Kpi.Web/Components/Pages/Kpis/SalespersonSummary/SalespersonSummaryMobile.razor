@@ -1,0 +1,52 @@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Salesperson Summary on a phone: one salesperson at a time, chosen with the picker, then Year,
+   Quarter and Month to date in one scroll - the Sales Summary phone cards, scoped to the person. *@
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else if (People is not null)
+{
+    if (People.Count == 0)
+    {
+        <div class="kpim-empty">No salespeople.</div>
+    }
+    else
+    {
+        var index = Math.Clamp(_index, 0, People.Count - 1);
+        var person = People[index];
+
+        <SalespersonMobilePicker Name="@person.FullName" Position="@($"{index + 1} of {People.Count}")"
+                                 OnPrevious="() => Step(-1)" OnNext="() => Step(1)" />
+
+        @foreach (var period in Periods)
+        {
+            <SalesSummaryMobileCard @key="period" Period="@period" SalespersonId="person.Id" Title="@person.Name" />
+        }
+    }
+}
+
+@code {
+    private static readonly string[] Periods = { "Year", "Quarter", "Month" };
+
+    /// <summary>In the page's order (this year's TFI, highest first): Name upper-cased for the card headings, FullName as written.</summary>
+    [Parameter] public IReadOnlyList<(int Id, string Name, string FullName)>? People { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    private int _index;
+
+    // round the list, either way
+    private void Step(int by)
+    {
+        if (People is null || People.Count == 0) return;
+        var n = People.Count;
+        _index = ((Math.Clamp(_index, 0, n - 1) + by) % n + n) % n;
+    }
+}

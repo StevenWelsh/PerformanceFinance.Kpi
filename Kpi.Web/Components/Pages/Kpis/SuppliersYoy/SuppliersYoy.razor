@@ -1,0 +1,157 @@
+@page "/kpis/suppliers-yoy"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@using Kpi.Web.Reports
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Suppliers Year on Year — a card per year (the report year and the three before it), each ranking
+   the top 30 suppliers by the amount financed on their equipment, with running totals at 10, 20
+   and 30, as Klipfolio's report. Rules ported unchanged from Klipfolio (SupplierService). The
+   supplier figures are cached under one key shared with Supplier Development, so opening both
+   costs one query. *@
+
+<PageTitle>Suppliers Year on Year — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="suppliers-yoy" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Suppliers Year on Year" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+            @if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+            else
+            {
+                <div class="sy-grid">
+                    @foreach (var card in _cards)
+                    {
+                        <div class="ss-card sy-card">
+                            <div class="ss-card-head">@(IsCurrent(card.Year) ? $"{card.Year} to date" : card.Year.ToString())</div>
+                            <table class="mi-table sy-table">
+                                <thead>
+                                    <tr>
+                                        <th></th>
+                                        <th class="mi-l">Supplier</th>
+                                        <th class="mi-l">Profession</th>
+                                        <th>AF</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (var i = 0; i < card.Lines.Count; i++)
+                                    {
+                                        var line = card.Lines[i];
+                                        <tr>
+                                            <td>@line.Rank</td>
+                                            <td class="mi-l sy-name" title="@line.Supplier">@line.Supplier</td>
+                                            <td class="mi-l kpi-sy-prof">@line.Profession</td>
+                                            <td>@Cur(line.AmountFinanced)</td>
+                                        </tr>
+                                        @if ((i + 1) % 10 == 0 || i == card.Lines.Count - 1)
+                                        {
+                                            var upTo = (i / 10 + 1) * 10;
+                                            <tr class="sy-total">
+                                                <td></td>
+                                                <td class="mi-l" colspan="2">Top @upTo Total</td>
+                                                <td>@Cur(card.Lines.Take(i + 1).Sum(l => l.AmountFinanced))</td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            }
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Suppliers Year on Year" Active="suppliers-yoy" AsAt="_asOf">
+    <SuppliersYoyMobile Cards="_cards" Before="_before" Loading="_loading" Error="@_error" />
+</KpiMobile>
+
+@code {
+    // The report year and the three before it, oldest left (Klipfolio showed five; four fit the screen).
+    private const int YearsShown = 4;
+
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    private List<SupplierYoyYearResult> _cards = new();
+
+    // The year before the oldest card: the phone shows each line's rank a year earlier.
+    private SupplierYoyYearResult? _before;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            var entry = await KpiCache.GetOrLoad(KpiCache.Key("SupplierFigures"), LoadPayload);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+            Apply(entry.Data);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    // Pure loader: opens a one-shot session, runs the supplier query, returns the rows + the as-at.
+    // The cached type is the plain row list, the same as Supplier Development's, so the two pages
+    // share the one entry.
+    private async Task<(List<SupplierYearRow>, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        return (new SupplierService(cms.Db).GetFigures(), asAt);
+    }
+
+    private void Apply(List<SupplierYearRow> figures)
+    {
+        var year = (_asOf ?? DateTime.Today).Year;
+        _cards = Enumerable.Range(year - YearsShown + 1, YearsShown)
+            .Select(y => SupplierService.BuildYearOnYear(figures, y))
+            .ToList();
+        _before = SupplierService.BuildYearOnYear(figures, year - YearsShown);
+    }
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view.
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(KpiCache.Key("SupplierFigures"), LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                _asOf = entry.AsAt;
+                Apply(entry.Data);
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private bool IsCurrent(int year) => _asOf is not null && year == _asOf.Value.Year;
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+}

@@ -1,0 +1,575 @@
+@page "/kpis/heat-map"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiScripts Scripts
+@inject IJSRuntime JS
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@implements IAsyncDisposable
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Postcode Heat Map — UK choropleth by postcode area, coloured by a chosen metric.
+   Two lanes from WebKPI.spHeatMap: own-book capital position (RemainingCapital /
+   ActiveLeads / ActiveCustomers, year-independent) and the selected years' sales
+   (AF / TFI). The Leaflet map is drawn client-side by HeatMap.razor.js (Blazor owns
+   the data + Measure/Arrangement/Year/level filters; the module renders + reports
+   selection/legend/table back via JSInvokable callbacks). Arrangement (Own Book /
+   Brokered / All) filters both lanes; Year applies to the sales metrics only.
+   UNVERIFIED beyond spot checks. *@
+
+<PageTitle>Postcode Heat Map — KPIs</PageTitle>
+
+@* Leaflet + the UK/Ireland geo data (loaded before the module init runs) *@
+<link rel="stylesheet" href="lib/leaflet/leaflet.css" />
+
+<div class="kpi-shell">
+    <KpiSidebar Active="heat-map" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Postcode Heat Map" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+            <div class="hm-body">
+            @if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+
+            @* hidden, never removed, while loading: the Leaflet map lives in .hm-map *@
+            <div class="hm-main" style="@(_loading || _error is not null ? "display:none" : "")">
+                <div class="hm-map" @ref="_mapHost"></div>
+
+                @* the left column, floating over the map: the filters at the top, the breakdown table at the
+                   bottom - stacked, so a long table (Postcode Area) stops below the filters *@
+                <div class="kpi-hm-left">
+                    @* filters: Measure first, as it drives the others: Arrangement applies to every metric;
+                       Year applies to the sales metrics only, so it greys out for the capital measures (current
+                       position, year-independent). Year takes several years: a dropdown of ticks in the same
+                       field look, reloading as it closes. *@
+                    <div class="hm-panel hm-controls kpi-filters">
+                        <KpiField Caption="Measure" Value="@_metric" ValueChanged="OnMetric" Options="MeasureOptions" />
+                        <KpiField Caption="Arrangement" Value="@_arrangement" ValueChanged="OnArrangement" Options="ArrangementOptions" />
+                        <details class="hm-yearsdd @(IsSalesMetric ? "" : "hm-yearsdd-off")"
+                                 @ref="_yearsDetails" @ontoggle="OnYearsToggle">
+                            <summary>
+                                <span class="kpim-field @(IsSalesMetric ? "" : "kpim-field-off")">
+                                    <span class="kpim-field-caption">Year</span>
+                                    <span class="kpim-field-value">
+                                        <span>@(IsSalesMetric ? YearsSummary : "–")</span>
+                                        @if (IsSalesMetric)
+                                        {
+                                            <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                                        }
+                                    </span>
+                                </span>
+                            </summary>
+                            <div class="hm-yearsdd-menu">
+                                @foreach (var y in _years)
+                                {
+                                    var yr = y;
+                                    <label class="hm-yearchk">
+                                        <input type="checkbox" checked="@_selectedYears.Contains(yr)"
+                                               @onchange="() => ToggleYear(yr)" />
+                                        <span>@yr</span>
+                                    </label>
+                                }
+                            </div>
+                        </details>
+                    </div>
+
+                    @* level switch + breakdown table *@
+                    <div class="hm-panel hm-regions">
+                        <div class="hm-cap">
+                            <div class="hm-caprow">
+                                <span class="hm-ttl">@_levelTitle</span>
+                                <span class="hm-metricname">@_metricLabel</span>
+                            </div>
+                            <KpiSegmented Label="Level" Value="@_level" ValueChanged="SetLevel" Options="LevelOptions" Compact="true" />
+                        </div>
+                        <div class="hm-scroll">
+                            <table class="hm-rtable">
+                                <colgroup>
+                                    <col style="width:42%" /><col style="width:35%" /><col style="width:23%" />
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th class="l">@_nameHdr</th>
+                                        <th class="p">@ShortHdr(_metric)</th>
+                                        <th class="p">%</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var r in _rows)
+                                    {
+                                        var key = r.Key;
+                                        <tr @onmouseenter="() => HoverRow(key)" @onmouseleave="HoverOut"
+                                            @onclick="() => PickRow(key)">
+                                            <td class="l" title="@r.Name">@r.Name</td>
+                                            <td class="p">@Fmt(_metric, r.V)</td>
+                                            <td class="p">@Pct(r.V)</td>
+                                        </tr>
+                                    }
+                                    @if (_unmapped is not null)
+                                    {
+                                        <tr class="um">
+                                            <td class="l">Overseas / unmapped</td>
+                                            <td class="p">@Fmt(_metric, UnmappedV())</td>
+                                            <td class="p">@Pct(UnmappedV())</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td class="l">Total</td>
+                                        <td class="p">@Fmt(_metric, TotalV())</td>
+                                        <td class="p">—</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                @* selection info panel (top-right) *@
+                <div class="hm-panel hm-info">
+                    <h2>@SelTitle()</h2>
+                    @if (_sel is null)
+                    {
+                        <div class="hm-region empty">Click the map or a row to select</div>
+                    }
+                    else
+                    {
+                        @* AF/TFI carry the year in brackets only in a capital-mode view (where the
+                           Year filter is greyed, so the sales figures are for the current report
+                           year); in sales mode the params already show the selected years. *@
+                        <div class="hm-region">@_sel.DisplayName</div>
+                        <div class="hm-inforow"><span class="k">Remaining Capital</span><span class="v">@Cur(_sel.Capital)</span></div>
+                        <div class="hm-inforow"><span class="k">Active Leads</span><span class="v">@_sel.Leads.ToString("N0")</span></div>
+                        <div class="hm-inforow"><span class="k">Active Customers</span><span class="v">@_sel.Customers.ToString("N0")</span></div>
+                        <div class="hm-inforow"><span class="k">@($"AF{InfoYearSuffix}")</span><span class="v">@Cur(_sel.Af)</span></div>
+                        <div class="hm-inforow"><span class="k">@($"TFI{InfoYearSuffix}")</span><span class="v">@Cur(_sel.Tfi)</span></div>
+                    }
+                </div>
+
+                @* legend (bottom-right) — click a band to flash its areas *@
+                <div class="hm-panel hm-legend">
+                    <div class="lt">@_metricLabel</div>
+                    @foreach (var b in _bands)
+                    {
+                        var band = b.Key;
+                        <div class="band @(b.Count == 0 ? "empty" : "")" @onclick="() => FlashBand(band)">
+                            <span class="sw" style="background:@b.Colour"></span>
+                            <span class="bl">@b.Label</span>
+                            <span class="cnt">@b.Count</span>
+                        </div>
+                    }
+                    <div class="hint">Click a band to flash its areas</div>
+                </div>
+
+                @* zoom controls (right edge) — +, vertical slider, −, reset. The slider is bound
+                   directly by the JS module (two-way with the map) so dragging is smooth. *@
+                <div class="hm-zoom">
+                    <button @onclick="ZoomIn" title="Zoom in">+</button>
+                    <input type="range" class="hm-zrange" @ref="_zoomSlider" />
+                    <button @onclick="ZoomOut" title="Zoom out">&minus;</button>
+                    <button @onclick="ResetView" title="Reset view">&#8962;</button>
+                </div>
+
+                @* help footnote — bottom-centre pill (as the original) *@
+                <div class="hm-helpkey">Click to select&nbsp;·&nbsp;Double-click to zoom&nbsp;·&nbsp;Double-click again to zoom back out</div>
+            </div>
+            </div>
+        </KpiPanel>
+    </main>
+</div>
+
+@* The phone view: the same data, filters, level and selection, with its own map (phoneInit). *@
+<KpiMobile Title="Postcode Heat Map" Active="heat-map" AsAt="_asOf">
+    <HeatMapMobile @ref="_mobile" Loading="_loading" Error="@_error"
+                   Metric="@_metric" MetricChanged="OnMetric"
+                   Arrangement="@_arrangement" ArrangementChanged="OnArrangement"
+                   Years="_years" SelectedYears="_selectedYears" YearToggled="ToggleYear"
+                   YearsOpened="PhoneYearsOpened" YearsClosed="PhoneYearsClosed"
+                   Level="@_level" LevelChanged="SetLevel"
+                   Rows="_rows" Unmapped="_unmapped" Bands="_bands" Swatch="_swatch" Districts="_districts"
+                   Selection="_sel" RowPicked="PhonePick" ReportYear="_asOf?.Year" />
+</KpiMobile>
+
+@code {
+    // ---- filters / state ----
+    private List<int> _selectedYears = new();   // multiselect: sales lane sums across these
+    private string YearsCsv => string.Join(",", _selectedYears);
+    private string YearsLabel => _selectedYears.Count == 0 ? "" : string.Join(", ", _selectedYears.OrderBy(y => y));
+    private string YearsSummary => _selectedYears.Count switch
+    {
+        0 => "—",
+        <= 3 => string.Join(", ", _selectedYears.OrderByDescending(y => y)),
+        _ => _selectedYears.Count + " years"
+    };
+    // in a capital-mode view the sales figures are for the current report year → show it in
+    // brackets on the AF/TFI rows; in sales mode the params already show the years, so omit it
+    private string InfoYearSuffix => IsSalesMetric ? "" : $" ({_asOf?.Year})";
+    private string _arrangement = "All";
+    private string _metric = "capital";
+    private string _level = "region";
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private KpiPanel? _panel;
+    private List<int> _years = new();
+    private bool _loading = true;
+    private string? _error;
+
+    // The result the page renders, as one cacheable payload. Only the map rows are a function of
+    // the load — the table/legend/selection fields are pushed back FROM the JS module after it
+    // paints, so they're not part of the cached data (and _asOf comes from the cache entry).
+    private sealed record Payload(List<Kpi.Web.Reports.HeatMapRow> Rows);
+
+    private ElementReference _mapHost;
+    private ElementReference _zoomSlider;
+    private ElementReference _yearsDetails;
+    private string _yearsWhenOpened = "";        // selection snapshot when the year dropdown opened
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<HeatMap>? _self;
+    private bool _mapReady;
+
+    // the phone view: its map is the module's second map (phoneInit / phoneSync), built only on a phone
+    private HeatMapMobile? _mobile;
+    private bool _phoneMapReady;
+    private Dictionary<string, string> _swatch = new();      // group -> its band colour, for the phone list
+    private Dictionary<string, string> _districts = new();   // postcode area -> district town
+
+    // measure / arrangement / level choices
+    private static readonly KpiOption[] MeasureOptions =
+    {
+        new("capital", "Remaining Capital"), new("leads", "Active Leads"),
+        new("customers", "Active Customers"), new("af", "Amount Financed"), new("tfi", "Total Fee Income"),
+    };
+    private static readonly KpiOption[] ArrangementOptions =
+    {
+        new("OwnBook", "Own Book"), new("Brokered", "Brokered"), new("All", "All"),
+    };
+    private static readonly KpiOption[] LevelOptions =
+    {
+        new("region", "Region"), new("area", "Postcode Area"),
+    };
+    // capital/leads/customers are own-book-only; af/tfi are the sales lane the arrangement filters
+    private bool IsSalesMetric => _metric is "af" or "tfi";
+
+    // ---- payloads pushed from JS ----
+    private string _levelTitle = "Regions", _metricLabel = "Remaining Capital", _nameHdr = "Region";
+    private bool _isArea;
+    private List<Band> _bands = new();
+    private List<Row> _rows = new();
+    private Unmapped? _unmapped;
+    private Selection? _sel;
+
+    public record Band(string Key, string Colour, string Label, int Count);
+    public record Row(string Key, string Code, string Name, decimal Capital, int Leads, int Customers,
+                      decimal Af, decimal Tfi, decimal V, int Areas);
+    public record Unmapped(decimal Capital, int Leads, int Customers, decimal Af, decimal Tfi);
+    public class Selection
+    {
+        public string Key { get; set; } = "";
+        public string Level { get; set; } = "";
+        public decimal Capital { get; set; }
+        public int Leads { get; set; }
+        public int Customers { get; set; }
+        public decimal Af { get; set; }
+        public decimal Tfi { get; set; }
+        public int Areas { get; set; }
+        public string DisplayName => Key;
+    }
+
+    // rows waiting to be pushed to the map on the next render (set by LoadData, consumed by
+    // OnAfterRenderAsync so the map host is guaranteed to exist when we touch it)
+    private List<Kpi.Web.Reports.HeatMapRow>? _pendingRows;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadData(firstLoad: true);
+            return;
+        }
+        // push freshly-loaded data to the map — AFTER the render that made _mapHost real
+        if (_pendingRows is not null && !_loading && _error is null)
+        {
+            var rows = _pendingRows;
+            _pendingRows = null;
+            try
+            {
+                _module ??= await JS.InvokeAsync<IJSObjectReference>(
+                    "import", Scripts.Url("./Components/Pages/Kpis/HeatMap/HeatMap.razor.js"));
+                _self ??= DotNetObjectReference.Create(this);
+
+                if (!_mapReady)
+                {
+                    // ensure Leaflet + geo data are loaded (global loader), then build once, on the measure and
+                    // level already chosen (the phone's can be changed while the first load runs)
+                    await JS.InvokeVoidAsync("cmsHeatMapEnsureAssets");
+                    await _module.InvokeVoidAsync("init", _mapHost, rows, _self, _zoomSlider, _metric, _level);
+                    _mapReady = true;
+                }
+                else
+                {
+                    await _module.InvokeVoidAsync("update", rows);
+                }
+                await PhoneMapSync();
+                StateHasChanged();
+            }
+            catch (JSDisconnectedException) { /* circuit gone */ }
+            catch (Exception ex)
+            {
+                _error = "Map failed to load: " + ex.Message;
+                StateHasChanged();
+            }
+        }
+    }
+
+    // load the data only; the map push happens in OnAfterRenderAsync.
+    // The first-load bootstrap (year dropdown fill + default selection) mutates fields and runs
+    // once, so it stays OUT of the cached loader — it seeds YearsCsv, which the cache key depends
+    // on, so it must run before the keyed load. After the bootstrap, delegate to the cached Load().
+    private async Task LoadData(bool firstLoad = false)
+    {
+        if (firstLoad)
+        {
+            try
+            {
+                using var cms = await SessionFactory.BeginAsync();
+                var asOf = cms.Db.ReportDate();
+                var current = asOf.Year;
+                _years = cms.Db
+                    .Options("Years").Select(y => y.Id)
+                    .OrderByDescending(y => y).ToList();
+                if (!_years.Contains(current)) _years.Insert(0, current);
+                _selectedYears = new List<int> { current };   // default to the current year
+            }
+            catch (Exception ex)
+            {
+                _error = ex.Message;
+                _loading = false;
+                StateHasChanged();
+                return;
+            }
+        }
+        await Load();
+    }
+
+    // Cached load: instant on a repeat open / tab-flick, one DB hit the first time. Keyed on the
+    // selected years + arrangement (the two params GetHeatMap takes) — the metric/level toggles
+    // re-colour client-side without a reload, so they're deliberately NOT in the key.
+    private async Task Load()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("HeatMap", YearsCsv, _arrangement),
+                LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();   // triggers the render that OnAfterRenderAsync uses to push _pendingRows
+        }
+    }
+
+    // Pure loader: opens a one-shot session, fetches the heat-map rows, returns them + the as-at.
+    // No component-field mutation here — that's Apply()'s job, so the cache can call this off the
+    // render path during a background refresh.
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var rows = new Kpi.Web.Reports.HeatMapService(cms.Db).GetHeatMap(YearsCsv, _arrangement);
+        return (new Payload(rows), asAt);
+    }
+
+    // Push a payload into the fields the render/map-push machinery reads. Setting _pendingRows and
+    // re-rendering makes OnAfterRenderAsync push the rows to the map, exactly as a fresh load does.
+    // (_asOf comes from the cache entry's AsAt, set by the caller, not from the payload.)
+    // The district towns are kept for the phone list's area names.
+    private void Apply(Payload p)
+    {
+        _pendingRows = p.Rows;
+        _districts = new();
+        foreach (var r in p.Rows) _districts[r.PostCodeArea] = r.District;
+    }
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view. Re-run through the cache;
+    // if the data changed, re-push to the map and fade; otherwise just tick "Refreshed on".
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(
+                KpiCache.Key("HeatMap", YearsCsv, _arrangement),
+                LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                StateHasChanged();   // triggers OnAfterRenderAsync to update the map with the new rows
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    // ---- filter handlers ----
+    // ticking a year only updates the pending selection — the reload happens when the dropdown
+    // CLOSES (OnYearsToggle), so we don't reload after every tick.
+    private void ToggleYear(int yr)
+    {
+        if (_selectedYears.Contains(yr))
+        {
+            if (_selectedYears.Count > 1) _selectedYears.Remove(yr);   // keep at least one
+        }
+        else
+        {
+            _selectedYears.Add(yr);
+        }
+    }
+
+    // fired whenever the <details> opens or closes. On CLOSE, reload only if the selection
+    // actually changed since it was opened. (Outside-click closing is wired in JS below.)
+    private async Task OnYearsToggle()
+    {
+        var open = await JS.InvokeAsync<bool>("cmsDetailsIsOpen", _yearsDetails);
+        if (open)
+        {
+            _yearsWhenOpened = string.Join(",", _selectedYears.OrderBy(y => y));   // snapshot
+            return;
+        }
+        var now = string.Join(",", _selectedYears.OrderBy(y => y));
+        if (now != _yearsWhenOpened) await LoadData();
+    }
+
+    // Measure, Arrangement and the level switch: the full view's and the phone's filters both call these.
+    private async Task OnArrangement(string arrangement)
+    {
+        _arrangement = arrangement;
+        await LoadData();   // arrangement filters BOTH lanes now -> reload
+    }
+    private async Task OnMetric(string metric)
+    {
+        // metric switch never needs a reload — the loaded rows carry every column for the
+        // current arrangement/year; just re-colour the maps (Year greys/enables via IsSalesMetric)
+        _metric = metric;
+        if (_module is not null) await _module.InvokeVoidAsync("setMetric", _metric);
+        await PhoneMapSync();
+    }
+    private async Task SetLevel(string lv)
+    {
+        _level = lv;
+        if (_module is not null) await _module.InvokeVoidAsync("setLevel", lv);
+        await PhoneMapSync();
+    }
+
+    // ---- table row <-> map interaction ----
+    private async Task HoverRow(string key) { if (_module is not null) await _module.InvokeVoidAsync("hoverGroup", key); }
+    private async Task HoverOut() { if (_module is not null) await _module.InvokeVoidAsync("hoverGroup", (string?)null); }
+    private async Task PickRow(string key) { if (_module is not null) await _module.InvokeVoidAsync("pickGroup", key); }
+    private async Task FlashBand(string band) { if (_module is not null) await _module.InvokeVoidAsync("flashBand", band); }
+    private async Task ZoomIn() { if (_module is not null) await _module.InvokeVoidAsync("zoomIn"); }
+    private async Task ZoomOut() { if (_module is not null) await _module.InvokeVoidAsync("zoomOut"); }
+    private async Task ResetView() { if (_module is not null) await _module.InvokeVoidAsync("reset"); }
+
+    // ---- the phone view: its filters set the same state and run the same load path as the full view's ----
+    private async Task PhonePick(string key) { if (_module is not null) await _module.InvokeVoidAsync("phonePick", key); }
+
+    // the year chips commit when they close, as the full view's year dropdown does
+    private void PhoneYearsOpened() => _yearsWhenOpened = string.Join(",", _selectedYears.OrderBy(y => y));
+    private async Task PhoneYearsClosed()
+    {
+        if (string.Join(",", _selectedYears.OrderBy(y => y)) != _yearsWhenOpened) await LoadData();
+    }
+
+    // Start the phone map once the full view's map exists (the module builds it only while the phone view
+    // shows), then recolour it and fetch the list swatches after anything that changes the colours.
+    private async Task PhoneMapSync()
+    {
+        if (_module is null || !_mapReady) return;
+        if (!_phoneMapReady && _mobile is not null && _mobile.MapHost.Id is not null)
+        {
+            await _module.InvokeVoidAsync("phoneInit", _mobile.MapHost);
+            _phoneMapReady = true;
+        }
+        _swatch = await _module.InvokeAsync<Dictionary<string, string>>("phoneSync");
+    }
+
+    // ---- JSInvokable callbacks from the module ----
+    // These are invoked FROM JS, so they run off the renderer's sync context — the state
+    // update must be marshalled back via InvokeAsync(StateHasChanged), otherwise the re-render
+    // (e.g. refreshing the legend counts after an arrangement/year reload) is unreliable.
+    [JSInvokable]
+    public Task OnMapPainted(MapPaint p)
+    {
+        _metric = p.Metric; _metricLabel = p.MetricLabel; _level = p.Level;
+        _levelTitle = p.LevelTitle; _nameHdr = p.NameHdr; _isArea = p.IsArea;
+        _bands = p.Bands; _rows = p.Rows; _unmapped = p.Unmapped;
+        return InvokeAsync(StateHasChanged);
+    }
+    [JSInvokable]
+    public Task OnGroupSelected(Selection s) { _sel = s; return InvokeAsync(StateHasChanged); }
+    [JSInvokable]
+    public Task OnGroupCleared() { _sel = null; return InvokeAsync(StateHasChanged); }
+
+    public record MapPaint(string Metric, string MetricLabel, string Level, string LevelTitle,
+                           string NameHdr, bool IsArea, List<Band> Bands, List<Row> Rows, Unmapped? Unmapped);
+
+    // ---- formatting helpers ----
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+    private string SelTitle() => _level switch { "region" => "Selected Region", "town" => "Selected Town", _ => "Selected Postcode Area" };
+    private static string ShortHdr(string m) => m switch
+    { "capital" => "Capital", "leads" => "Leads", "customers" => "Customers", "af" => "AF", "tfi" => "TFI", _ => m };
+
+    private string Fmt(string m, decimal v) => m is "leads" or "customers" ? ((int)v).ToString("N0") : "£" + v.ToString("N0");
+    private string Short(string m, decimal v)
+    {
+        if (m is "leads" or "customers") return ((int)v).ToString("N0");
+        return v >= 1_000_000m ? "£" + (v / 1_000_000m).ToString("0.#") + "m"
+             : v >= 1_000m     ? "£" + Math.Round(v / 1_000m) + "k"
+             : "£" + v.ToString("N0");
+    }
+    private string Pct(decimal v) { var t = TotalV(); return t > 0 ? (v / t * 100m).ToString("N1") + "%" : "—"; }
+
+    // secondary columns = the other value-bearing metrics (skip the active one; af/tfi shown when relevant)
+    private IEnumerable<string> SecondaryMetrics()
+        => new[] { "capital", "leads", "customers" }.Where(m => m != _metric);
+
+    private decimal ValueOf(Row r, string m) => m switch
+    { "capital" => r.Capital, "leads" => r.Leads, "customers" => r.Customers, "af" => r.Af, "tfi" => r.Tfi, _ => 0m };
+    private decimal UnmappedOf(string m) => _unmapped is null ? 0m : m switch
+    { "capital" => _unmapped.Capital, "leads" => _unmapped.Leads, "customers" => _unmapped.Customers,
+      "af" => _unmapped.Af, "tfi" => _unmapped.Tfi, _ => 0m };
+    private decimal UnmappedV() => UnmappedOf(_metric);
+
+    private decimal TotalOf(string m) => _rows.Sum(r => ValueOf(r, m)) + UnmappedOf(m);
+    private decimal TotalV() => TotalOf(_metric);
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_module is not null)
+            {
+                await _module.InvokeVoidAsync("phoneDispose");
+                await _module.InvokeVoidAsync("dispose");
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException) { }
+        _self?.Dispose();
+    }
+}

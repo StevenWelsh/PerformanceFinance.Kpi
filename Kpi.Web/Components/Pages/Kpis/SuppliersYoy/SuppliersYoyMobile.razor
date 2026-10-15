@@ -1,0 +1,103 @@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Suppliers Year on Year on a phone: one of the full view's year cards at a time (the Year field), the
+   top 30 with the running totals at 10, 20 and 30, and under each amount the supplier's rank in the
+   year before's top 30 - the card beside it on the full view. *@
+
+<KpiMobileFilters>
+    <div class="kpim-filters" style="--kpim-cols:1">
+        <KpiField Caption="Year" Value="@SelectedYear.ToString()" ValueChanged="PickYear" Options="@YearOptions" Enabled="@(Cards.Count > 0)" />
+    </div>
+</KpiMobileFilters>
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else if (Selected is { } card)
+{
+    var ranksBefore = RanksIn(card.Year - 1);
+    <section class="kpim-card kpim-sy-card">
+        <div class="kpim-sy-head">
+            <h2 class="kpim-sy-title">Top 30 suppliers</h2>
+            <span class="kpim-sy-sub">@($"AF · {card.Year - 1} rank")</span>
+        </div>
+        @if (card.Lines.Count == 0)
+        {
+            <p class="kpim-sy-empty">No supplier business recorded for this year.</p>
+        }
+        @for (var i = 0; i < card.Lines.Count; i++)
+        {
+            var line = card.Lines[i];
+            int? was = ranksBefore.TryGetValue(Key(line), out var r) ? r : null;
+            <div class="kpim-sy-row">
+                <span class="kpim-sy-rank">@line.Rank</span>
+                <div class="kpim-sy-who">
+                    <span class="kpim-sy-name" title="@line.Supplier">@line.Supplier</span>
+                    <span class="kpim-sy-prof">@line.Profession</span>
+                </div>
+                <div class="kpim-sy-fig">
+                    <span class="kpim-sy-af">@Cur(line.AmountFinanced)</span>
+                    <span class="kpim-sy-prev">
+                        @if (was > line.Rank)
+                        {
+                            <svg class="kpim-up" width="9" height="9" viewBox="0 0 10 10" role="img" aria-label="up on last year"><path d="M5 1.5 9 8.5H1z" fill="currentColor"></path></svg>
+                        }
+                        else if (was < line.Rank)
+                        {
+                            <svg class="kpim-down" width="9" height="9" viewBox="0 0 10 10" role="img" aria-label="down on last year"><path d="M1 1.5h8L5 8.5z" fill="currentColor"></path></svg>
+                        }
+                        @($"{card.Year - 1}: {(was is int w ? $"#{w}" : "—")}")
+                    </span>
+                </div>
+            </div>
+            @if ((i + 1) % 10 == 0 || i == card.Lines.Count - 1)
+            {
+                <div class="kpim-sy-total">
+                    <span class="kpim-sy-rank"></span>
+                    <span class="kpim-sy-total-label">@($"Top {(i / 10 + 1) * 10} Total")</span>
+                    <span class="kpim-sy-total-af">@Cur(card.Lines.Take(i + 1).Sum(l => l.AmountFinanced))</span>
+                </div>
+            }
+        }
+    </section>
+}
+
+@code {
+    /// <summary>The full view's year cards, oldest first.</summary>
+    [Parameter] public List<SupplierYoyYearResult> Cards { get; set; } = new();
+
+    /// <summary>The year before the oldest card, for that card's ranks a year earlier.</summary>
+    [Parameter] public SupplierYoyYearResult? Before { get; set; }
+
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    // The year shown; null = the report year (the newest card).
+    private int? _year;
+
+    private SupplierYoyYearResult? Selected => Cards.FirstOrDefault(c => c.Year == _year) ?? Cards.LastOrDefault();
+    private int SelectedYear => Selected?.Year ?? 0;
+
+    // Newest first.
+    private IReadOnlyList<KpiOption> YearOptions => Cards.AsEnumerable().Reverse()
+        .Select(c => new KpiOption(c.Year.ToString(), c.Year.ToString())).ToList();
+
+    private void PickYear(string value) => _year = int.TryParse(value, out var y) ? y : null;
+
+    // A supplier's rank in a year's top 30, by the key BuildYearOnYear groups on (name and profession).
+    private Dictionary<string, int> RanksIn(int year)
+    {
+        var card = Cards.FirstOrDefault(c => c.Year == year) ?? (Before?.Year == year ? Before : null);
+        return card?.Lines.GroupBy(Key).ToDictionary(g => g.Key, g => g.First().Rank) ?? new();
+    }
+
+    private static string Key(SupplierRankResult line)
+        => line.Supplier.ToUpperInvariant() + "|" + line.Profession.ToUpperInvariant();
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+}

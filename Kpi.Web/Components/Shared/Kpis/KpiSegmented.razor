@@ -1,0 +1,33 @@
+@* Switches between VIEWS of the same data on a KPI report (Years / Months / Last days, Table / Chart), full
+   view or phone. Never a filter - filters are KpiField. *@
+
+<div class="kpim-seg @(Compact ? "kpim-compact" : "")" role="group" aria-label="@Label" style="--kpim-cols:@Options.Count">
+    @foreach (var o in Options)
+    {
+        var on = o.Value == Value;
+        <button type="button" class="@(on ? "kpim-on" : "")" aria-pressed="@(on ? "true" : "false")" @onclick="() => Pick(o.Value)">
+            @if (o.Icon is not null)
+            {
+                <i class="bi @o.Icon" aria-hidden="true"></i>
+            }
+            @o.Text
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+    [Parameter] public IReadOnlyList<KpiOption> Options { get; set; } = Array.Empty<KpiOption>();
+
+    /// <summary>The shorter landscape version.</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    private async Task Pick(string value)
+    {
+        if (value == Value) return;
+        Value = value;
+        await ValueChanged.InvokeAsync(value);
+    }
+}

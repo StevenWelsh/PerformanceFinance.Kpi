@@ -1,0 +1,223 @@
+@page "/kpis/exposure"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@attribute [Authorize(Policy = "OBEnquiryExposure.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@using Kpi.Web.Reports
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Exposure Top 10 — the own-book customers (or business groups) owing the most capital, from
+   Reports.Exposure: the procedure behind the desktop's Own Book > Exposure tab, so both rank the
+   book the same way. Filters: grouping and fund lender. The desktop's fund filter is left off the KPI site
+   (Oct 2026, Steve): its figures are last night's, worked out per lender, and per fund would be ~300 more runs.
+   The total row sums the ten, as the desktop's grid footer does; percentages are shares of the
+   whole book. No drill-down
+   to leads and no Exclude, by decision: too much detail for a dashboard. Needs the desktop's
+   Exposure right as well as Dashboard, as the desktop does. *@
+
+<PageTitle>Exposure Top 10 — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="exposure" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Exposure Top 10" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+            <div class="kpi-filters kpi-ex-filters">
+                <KpiField Caption="Grouping" Value="@_grouping.ToString()"
+                          ValueChanged="@(v => OnGrouping(new ChangeEventArgs { Value = v }))" Options="GroupingOptions" />
+                <KpiField Caption="Fund lender" Value="@(_fundLenderId?.ToString() ?? "")"
+                          ValueChanged="@(v => OnFundLender(new ChangeEventArgs { Value = v }))" Options="LenderOptions" />
+            </div>
+
+            @if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+            else
+            {
+                <div class="ss-card ex-card">
+                    <div class="ss-card-head ex-head">
+                        <span>Exposure by @GroupingName</span>
+                        <span class="ex-total">Own book remaining capital @Cur(_rows.FirstOrDefault()?.TotalRemainingCapital ?? 0m)</span>
+                    </div>
+
+                    <table class="mi-table kpi-ex-table">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th class="mi-l">@ColumnName</th>
+                                <th>Lead Count</th>
+                                <th>Remaining Capital</th>
+                                <th>% Total Remaining Capital</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var r in Shown)
+                            {
+                                <tr>
+                                    <td>@r.RowNumber</td>
+                                    <td class="mi-l">
+                                        @r.Name
+                                        @if (_grouping == ExposureGrouping.Combined && r.CustomerType == 2)
+                                        {
+                                            <span class="ex-type">Business group</span>
+                                        }
+                                    </td>
+                                    <td>@r.LeadCount.ToString("N0")</td>
+                                    <td>@Cur(r.RemainingCapital)</td>
+                                    <td class="kpi-ex-share">@Pct(r.PercentRemainingCapital)</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td></td>
+                                <td class="mi-l">Total</td>
+                                <td>@Shown.Sum(r => r.LeadCount).ToString("N0")</td>
+                                <td>@Cur(Shown.Sum(r => r.RemainingCapital))</td>
+                                <td>@Pct(Shown.Sum(r => r.PercentRemainingCapital))</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Exposure Top 10" Active="exposure" AsAt="_asOf" Hint="KpiMobileHint.SummaryInPortrait">
+    <ChildContent>
+        <ExposureMobile Rows="_rows" Loading="_loading" Error="@_error"
+                        Grouping="_grouping" GroupingChanged="@(v => OnGrouping(new ChangeEventArgs { Value = v }))"
+                        FundLenders="_fundLenders" FundLenderId="_fundLenderId"
+                        FundLenderChanged="@(v => OnFundLender(new ChangeEventArgs { Value = v }))" />
+    </ChildContent>
+    <Landscape>
+        <ExposureMobileLandscape Rows="_rows" Loading="_loading" Error="@_error"
+                                 Grouping="_grouping" GroupingChanged="@(v => OnGrouping(new ChangeEventArgs { Value = v }))"
+                                 FundLenders="_fundLenders" FundLenderId="_fundLenderId"
+                                 FundLenderChanged="@(v => OnFundLender(new ChangeEventArgs { Value = v }))" />
+    </Landscape>
+</KpiMobile>
+
+@code {
+    private ExposureGrouping _grouping = ExposureGrouping.Combined;
+    private int? _fundLenderId;
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    private List<ExposureRow> _rows = new();
+    private List<ExposureFundOptionResult> _fundLenders = new();
+
+    private sealed record Payload(List<ExposureRow> Rows);
+
+    private string GroupingName => _grouping switch
+    {
+        ExposureGrouping.Customer => "customer",
+        ExposureGrouping.BusinessGroup => "business group",
+        _ => "customer and business group"
+    };
+
+    private string ColumnName => _grouping switch
+    {
+        ExposureGrouping.Customer => "Customer",
+        ExposureGrouping.BusinessGroup => "Business Group",
+        _ => "Customer / Business Group"
+    };
+
+    private IEnumerable<ExposureRow> Shown => _rows.Take(10);
+
+    private static readonly IReadOnlyList<KpiOption> GroupingOptions = new[]
+    {
+        new KpiOption(ExposureGrouping.Combined.ToString(), "Combined"),
+        new KpiOption(ExposureGrouping.Customer.ToString(), "Customer"),
+        new KpiOption(ExposureGrouping.BusinessGroup.ToString(), "Business Group"),
+    };
+
+    private IReadOnlyList<KpiOption> LenderOptions => _fundLenders
+        .Select(l => new KpiOption(l.Id.ToString(), l.Name))
+        .Prepend(new KpiOption("", "All")).ToList();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Load(firstLoad: true);
+    }
+
+    private async Task Load(bool firstLoad = false)
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            // One-time bootstrap: the fund lender list. Not part of the cached payload.
+            if (firstLoad)
+            {
+                using var cms = await SessionFactory.BeginAsync();
+                _fundLenders = new ExposureService(cms.Db).GetFundLenders();
+            }
+
+            // Cached per (grouping + fund lender + report date). GetOrLoad is single-flight.
+            var entry = await KpiCache.GetOrLoad(CacheKey, LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private string CacheKey => KpiCache.Key("Exposure", _grouping, _fundLenderId);
+
+    // Pure loader: opens a one-shot session, runs the procedure, returns the payload + its as-at.
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        var rows = new ExposureService(cms.Db).GetExposure(_grouping, _fundLenderId);
+        return (new Payload(rows), asAt);
+    }
+
+    private void Apply(Payload p) => _rows = p.Rows;
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view.
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(CacheKey, LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task OnGrouping(ChangeEventArgs e)
+    {
+        _grouping = Enum.TryParse<ExposureGrouping>(e.Value?.ToString(), out var g) ? g : ExposureGrouping.Combined;
+        await Load();
+    }
+
+    private async Task OnFundLender(ChangeEventArgs e)
+    {
+        _fundLenderId = int.TryParse(e.Value?.ToString(), out var v) ? v : null;
+        await Load();
+    }
+
+    private static string Cur(decimal v) => "£" + v.ToString("N2");
+    private static string Pct(decimal fraction) => (fraction * 100m).ToString("0.00") + "%";
+}

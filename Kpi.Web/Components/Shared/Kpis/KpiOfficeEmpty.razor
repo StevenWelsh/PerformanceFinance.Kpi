@@ -1,0 +1,9 @@
+@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
+
+@* What a KPI report shows in place of its figures when the chosen sales office has none (KpiOfficeState.ShowsData),
+   on the full view and the phone. *@
+
+<div class="kpi-office-empty" role="status">
+    <i class="bi bi-building" aria-hidden="true"></i>
+    <span>No figures for the @Office.OfficeName office yet.</span>
+</div>

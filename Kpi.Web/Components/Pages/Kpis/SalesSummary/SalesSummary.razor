@@ -1,0 +1,163 @@
+@page "/kpis/sales-summary"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Sales Summary — a grid of comparison cards: each division (All + each real
+   division) across Year / Quarter / Month to date, this year vs last. Each cell
+   is a SalesSummaryPanel that loads its own data. The Sales Office filter sits
+   above the grid. UNVERIFIED against live numbers. *@
+
+<PageTitle>Sales Summary — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="sales-summary" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Sales Summary" AsAt="_asOf" RefreshedOn="_refreshedOn"
+                  RefreshRequested="OnRefreshRequested">
+            <div class="kpi-ss-page">
+                <div class="kpi-filters">
+                    <KpiOfficeField Changed="StateHasChanged" />
+                </div>
+
+                @if (!Office.ShowsData)
+                {
+                    <KpiOfficeEmpty />
+                }
+                else if (_loading)
+                {
+                    <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+                }
+                else if (_error is not null)
+                {
+                    <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+                }
+                else if (_divisions is not null)
+                {
+                    @* rows = period, columns = division (All first, then each division).
+                       @key keeps each cell a distinct component instance so its own
+                       Period/Division state never gets reused across the grid. *@
+                    <div class="ss-grid" style="--ss-cols:@(_divisions.Count)">
+                        @foreach (var period in Periods)
+                        {
+                            @foreach (var div in _divisions)
+                            {
+                                <SalesSummaryPanel @key="Key(period, div.Id)"
+                                                   DivisionId="div.Id" Title="@div.Title" Period="@period" />
+                            }
+                        }
+                    </div>
+                }
+            </div>
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Sales Summary" Active="sales-summary" AsAt="_asOf">
+    <SalesSummaryMobile Divisions="_divisions" Loading="_loading" Error="@_error" OfficeChanged="StateHasChanged" />
+</KpiMobile>
+
+@code {
+    private static readonly string[] Periods = { "Year", "Quarter", "Month" };
+
+    private static string Key(string period, int divisionId) => period + "-" + divisionId;
+
+    // (DivisionId, Title, Name) — "All" (-1) plus each real division; the phone picks by Name.
+    private List<(int Id, string Title, string Name)>? _divisions;
+
+    // The report's "as at" date (today, or a frozen year-end date) — shown top-right.
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    // The result the page renders, as one cacheable payload (the division list only).
+    // The per-cell numbers are loaded independently by each SalesSummaryPanel and stay
+    // uncached; this page's own data is just the divisions the grid is built from.
+    private sealed record Payload(List<(int Id, string Title, string Name)> Divisions);
+
+    // Load AFTER first render so the page shell + panel spinners paint immediately;
+    // the ~30s EF cold start then happens without a blank screen.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            // Cached per report date (this page varies by no parameters): instant on a
+            // repeat open / tab-flick, one DB hit the first time. GetOrLoad is single-flight,
+            // so concurrent viewers load once.
+            var entry = await KpiCache.GetOrLoad(
+                KpiCache.Key("SalesSummary"),
+                LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    // Pure loader: opens a one-shot session, reads the report date + divisions, returns the
+    // payload + its as-at. No component-field mutation here — that's Apply()'s job, so the
+    // cache can call this off the render path during a background refresh.
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+
+        var asAt = cms.Db.ReportDate();
+
+        var divs = cms.Db.Report<DivisionRow>("Rpt.spFilterOptions", new { List = "Divisions" })
+            .ToList()
+            .OrderBy(d => d.Name)
+            .ToList();
+
+        var divisions = new List<(int Id, string Title, string Name)> { (-1, "All", "All") };
+        divisions.AddRange(divs.Select(d => (d.Id, d.Name.ToUpperInvariant(), d.Name)));
+
+        return (new Payload(divisions), asAt);
+    }
+
+    // Push a payload into the fields the markup renders. (_asOf comes from the cache entry's
+    // AsAt, set by the caller, not from the payload.)
+    private void Apply(Payload p) => _divisions = p.Divisions;
+
+    // KpiPanel calls this on its 10-min in-view timer / return-to-view. Re-run through the
+    // cache; if the data changed, refresh the fields and fade the grid; otherwise just tick
+    // "Refreshed on".
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(
+                KpiCache.Key("SalesSummary"),
+                LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();  // gentle grid fade
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private class DivisionRow
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+    }
+}

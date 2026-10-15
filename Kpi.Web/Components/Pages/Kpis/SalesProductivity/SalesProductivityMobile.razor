@@ -1,0 +1,164 @@
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Sales Productivity on a phone: one salesperson at a time, chosen with the picker. The newest year
+   as a funnel (leads in, approved, activated), then the full view's two blocks - leads in and
+   conversion - over the same last four years, the newest column shaded, with the same
+   up / down marks on the year before. Money is shortened (£1.2m, £640k) to fit four columns. *@
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else if (People.Count == 0)
+{
+    <div class="kpim-empty">No salespeople.</div>
+}
+else
+{
+    var index = Math.Clamp(_index, 0, People.Count - 1);
+    var p = Build(People[index]);
+    var now = p.Years.Count - 1;
+    var nowYear = p.Years[now];
+    var soFar = AsAt is not null && nowYear == AsAt.Value.Year;
+
+    <SalespersonMobilePicker Name="@p.Name" Position="@($"{index + 1} of {People.Count}")"
+                             OnPrevious="() => Step(-1)" OnNext="() => Step(1)" />
+
+    <section class="kpim-card kpim-card-pad kpim-spr-funnel">
+        <h2 class="kpim-spr-title">@($"{nowYear}{(soFar ? " so far" : "")} · from lead to activation")</h2>
+        @FunnelBar("Leads in", $"{Count(p.Leads[now])} leads · {Money(p.Af[now])}", 100m, "kpim-spr-fill-leads")
+        @FunnelBar("Approved", $"{Pct(p.LeadToApproval[now])} of leads", Width(p.LeadToApproval[now]), "kpim-spr-fill-approved")
+        @FunnelBar("Activated", $"{Pct(p.LeadToActivation[now])} of leads", Width(p.LeadToActivation[now]), "kpim-spr-fill-activated")
+    </section>
+
+    @Block("Leads in", p.Years, LeadsIn(p))
+    @Block("Conversion", p.Years, Conversion(p))
+}
+
+@code {
+    /// <summary>The page's people, in its order, each carrying the proc's rows.</summary>
+    [Parameter] public IReadOnlyList<SalesProductivity.Person> People { get; set; } = Array.Empty<SalesProductivity.Person>();
+
+    /// <summary>The report date: its year is the one still running ("so far").</summary>
+    [Parameter] public DateTime? AsAt { get; set; }
+
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    private int _index;
+
+    // A person's last four years, oldest to newest (as the full view), each figure null where the year has no row.
+    private sealed record View(string Name, List<int> Years, List<decimal?> Af, List<decimal?> Leads, List<decimal?> HqOther,
+        List<decimal?> SelfGen, List<decimal?> LeadToActivation, List<decimal?> LeadToApproval, List<decimal?> ApprovalToActivation);
+
+    private sealed record Line(string Label, List<decimal?> Values, Func<decimal?, string> Format, bool Trend = false, bool Strong = false);
+
+    private static View Build(SalesProductivity.Person person)
+    {
+        var years = person.Rows.Select(r => r.Year).Distinct().OrderBy(y => y).TakeLast(4).ToList();
+        var byYear = person.Rows.GroupBy(r => r.Year).ToDictionary(g => g.Key, g => g.First());
+        List<decimal?> Col(Func<SalesProductivityRow, decimal> pick) =>
+            years.Select(y => byYear.TryGetValue(y, out var r) ? pick(r) : (decimal?)null).ToList();
+
+        return new View(person.Name, years,
+            Col(r => r.TotalLead_AF),
+            Col(r => r.TotalLead_Count),
+            Col(r => r.HQLead_Count + r.Self_OtherSales_Count),
+            Col(r => r.SelfGen_Percent_Count),
+            Col(r => r.L_ACT_Percent_Count),
+            Col(r => r.L_APR_Percent_Count),
+            Col(r => r.APR_ACT_Percent_Count));
+    }
+
+    private static Line[] LeadsIn(View p) => new[]
+    {
+        new Line("AF volume", p.Af, Money),
+        new Line("Leads", p.Leads, Count),
+        new Line("HQ + other", p.HqOther, Count),
+        new Line("% self generated", p.SelfGen, Pct, Trend: true),
+    };
+
+    private static Line[] Conversion(View p) => new[]
+    {
+        new Line("Lead to activation", p.LeadToActivation, Pct, Trend: true, Strong: true),
+        new Line("Lead to approval", p.LeadToApproval, Pct, Trend: true),
+        new Line("Approval to activation", p.ApprovalToActivation, Pct, Trend: true),
+    };
+
+    // round the list, either way
+    private void Step(int by)
+    {
+        var n = People.Count;
+        if (n == 0) return;
+        _index = ((Math.Clamp(_index, 0, n - 1) + by) % n + n) % n;
+    }
+
+    private static string Money(decimal? v) => v is null ? ""
+        : v >= 1_000_000m ? "£" + (v.Value / 1_000_000m).ToString("0.0") + "m"
+        : "£" + Math.Round(v.Value / 1_000m, MidpointRounding.AwayFromZero).ToString("0") + "k";
+
+    private static string Count(decimal? v) => v is null ? "" : v.Value.ToString("N0");
+
+    // as the full view: Math.Round on the decimal (half to even)
+    private static string Pct(decimal? v) => v is null ? "" : Math.Round(v.Value * 100).ToString("N0") + "%";
+
+    // a funnel bar's length: the share of leads as printed (whole percent)
+    private static decimal Width(decimal? share) => share is null ? 0m : Math.Clamp(Math.Round(share.Value * 100), 0m, 100m);
+
+    // a funnel bar: the label and figure above the bar
+    private RenderFragment FunnelBar(string label, string value, decimal width, string fill) => __builder =>
+    {
+        <div class="kpim-spr-bar">
+            <div class="kpim-spr-bar-text">
+                <span class="kpim-spr-bar-label">@label</span>
+                <span class="kpim-spr-bar-value">@value</span>
+            </div>
+            <div class="kpim-spr-track">
+                <div class="kpim-spr-fill @fill" style="width:@(width.ToString(System.Globalization.CultureInfo.InvariantCulture))%"></div>
+            </div>
+        </div>
+    };
+
+    // a block of the table: a heading, the year columns, a row per line
+    private RenderFragment Block(string title, List<int> years, Line[] lines) => __builder =>
+    {
+        var last = years.Count - 1;
+        <section class="kpim-card kpim-spr-table">
+            <h2 class="kpim-spr-title">@title</h2>
+            <div class="kpim-spr-row kpim-spr-head">
+                <span class="kpim-spr-corner"></span>
+                @for (var i = 0; i < years.Count; i++)
+                {
+                    <span class="kpim-spr-year @(i == last ? "kpim-spr-now-head" : "")">@years[i]</span>
+                }
+            </div>
+            @foreach (var line in lines)
+            {
+                <div class="kpim-spr-row @(line.Strong ? "kpim-spr-strong" : "")">
+                    <span class="kpim-spr-label">@line.Label</span>
+                    @for (var i = 0; i < line.Values.Count; i++)
+                    {
+                        var v = line.Values[i];
+                        var prev = i > 0 ? line.Values[i - 1] : null;
+                        var trend = line.Trend && v is not null && prev is not null && v != prev;
+                        <span class="kpim-spr-cell @(i == last ? "kpim-spr-now" : "")">
+                            @line.Format(v)
+                            @if (trend && v > prev)
+                            {
+                                <svg class="kpim-up" width="8" height="8" viewBox="0 0 10 10" role="img" aria-label="up on the year before"><path d="M5 1.5 9 8.5H1z" fill="currentColor"></path></svg>
+                            }
+                            else if (trend)
+                            {
+                                <svg class="kpim-down" width="8" height="8" viewBox="0 0 10 10" role="img" aria-label="down on the year before"><path d="M1 1.5h8L5 8.5z" fill="currentColor"></path></svg>
+                            }
+                        </span>
+                    }
+                </div>
+            }
+        </section>
+    };
+}

@@ -1,0 +1,151 @@
+@implements IDisposable
+@using Kpi.Web.Data.Kpis
+@inject KpiFavourites Favourites
+
+@* The reports menu on a phone: the same reports, sections and rights as KpiSidebar. A drawer over the
+   report (OnClose set), or the whole KPI home screen (AsPage). Favourites / All: it opens on the view the user
+   last picked, or - when they never have - on their favourites when there are any and on All when there are
+   none; a star on every row adds or removes one (KpiFavourites - kept with the login). The avatar (KpiUserMenu)
+   sits in the head: on a phone this menu is the home screen. *@
+
+<nav class="kpim-menu @(AsPage ? "kpim-menu-page" : "")" aria-label="Reports">
+    <div class="kpim-menu-head">
+        <span>KPIs</span>
+        <KpiUserMenu />
+        @if (!AsPage)
+        {
+            <button type="button" class="kpim-bar-btn" aria-label="Close menu" @onclick="() => OnClose.InvokeAsync()">
+                <i class="bi bi-x-lg" aria-hidden="true"></i>
+            </button>
+        }
+    </div>
+    @if (_view is not null)
+    {
+        <div class="kpim-seg kpim-menu-seg" role="group" aria-label="Show" style="--kpim-cols:2">
+            <button type="button" class="@(_view == KpiMenuView.Favourites ? "kpim-on" : "")" aria-pressed="@(_view == KpiMenuView.Favourites ? "true" : "false")"
+                    @onclick="() => Choose(KpiMenuView.Favourites)">
+                Favourites <span class="kpim-menu-count">@FavouriteReports.Count</span>
+            </button>
+            <button type="button" class="@(_view == KpiMenuView.All ? "kpim-on" : "")" aria-pressed="@(_view == KpiMenuView.All ? "true" : "false")"
+                    @onclick="() => Choose(KpiMenuView.All)">
+                All
+            </button>
+        </div>
+        <div class="kpim-menu-list">
+            @if (_view == KpiMenuView.Favourites)
+            {
+                @if (FavouriteReports.Count == 0)
+                {
+                    <div class="kpim-menu-empty">No favourites yet. Tap the star beside a report in All to keep it here.</div>
+                }
+                else
+                {
+                    <div class="kpim-menu-section">
+                        <div class="kpim-menu-heading">Favourites</div>
+                        @foreach (var r in FavouriteReports)
+                        {
+                            @Row(r)
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                @foreach (var section in Sections)
+                {
+                    var reports = Visible.Where(r => r.Section == section).ToList();
+                    if (reports.Count == 0) continue;
+                    <div class="kpim-menu-section">
+                        <div class="kpim-menu-heading">@section</div>
+                        @foreach (var r in reports)
+                        {
+                            @Row(r)
+                        }
+                    </div>
+                }
+            }
+        </div>
+    }
+</nav>
+
+@code {
+    /// <summary>Slug of the current report, marked in the list.</summary>
+    [Parameter] public string Active { get; set; } = "";
+
+    /// <summary>Closes the drawer. Not used when the menu is the page.</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>The menu is the whole screen (the KPI home), with no close button.</summary>
+    [Parameter] public bool AsPage { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private static string[] Sections => KpiReports.Sections;
+    private static KpiReport[] Reports => KpiReports.All;
+
+    private KpiMenuView? _view;     // null until the favourites have been read: the menu then picks its opening view
+
+    private System.Security.Claims.ClaimsPrincipal _user = new();
+
+    // The Own Book reports need the desktop's Own Book Enquiry right for each, as in KpiSidebar.
+    // only the reports this person may open (Settings > Users); a section with none is left out below
+    private IEnumerable<KpiReport> Visible => Reports.Where(r => Kpi.Web.Account.KpiReportAccess.CanSee(_user, r.Slug));
+
+    // the user's favourites, in the order they were added, that they may still open
+    private List<KpiReport> FavouriteReports => Favourites.Slugs
+        .Select(s => Visible.FirstOrDefault(r => r.Slug == s))
+        .Where(r => r is not null).Select(r => r!).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Favourites.Changed += OnFavouritesChanged;
+        if (AuthState is null) return;
+        _user = (await AuthState).User;
+        PickView();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Favourites.EnsureLoadedAsync();
+        PickView();
+        StateHasChanged();
+    }
+
+    // Decided once, as the menu opens: the view the user last picked (Favourites only while they have any), else
+    // Favourites when there are any and All when there are none.
+    private void PickView()
+    {
+        if (_view is not null || !Favourites.Loaded) return;
+        _view = Favourites.MenuView == KpiMenuView.All || FavouriteReports.Count == 0
+            ? KpiMenuView.All : KpiMenuView.Favourites;
+    }
+
+    // a tap on the switch: shown now and remembered for next time
+    private Task Choose(KpiMenuView view)
+    {
+        _view = view;
+        return Favourites.SetMenuViewAsync(view);
+    }
+
+    private void OnFavouritesChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private RenderFragment Row(KpiReport r) => __builder =>
+    {
+        var on = r.Slug == Active;
+        var fav = Favourites.Contains(r.Slug);
+        <div class="kpim-menu-row @(on ? "kpim-on" : "")">
+            <a href="/kpis/@r.Slug" class="kpim-menu-item" aria-current="@(on ? "page" : null)">
+                <i class="bi @r.Icon" aria-hidden="true"></i>
+                <span>@r.Label</span>
+            </a>
+            <button type="button" class="kpim-star @(fav ? "kpim-on" : "")" aria-pressed="@(fav ? "true" : "false")"
+                    aria-label="@(fav ? $"Remove {r.Label} from favourites" : $"Add {r.Label} to favourites")"
+                    @onclick="() => Favourites.ToggleAsync(r.Slug)">
+                <i class="bi @(fav ? "bi-star-fill" : "bi-star")" aria-hidden="true"></i>
+            </button>
+        </div>
+    };
+
+    public void Dispose() => Favourites.Changed -= OnFavouritesChanged;
+}

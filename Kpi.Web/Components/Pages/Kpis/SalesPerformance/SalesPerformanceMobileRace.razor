@@ -1,0 +1,108 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject Kpi.Web.Data.Kpis.KpiScripts Scripts
+
+@* The timelapse on a phone (landscape), for one year and the current measure: the full view's bar race - the same
+   script, SalesPerformance.razor.js, given the page's payload with its compact rows - and play and the scrubber
+   under it, the week's date riding the scrubber, the YTD target key beside it when the year has targets. Built
+   when shown and rebuilt when the year or measure changes; leaving the view disposes it. *@
+
+<div class="kpim-sp-race">
+    @if (_error is not null)
+    {
+        <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @_error</div>
+    }
+    else
+    {
+        @if (_loading)
+        {
+            <div class="kpim-loading"><span class="kpim-spinner"></span> Loading the @Year timelapse…</div>
+        }
+        <div class="slt-racehost" id="@HostId"></div>
+        <div class="slt-racefoot">
+            <button type="button" class="slt-ctrl" id="@PlayId" aria-label="Play or pause" @onclick="TogglePlay">
+                <i class="bi bi-play-fill" aria-hidden="true"></i>
+            </button>
+            <div class="slt-scrubwrap">
+                <span class="slt-date" id="@DateId"></span>
+                <input type="range" class="slt-scrub" id="@ScrubId" aria-label="Week" />
+            </div>
+            @if (_hasTargets)
+            {
+                <span class="kpim-sp-key">
+                    <span>
+                        <svg width="6" height="16" viewBox="0 0 6 16" aria-hidden="true"><line class="kpim-sp-tick-ytd" x1="3" y1="2" x2="3" y2="14" /></svg>
+                        YTD target
+                    </span>
+                </span>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Year { get; set; }
+    [Parameter] public string Measure { get; set; } = "TFI";
+
+    /// <summary>The page's race payload for a year (the current measure), compact.</summary>
+    [Parameter, EditorRequired] public Func<int, Task<(object Payload, bool HasTargets)>> LoadRace { get; set; } = default!;
+
+    private const string Module = "./Components/Pages/Kpis/SalesPerformance/SalesPerformance.razor.js";
+
+    private IJSObjectReference? _module;
+    private string? _builtFor;      // the measure + year the race on screen was built for
+    private bool _loading;
+    private bool _hasTargets;
+    private string? _error;
+
+    // the script finds its elements by id (as the popup's race does)
+    private readonly string _id = Guid.NewGuid().ToString("N");
+    private string HostId => $"kpim-sp-race-{_id}";
+    private string ScrubId => $"kpim-sp-scrub-{_id}";
+    private string DateId => $"kpim-sp-date-{_id}";
+    private string PlayId => $"kpim-sp-play-{_id}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var key = $"{Measure}|{Year}";
+        if (_loading || Year <= 0 || key == _builtFor) return;
+        _builtFor = key;
+        _loading = true; _error = null;
+        StateHasChanged();
+        try
+        {
+            var (payload, hasTargets) = await LoadRace(Year);
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", Scripts.Url(Module));
+            _hasTargets = hasTargets;
+            _loading = false;
+            StateHasChanged();
+            // a change of year or measure while it loaded: the next render builds that one instead
+            if (key == $"{Measure}|{Year}")
+                await _module.InvokeAsync<bool>("initRace", HostId, ScrubId, DateId, PlayId, payload);
+        }
+        catch (JSDisconnectedException) { }
+        catch (Exception ex)
+        {
+            _loading = false; _error = ex.Message;
+            StateHasChanged();
+        }
+    }
+
+    private async Task TogglePlay()
+    {
+        if (_module is null) return;
+        try { await _module.InvokeVoidAsync("togglePlay", HostId); }
+        catch (JSDisconnectedException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is null) return;
+        try
+        {
+            await _module.InvokeVoidAsync("disposeRace", HostId);
+            await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+}
