@@ -1,16 +1,20 @@
-/*  KPI_Export - a LOCAL stand-in for the KpiExport schema that will live in CMS_Live.
+/*  KPI_Export - the database, beside CMS on the same SQL Server, that defines EXACTLY what the KPI copy reads
+    (docs/kpi-copy-plan.html). Kpi.Push reads only these views; nothing KPI-specific is created inside CMS itself.
 
-    It lets the KPI push copy real data from CMS_Dev without touching CMS_Dev: this is a database of its
-    own, holding only views, one function, the two nightly snapshot tables and the procedure that fills
-    them. The views and the procedure are the CMS_Live text word for word; they read CMS_Dev through
-    SYNONYMS (named pointers, e.g. Lead.vLead here means CMS_Dev.Lead.vLead), so moving them into CMS later
-    is a copy with no edits. The one difference: KpiExport.ConisterRCF_IWFA points at CMS_Dev's
-    WebKPI.ConisterRCF_IWFA instead of the table being moved.
+    It holds views, two functions, the two nightly snapshot tables and the procedure that fills them, reading CMS
+    through SYNONYMS (named pointers: Lead.vLead here means <CMS database>.Lead.vLead). The CMS database is set on
+    ONE line below (@CmsDb): CMS_Dev on a developer's machine, CMS_Live on the office server. The one difference
+    from CMS's own text: KpiExport.ConisterRCF_IWFA points at CMS's WebKPI.ConisterRCF_IWFA.
 
-    Run once, as yourself, in SSMS or with:
-        sqlcmd -S .\SQLEXPRESS -E -i KPI_Export.sql
-    Safe to run again: it drops and recreates everything except the database.
-    To point it at another copy of CMS, change @CmsDb below and run it again.  */
+    Apply it with Kpi.Tools (sets @CmsDb for you, checks the version, runs every batch):
+        dotnet run --project Kpi.Tools -- export-apply --cms CMS_Live      (or CMS_Dev on a developer's machine)
+        dotnet run --project Kpi.Tools -- export-check                     (is every view still valid?)
+    or in SSMS, after changing @CmsDb by hand. Safe to run again: it drops and recreates everything except the
+    database. Run by a person, never by an app.
+
+    VERSION: when this script changes, raise the number in KpiExport.Version at the bottom AND ExportVersion.Current
+    (Kpi.Push/Export/ExportVersion.cs) together - Kpi.Push refuses to copy from a KPI_Export of any other version, and
+    export-apply refuses a script whose number disagrees with the code.  */
 
 USE master;
 GO
@@ -538,4 +542,11 @@ BEGIN
         INSERT KpiExport.ExposureSnapshot SELECT * FROM #Exposure;
     COMMIT TRANSACTION;
 END
+GO
+
+-- ================================================================================================
+-- the version: Kpi.Push copies only from the KPI_Export it was built for (ExportVersion.Current) - raise both together
+-- ================================================================================================
+CREATE TABLE KpiExport.Version (Version int NOT NULL, AppliedUtc datetime2(0) NOT NULL);
+INSERT KpiExport.Version (Version, AppliedUtc) VALUES (1, SYSUTCDATETIME());
 GO

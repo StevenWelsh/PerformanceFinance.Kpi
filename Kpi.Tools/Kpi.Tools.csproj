@@ -25,6 +25,12 @@
     <ProjectReference Include="..\Kpi.Data\Kpi.Data.csproj" />
   </ItemGroup>
 
+  <!-- export-apply / export-check: the KPI_Export script and the version Kpi.Push expects, both owned by Kpi.Push -->
+  <ItemGroup>
+    <Compile Include="..\Kpi.Push\Export\ExportVersion.cs" Link="Export\ExportVersion.cs" />
+    <EmbeddedResource Include="..\Kpi.Push\Export\KPI_Export.sql" Link="Export\KPI_Export.sql" LogicalName="KPI_Export.sql" />
+  </ItemGroup>
+
   <ItemGroup>
     <None Update="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

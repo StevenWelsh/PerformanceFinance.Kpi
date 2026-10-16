@@ -4,7 +4,8 @@ using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 
 // The KPI copy, one way:  Kpi.Push Frequent | Nightly
-//   Source  where the KpiExport views are: CMS_Live in production, the local KPI_Export stand-in while building
+//   Source  the KPI_Export database beside CMS (Export/KPI_Export.sql, applied by Kpi.Tools export-apply); it must be at
+//           ExportVersion.Current or nothing is copied
 //   CmsKpi  the KPI database, as a login that can only fill Stage and run Stage.spPublish
 // Connection strings come from user-secrets (dotnet user-secrets set "ConnectionStrings:Source" "..." --project
 // Kpi.Push) or environment variables (ConnectionStrings__Source), never from a committed file.
@@ -63,6 +64,14 @@ try
             return 0;                                            // not a failure: the running push will publish
         }
     }                                                            // released when the connection closes
+
+    // 1b. only from the KPI_Export this build was written for: an older script on the server could feed the wrong shape
+    var version = (int)(await Scalar(source,
+        "IF OBJECT_ID(N'KpiExport.Version') IS NULL SELECT 0 ELSE SELECT ISNULL(MAX(Version), 0) FROM KpiExport.Version"))!;
+    if (version != Kpi.Push.ExportVersion.Current)
+        throw new InvalidOperationException(
+            $"KPI_Export is at version {version}; this Kpi.Push needs version {Kpi.Push.ExportVersion.Current}. " +
+            "Apply the script that came with it:  Kpi.Tools export-apply --cms <CMS database>");
 
     // 2. nightly: refresh the Bad Debt and Exposure snapshots at the source first (a few minutes)
     if (scope == "Nightly")

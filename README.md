@@ -6,10 +6,10 @@ CMS (the desktop / web / hub solution); CMS's own KPI pages stay as they are unt
 | Project | Role |
 |---|---|
 | `Kpi.Data` | EF Core migrations for `CMS_KPI`: schemas, copied tables, staging tables, the publish procedure, the report procedures (ports of CMS's `WebKPI` ones), roles. |
-| `Kpi.Tools` | Run by a person: `migrate` applies the migrations, `seed` creates the first System Admin of a new database, `compare` checks each report against CMS's `WebKPI` version. |
+| `Kpi.Tools` | Run by a person: `migrate` applies the migrations, `seed` creates the first System Admin of a new database, `grant-site` / `grant-push` let an Entra identity in, `export-apply` / `export-check` create and check KPI_Export, `compare` checks each report against CMS's `WebKPI` version. |
 | `Kpi.Push` | The copy: reads the `KpiExport` views, bulk-loads `Stage.*` in `CMS_KPI`, then runs `Stage.spPublish` (one transaction, so reports never see half a load). `Frequent` every 10 minutes, `Nightly` also refreshes Bad Debt and Exposure. |
 | `Kpi.Web` | The site: CMS.Web's KPI pages (shell, every report, phone views, the cache and 10-minute refresh), copied, reading `CMS_KPI` through the `Rpt` procedures; sign-in (ASP.NET Identity + a compulsory authenticator app, invitation only), My Account and Settings. |
-| `Local/KPI_Export.sql` | A local stand-in for the `KpiExport` schema that will eventually live in CMS_Live: its own database, views word for word as they will be in CMS, reading `CMS_Dev` through synonyms. CMS_Dev itself is not changed. |
+| `Kpi.Push/Export/KPI_Export.sql` | The `KPI_Export` database beside CMS (CMS_Live in production, CMS_Dev locally): the views the copy reads, reading CMS through synonyms. CMS itself is not changed. Versioned with `ExportVersion.cs`; apply it with `Kpi.Tools export-apply`. |
 
 ## First run on a developer machine
 
@@ -19,7 +19,9 @@ repository folder:
 ```
 dotnet user-secrets set "ConnectionStrings:CmsKpi" "Server=.\SQLEXPRESS;Database=CMS_KPI;Trusted_Connection=True;TrustServerCertificate=True" --project Kpi.Tools
 dotnet run --project Kpi.Tools -- migrate
-sqlcmd -S .\SQLEXPRESS -E -b -i Local\KPI_Export.sql
+dotnet user-secrets set "ConnectionStrings:Export" "Server=.\SQLEXPRESS;Database=master;Trusted_Connection=True;TrustServerCertificate=True" --project Kpi.Tools
+dotnet run --project Kpi.Tools -- export-apply --cms CMS_Dev
+dotnet run --project Kpi.Tools -- export-check
 dotnet user-secrets set "ConnectionStrings:Source" "Server=.\SQLEXPRESS;Database=KPI_Export;Trusted_Connection=True;TrustServerCertificate=True" --project Kpi.Push
 dotnet user-secrets set "ConnectionStrings:CmsKpi" "Server=.\SQLEXPRESS;Database=CMS_KPI;Trusted_Connection=True;TrustServerCertificate=True" --project Kpi.Push
 dotnet run --project Kpi.Push -- Nightly

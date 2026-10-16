@@ -21,10 +21,10 @@ Plan, object by object: `docs/analytics/kpi-database-plan.html` in the CMS repo
 | Project | Role |
 |---|---|
 | `Kpi.Data` | EF Core 10 migrations for `CMS_KPI` (history table `Ref.MigrationsHistory`). The schema is SQL in `migrationBuilder.Sql(...)`, not an EF model: there are no entity classes for the report tables. |
-| `Kpi.Tools` | Run by a person: `migrate`, `seed --email --name` (the first System Admin), `grant-site --app --app-id` (a web app's managed identity into `kpi_site`), each with `--azure` for the Azure database (`CmsKpiAzure`; a non-local server is refused without it); `compare [report]`. |
-| `Kpi.Push` | The copy (net10.0-windows console): `Frequent` every 10 minutes, `Nightly` also refreshes Bad Debt and Exposure; `--azure` copies into `CmsKpiAzure` from a developer's machine. |
+| `Kpi.Tools` | Run by a person: `migrate`, `seed --email --name` (the first System Admin), `grant-site --app --app-id` (a web app's managed identity into `kpi_site`), `grant-push --app --app-id` (the copy's app registration into `kpi_push`), each with `--azure` for the Azure database (`CmsKpiAzure`; a non-local server is refused without it); `export-apply --cms <db>` / `export-check` (KPI_Export, server = `ConnectionStrings:Export`, `--remote` to change another server); `compare [report]`. |
+| `Kpi.Push` | The copy (net10.0-windows console): `Frequent` every 10 minutes, `Nightly` also refreshes Bad Debt and Exposure; `--azure` copies into `CmsKpiAzure` from a developer's machine. Refuses a KPI_Export whose `KpiExport.Version` isn't `ExportVersion.Current`. |
 | `Kpi.Web` | The site: Blazor Server, CMS.Web's KPI pages copied, reading `CMS_KPI`. |
-| `Local/KPI_Export.sql` | Local stand-in for CMS_Live's `KpiExport` schema (see below). |
+| `Kpi.Push/Export/KPI_Export.sql` | The KPI_Export database beside CMS (see below), applied by `Kpi.Tools export-apply` (embedded there). |
 
 **.NET 10 (Oct 2026):** every project targets .NET 10 (LTS to Nov 2028; .NET 8 support ends 10 Nov 2026). EF Core and
 Identity 10.0.x, `Microsoft.Data.SqlClient` **6.1.x** - the version EF Core 10 is built on; 7.x moves Entra sign-in to a
@@ -33,12 +33,12 @@ separate package, which would break the site's managed identity. `System.Securit
 which runs on 10. CMS.Web's KPI pages (the copies' originals) are still .NET 8.
 
 Connection strings live in **user-secrets** (each csproj has a `UserSecretsId` label) or environment variables,
-never in committed files: `Kpi.Tools` needs `CmsKpi` and `Cms` (for compare); `Kpi.Push` needs `Source` and
+never in committed files: `Kpi.Tools` needs `CmsKpi`, `Cms` (for compare) and `Export` (the KPI_Export server); `Kpi.Push` needs `Source` and
 `CmsKpi`; `Kpi.Web` needs `CmsKpi`. Local values: `Server=.\SQLEXPRESS;Database=<db>;Trusted_Connection=True;TrustServerCertificate=True`.
 
 ## The data flow
 
-`KpiExport` views (in CMS_Live eventually; locally the `KPI_Export` database) → `Kpi.Push` bulk-copies each into
+`KpiExport` views (in the `KPI_Export` database beside CMS: CMS_Live's server in production, beside CMS_Dev locally) → `Kpi.Push` bulk-copies each into
 `Stage.*` in `CMS_KPI` → `Stage.spPublish` swaps everything into `Dim`/`Fact` in ONE transaction (read-committed
 snapshot, so a report never sees half a load; it refuses an empty `Stage.Lead`) → the site runs only `Rpt.*`.
 Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load locally).
@@ -60,9 +60,13 @@ Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load
   cached a minute; full view and phone bar), so a reader sees how fresh the figures are; amber with a warning when the
   copy is overdue. A past year's figures (CMS's current year set back) show the date alone. "Refreshed" is only when
   that browser last fetched.
-- **Local stand-in:** `KPI_Export` holds the views word for word as they will be in CMS, reading CMS_Dev through
-  SYNONYMS (`Lead.vLead` there = `CMS_Dev.Lead.vLead`), so moving them into CMS is a copy. Rerunnable (drops and
-  recreates its objects); `@CmsDb` at the top picks the CMS database. Created by the user, never by Claude.
+- **KPI_Export** (Oct 2026, plan section 9): its own database beside CMS, so nothing KPI-specific is added to CMS. It
+  reads CMS through SYNONYMS (`Lead.vLead` there = `<CMS db>.Lead.vLead`); `@CmsDb` (set by `export-apply --cms`) picks
+  the CMS database. Rerunnable (drops and recreates its objects). **Versioned:** the script's last statement stamps
+  `KpiExport.Version`; raise it and `Kpi.Push/Export/ExportVersion.cs` TOGETHER whenever the script changes - Kpi.Push
+  copies nothing from any other version, `export-apply` refuses a script that disagrees with the code, `export-check`
+  (read only) reports the version, a synonym whose CMS object is gone, or a view that no longer runs. Applied by the
+  user, never by Claude.
 - **Exposure has no fund filter on the KPI site (Oct 2026, Steve):** nightly runs = 3 groupings × (all lenders +
   each lender), a few minutes. Per fund would be ~300 more runs a night (830 funds in CMS_Dev, ~300 with book).
 
