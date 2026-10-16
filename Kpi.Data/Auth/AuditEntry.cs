@@ -40,4 +40,6 @@ public static class AuditEvents
     public const string UserEnabled = "UserEnabled";
     public const string UserDeleted = "UserDeleted";
     public const string IntegrationChanged = "IntegrationChanged";
+    /// <summary>A System Admin ran a test query against the data source (Settings > Integrations); the text is recorded.</summary>
+    public const string SourceQueried = "SourceQueried";
 }

@@ -32,6 +32,8 @@ public static class IntegrationProviders
     public const string Resend = "Resend";
     /// <summary>The sign-in's text codes (Twilio Verify). Its row is made on first use.</summary>
     public const string Twilio = "Twilio";
+    /// <summary>Where the KPI copy reads from: KPI_Export on the office SQL Server (Kpi.Web's CmsSource). Its row is made on first use.</summary>
+    public const string CmsSource = "CmsSource";
 }
 
 public static class IntegrationStatus

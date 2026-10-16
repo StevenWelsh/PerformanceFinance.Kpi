@@ -34,16 +34,21 @@ which runs on 10. CMS.Web's KPI pages (the copies' originals) are still .NET 8.
 
 Connection strings live in **user-secrets** (each csproj has a `UserSecretsId` label) or environment variables,
 never in committed files: `Kpi.Tools` needs `CmsKpi`, `Cms` (for compare) and `Export` (the KPI_Export server); `Kpi.Push` needs `Source`
-(local KPI_Export, Windows sign-in) and `CmsKpi`; `Kpi.Web` needs `CmsKpi`, and `KpiExport` to copy (in Azure: the office's
-public IP and forwarded port, database KPI_Export, the grant-pull login, `Encrypt=True;TrustServerCertificate=True` - no
-certificate on that SQL Server, Steve chose not to ask PCS for one; without `KpiExport` the copy is off). Local values: `Server=.\SQLEXPRESS;Database=<db>;Trusted_Connection=True;TrustServerCertificate=True`.
+(local KPI_Export, Windows sign-in) and `CmsKpi`; `Kpi.Web` needs `CmsKpi` only. **Where the site copies FROM is not a
+connection string: it is the CMS data source card in Settings > Integrations** (`Integrations/CmsSource`, provider
+`CmsSource` in `Cfg.Integration`: host, port, database, username and the encryption ticks in `SettingsJson`, the password
+in `SecretsCipher` like Resend's key; tested before saving). In Azure: the office's public IP and forwarded port,
+`KPI_Export`, the grant-pull login, encrypted with the server's own certificate accepted (none is installed; Steve chose
+not to ask PCS for one). With no card connected, `ConnectionStrings:KpiExport` stands in (a developer's machine); with
+neither, the copy is off. The card's **Try a query** runs as that same login (so it sees only what the copy can) in a
+transaction that is always rolled back, 100 rows / 30 s, System Admin only, each query audited (`SourceQueried`). Local values: `Server=.\SQLEXPRESS;Database=<db>;Trusted_Connection=True;TrustServerCertificate=True`.
 
 ## The data flow
 
 **A PULL (16 Oct 2026, Steve; it replaced a planned push from the office):** `KpiExport` views in the `KPI_Export`
 database beside CMS (CMS_Live on PF-APP1; CMS_Dev locally) → SQL Server Agent on PF-APP1 copies them into `KpiCopy.*`
 every 10 minutes, 07:00-20:00 Mon-Sat (`spRefreshCopies`, one transaction, stamps `KpiCopy.Refresh`), and at 00:15 first
-prepares Bad Debt and Exposure → the SITE (`KpiPull`, every 2 minutes) reads that one row and, when it is newer than
+prepares Bad Debt and Exposure → the SITE (`KpiPull`, every 2 minutes, through the CMS data source card) reads that one row and, when it is newer than
 CMS_KPI's last publish (`Rpt.spDataStatus`), bulk-copies `KpiCopy.*` (+ the snapshots when prepared since the last
 nightly publish) into `Stage.*` in `CMS_KPI` → `Stage.spPublish` swaps everything into `Dim`/`Fact` in ONE transaction
 (read-committed snapshot, so a report never sees half a load; it refuses an empty `Stage.Lead`) → the site runs only

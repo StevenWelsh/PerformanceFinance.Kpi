@@ -388,6 +388,16 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .intg-btn-warn { background: var(--warning-bg); color: var(--warning); }
 .intg-btn:hover:not(:disabled) { filter: brightness(1.12); }
 .intg-btn:disabled { opacity: 0.55; cursor: default; }
+/* the CMS data source card: its icon, host + port side by side, and "Try a query" with its results */
+.intg-db { font-size: 18px; color: var(--text-2); }
+.intg-pair { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); gap: 0 12px; }
+.intg-query { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.intg-query textarea { width: 100%; box-sizing: border-box; font-family: ui-monospace, Consolas, monospace; font-size: 13px; resize: vertical; }
+.intg-query-error { margin: 8px 0 0; font-size: 13px; }
+.intg-result { max-height: 320px; overflow: auto; margin-top: 8px; border: 1px solid var(--line); border-radius: 6px; }
+.intg-result .set-table { font-size: 12px; font-family: ui-monospace, Consolas, monospace; }
+.intg-result .set-table td { padding: 4px 8px; white-space: nowrap; }
+.intg-null { color: var(--text-3); font-style: italic; }
 /* the two-step Connect dialog */
 .set-dialog.set-dialog-wide { width: 560px; }
 .intg-steps { display: flex; gap: 18px; list-style: none; padding: 0; margin: 0 0 16px; font-size: 13px; color: var(--text-3); }

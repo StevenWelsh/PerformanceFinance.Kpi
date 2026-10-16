@@ -1,0 +1,267 @@
+@using Kpi.Data.Auth
+@using Kpi.Data.Cfg
+@using Kpi.Web.Integrations
+@using Microsoft.Data.SqlClient
+@inject IntegrationStore Store
+@inject IServiceScopeFactory Scopes
+
+@* The data source card (Settings > Integrations), like Klipfolio's SQL data source: where the KPI copy reads from -
+   KPI_Export on the office SQL Server, through the port forward that admits only the site's static IP (20.90.27.132),
+   as the SQL login made by Kpi.Tools grant-pull. Details are tested before they are saved; the password is encrypted
+   on the server and never shown back (a blank box keeps it). "Try a query" runs as that same login, so it sees only
+   what the copy can, inside a transaction that is always rolled back; every query is audited. What is copied is fixed
+   in code (Kpi.Copy), not set here. *@
+
+<div class="intg-card">
+    <div class="intg-head">
+        <span class="intg-name"><i class="bi bi-database intg-db" aria-hidden="true"></i>CMS data source</span>
+        <IntegrationPlug Row="_row" />
+    </div>
+    <p class="intg-desc">Where the KPI figures are copied from: KPI_Export on the office SQL Server.</p>
+    <IntegrationButton Row="_row" ConnectText="Connect data source" OnClick="Open" />
+</div>
+
+@if (_open && _row is not null)
+{
+    <div class="set-backdrop" @onclick="() => _open = false"></div>
+    <div class="set-dialog set-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="source-title">
+        <h3 id="source-title">CMS data source</h3>
+        @if (_message is not null)
+        {
+            <div class="@(_messageOk ? "login-notice" : "login-error")" role="status">
+                <i class="bi @(_messageOk ? "bi-check-circle" : "bi-exclamation-triangle-fill")"></i> @_message
+            </div>
+        }
+
+        @if (!_editing)
+        {
+            <dl class="acc-facts">
+                <dt>Server</dt><dd>@(_settings is null ? "-" : $"{_settings.Host}, port {_settings.Port}")</dd>
+                <dt>Database</dt><dd>@(_settings?.Database ?? "-")</dd>
+                <dt>Username</dt><dd>@(_settings?.UserName ?? "-")</dd>
+                <dt>Password</dt><dd>@(_row.SecretsCipher is null ? "-" : $"saved {Kpi.Web.Data.UkTime.Show(_row.SecretsUpdatedUtc)}")</dd>
+                <dt>Encryption</dt><dd>@EncryptionText(_settings)</dd>
+                <dt>Copying</dt><dd>@(_row.Enabled ? "On - checked every 2 minutes" : "Switched off")</dd>
+                <dt>Last worked</dt><dd>@Kpi.Web.Data.UkTime.Show(_row.LastOkUtc)</dd>
+                @if (_row.LastErrorUtc is not null && (_row.LastOkUtc is null || _row.LastErrorUtc > _row.LastOkUtc))
+                {
+                    <dt>Last problem</dt><dd class="set-bad">@Kpi.Web.Data.UkTime.Show(_row.LastErrorUtc): @_row.LastError</dd>
+                }
+            </dl>
+            <div class="set-buttons">
+                <button type="button" class="acc-btn" @onclick="StartEdit">Change</button>
+                <button type="button" class="acc-btn-secondary" disabled="@_busy" @onclick="TestSaved">@(_busy && !_running ? "Testing…" : "Test connection")</button>
+                <button type="button" class="acc-btn-secondary set-act-danger" @onclick="() => _confirmDisconnect = true">Disconnect</button>
+            </div>
+            @if (_confirmDisconnect)
+            {
+                <div class="set-confirm">
+                    <p>Disconnect the data source? The saved password is deleted and the site stops copying, so after 30 minutes
+                       in office hours every report says its figures are overdue - until it is connected again.</p>
+                    <button type="button" class="acc-btn-secondary" @onclick="() => _confirmDisconnect = false">Cancel</button>
+                    <button type="button" class="acc-btn" @onclick="Disconnect">Disconnect</button>
+                </div>
+            }
+
+            <div class="intg-query">
+                <label class="login-label" for="q-sql">Try a query</label>
+                <p class="acc-hint">Runs as the copy's own login, read only (nothing can be changed), the first @CmsSource.MaxRows rows,
+                   @CmsSource.QueryTimeoutSeconds seconds at most. Recorded in the audit.</p>
+                <textarea id="q-sql" @bind="_sql" spellcheck="false" rows="3"></textarea>
+                <div class="set-buttons">
+                    <button type="button" class="acc-btn-secondary" disabled="@_busy" @onclick="RunQuery">@(_running ? "Running…" : "Run")</button>
+                    @if (_result is not null)
+                    {
+                        <span class="acc-hint">@_result.Rows.Count row@(_result.Rows.Count == 1 ? "" : "s")@(_result.MoreRows ? $" (the first {CmsSource.MaxRows})" : "") in @_result.Elapsed.TotalSeconds.ToString("0.0") s</span>
+                    }
+                </div>
+                @if (_queryError is not null)
+                {
+                    <p class="set-bad intg-query-error">@_queryError</p>
+                }
+                @if (_result is { Columns.Count: > 0 })
+                {
+                    <div class="set-table-wrap intg-result">
+                        <table class="set-table">
+                            <thead><tr>@foreach (var c in _result.Columns) { <th>@c</th> }</tr></thead>
+                            <tbody>
+                                @foreach (var r in _result.Rows)
+                                {
+                                    <tr>@foreach (var v in r) { <td class="@(v is null ? "intg-null" : null)">@(v ?? "NULL")</td> }</tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="acc-hint">From PCS's port-forward rule and <code>Kpi.Tools grant-pull</code> (see docs/kpi-pull-runbook.md).
+               The details are tested before they're saved.</p>
+            <div class="intg-pair">
+                <div>
+                    <label class="login-label" for="s-host">Host</label>
+                    <input id="s-host" @bind="_host" spellcheck="false" autocomplete="off" placeholder="51.148.118.225" />
+                </div>
+                <div>
+                    <label class="login-label" for="s-port">Port</label>
+                    <input id="s-port" @bind="_port" inputmode="numeric" autocomplete="off" placeholder="1433" />
+                </div>
+            </div>
+            <label class="login-label" for="s-db">Database</label>
+            <input id="s-db" @bind="_database" spellcheck="false" autocomplete="off" placeholder="KPI_Export" />
+            <label class="login-label" for="s-user">Username</label>
+            <input id="s-user" @bind="_user" spellcheck="false" autocomplete="off" data-lpignore="true" data-1p-ignore placeholder="kpi_site_azure" />
+            <label class="login-label" for="s-pass">Password</label>
+            <input id="s-pass" type="password" @bind="_password" autocomplete="new-password" data-lpignore="true" data-1p-ignore
+                   placeholder="@(_row.SecretsCipher is null ? "" : "Leave blank to keep the saved password")" />
+            <label class="acc-check"><input type="checkbox" @bind="_encrypt" /> Encrypt the connection</label>
+            <label class="acc-check"><input type="checkbox" @bind="_trust" /> Accept the server's own certificate (none is installed on it)</label>
+            <label class="acc-check"><input type="checkbox" @bind="_enabled" /> Copy from this data source</label>
+        }
+
+        <div class="set-dialog-buttons">
+            @if (_editing)
+            {
+                <button type="button" class="acc-btn-secondary" @onclick="CancelEdit">Cancel</button>
+                <button type="button" class="acc-btn" disabled="@_busy" @onclick="Save">@(_busy ? "Testing…" : "Test & save")</button>
+            }
+            else
+            {
+                <button type="button" class="acc-btn-secondary" @onclick="() => _open = false">Close</button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private Integration? _row;
+    private CmsSourceSettings? _settings;
+    private bool _open, _editing, _busy, _running, _confirmDisconnect, _messageOk;
+    private string? _message, _queryError;
+    private string _host = "", _port = "", _database = "", _user = "", _password = "";
+    private bool _encrypt = true, _trust = true, _enabled = true;
+    private string _sql = "SELECT * FROM KpiCopy.Refresh";
+    private SourceQueryResult? _result;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _row = await Store.GetAsync(IntegrationProviders.CmsSource);
+        _settings = IntegrationStore.ReadSettings<CmsSourceSettings>(_row);
+    }
+
+    private static string EncryptionText(CmsSourceSettings? s) => s is null ? "-"
+        : !s.Encrypt ? "Not encrypted"
+        : s.TrustServerCertificate ? "Encrypted (server's own certificate accepted)" : "Encrypted, certificate checked";
+
+    private void Open()
+    {
+        _message = null; _confirmDisconnect = false; _result = null; _queryError = null;
+        if (_row?.Status == IntegrationStatus.NotConnected) StartEdit(); else _editing = false;
+        _open = true;
+    }
+
+    private void StartEdit()
+    {
+        _host = _settings?.Host ?? "";
+        _port = _settings?.Port.ToString() ?? "";
+        _database = _settings?.Database ?? "KPI_Export";
+        _user = _settings?.UserName ?? "kpi_site_azure";
+        _password = "";
+        _encrypt = _settings?.Encrypt ?? true;
+        _trust = _settings?.TrustServerCertificate ?? true;
+        _enabled = _row?.Status == IntegrationStatus.NotConnected || (_row?.Enabled ?? true);
+        _message = null;
+        _editing = true;
+    }
+
+    private void CancelEdit()
+    {
+        if (_row?.Status == IntegrationStatus.NotConnected) _open = false;
+        _editing = false; _message = null;
+    }
+
+    // the typed details are tried first; they are saved only once they have worked
+    private async Task Save()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            var host = _host.Trim();
+            if (host.Length == 0) { Say(false, "Enter the host."); return; }
+            if (!int.TryParse(_port.Trim(), out var port) || port is < 1 or > 65535) { Say(false, "The port must be a number from 1 to 65535."); return; }
+            if (_database.Trim().Length == 0 || _user.Trim().Length == 0) { Say(false, "Enter the database and the username."); return; }
+            var password = _password.Length > 0 ? _password : _row is null ? null : Store.ReadSecrets<CmsSourceSecrets>(_row)?.Password;
+            if (string.IsNullOrEmpty(password)) { Say(false, "Enter the password."); return; }
+
+            var settings = new CmsSourceSettings(host, port, _database.Trim(), _user.Trim(), _encrypt, _trust);
+            var answer = await CmsSource.TestAsync(CmsSource.ConnectionString(settings, password));
+            await Store.SaveCmsSourceAsync(await SettingsActor.GetAsync(AuthState, Scopes), settings, _password.Length > 0 ? _password : null, _enabled);
+            _password = "";
+            await Load();
+            _editing = false;
+            Say(true, answer + (_enabled ? " Saved: the site copies from it within two minutes." : " Saved, with copying switched off."));
+        }
+        catch (Exception ex) when (ex is SqlException or InvalidOperationException or IntegrationSecretsUnreadableException)
+        {
+            Say(false, $"Not saved: {ex.Message}");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task TestSaved()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            var answer = await CmsSource.TestAsync(SavedConnection());
+            await Store.RecordCallAsync(IntegrationProviders.CmsSource, null);
+            Say(true, answer);
+        }
+        catch (Exception ex) when (ex is SqlException or InvalidOperationException or IntegrationSecretsUnreadableException)
+        {
+            await Store.RecordCallAsync(IntegrationProviders.CmsSource, ex.Message);
+            Say(false, ex.Message);
+        }
+        finally { _busy = false; await Load(); }
+    }
+
+    private async Task RunQuery()
+    {
+        if (string.IsNullOrWhiteSpace(_sql)) { _queryError = "Enter a query."; return; }
+        _busy = _running = true; _queryError = null; _result = null;
+        try
+        {
+            var me = await SettingsActor.GetAsync(AuthState, Scopes);
+            await Store.AuditAsync(me, AuditEvents.SourceQueried, $"Test query on the data source: {_sql.Trim()}");
+            _result = await CmsSource.RunAsync(SavedConnection(), _sql);
+        }
+        catch (Exception ex) when (ex is SqlException or InvalidOperationException or IntegrationSecretsUnreadableException)
+        {
+            _queryError = ex.Message;
+        }
+        finally { _busy = _running = false; }
+    }
+
+    private string SavedConnection()
+    {
+        var settings = _settings ?? throw new InvalidOperationException("The data source isn't connected.");
+        var secrets = Store.ReadSecrets<CmsSourceSecrets>(_row!) ?? throw new InvalidOperationException("No password is saved.");
+        return CmsSource.ConnectionString(settings, secrets.Password);
+    }
+
+    private async Task Disconnect()
+    {
+        await Store.DisconnectAsync(IntegrationProviders.CmsSource, await SettingsActor.GetAsync(AuthState, Scopes));
+        _confirmDisconnect = false;
+        _open = false;
+        await Load();
+    }
+
+    private void Say(bool ok, string message) { _messageOk = ok; _message = message; }
+}

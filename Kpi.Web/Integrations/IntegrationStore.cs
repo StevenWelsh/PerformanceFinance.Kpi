@@ -147,6 +147,51 @@ public sealed class IntegrationStore(IDbContextFactory<KpiDbContext> dbs, IDataP
         await db.SaveChangesAsync();
     }
 
+    /// <summary>Saves the data source - already tested by the caller - and, when one is given, a new password.</summary>
+    public async Task SaveCmsSourceAsync(KpiUser actor, CmsSourceSettings settings, string? newPassword, bool enabled)
+    {
+        await using var db = await dbs.CreateDbContextAsync();
+        var row = await TrackedAsync(db, IntegrationProviders.CmsSource);
+        var changes = new List<string>();
+
+        if (!string.IsNullOrEmpty(newPassword))
+        {
+            row.SecretsCipher = _secrets.Protect(JsonSerializer.Serialize(new CmsSourceSecrets(newPassword)));
+            row.SecretsUpdatedUtc = DateTime.UtcNow;
+            changes.Add("a new password");
+        }
+        if (row.SecretsCipher is null) throw new InvalidOperationException("Enter the password.");
+
+        if (row.SettingsJson != JsonSerializer.Serialize(settings))
+            changes.Add($"{settings.UserName} at {settings.Host},{settings.Port} / {settings.Database}" +
+                        (settings.Encrypt ? "" : ", NOT encrypted"));
+        row.SettingsJson = JsonSerializer.Serialize(settings);
+
+        if (enabled != row.Enabled) changes.Add(enabled ? "copying on" : "copying off");
+        row.Enabled = enabled;
+
+        if (row.Status != IntegrationStatus.Connected)
+        {
+            row.Status = IntegrationStatus.Connected;
+            row.ConnectedByUserId = actor.Id;
+            row.ConnectedUtc = DateTime.UtcNow;
+        }
+        row.LastOkUtc = DateTime.UtcNow;   // it has just connected
+        row.UpdatedByUserId = actor.Id;
+        row.UpdatedUtc = DateTime.UtcNow;
+        AuditLog.Add(db, AuditEvents.IntegrationChanged, actor, null,
+            $"Data source saved{(changes.Count > 0 ? ": " + string.Join(", ", changes) : "")}");
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>An audit line that isn't a change to a row (a test query against the data source).</summary>
+    public async Task AuditAsync(KpiUser actor, string auditEvent, string detail)
+    {
+        await using var db = await dbs.CreateDbContextAsync();
+        AuditLog.Add(db, auditEvent, actor, null, detail.Length > 1000 ? detail[..999] + "…" : detail);
+        await db.SaveChangesAsync();
+    }
+
     public async Task DisconnectAsync(string provider, KpiUser actor)
     {
         await using var db = await dbs.CreateDbContextAsync();

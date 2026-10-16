@@ -97,6 +97,7 @@ builder.Services.AddHostedService<Kpi.Web.Data.KpiPull>();          // the KPI c
 
 // ---- integrations: Resend for email ----------------------------------------------------------------------------
 builder.Services.AddSingleton<IntegrationStore>();
+builder.Services.AddSingleton<CmsSource>();            // where the KPI copy reads from (Settings > Integrations)
 builder.Services.AddSingleton<Mailer>();
 builder.Services.AddSingleton<TwilioConnection>();
 builder.Services.AddSingleton<TextCodes>();

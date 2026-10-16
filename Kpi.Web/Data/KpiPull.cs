@@ -1,5 +1,7 @@
 using System.Data;
 using Kpi.Copy;
+using Kpi.Data.Cfg;
+using Kpi.Web.Integrations;
 using Microsoft.Data.SqlClient;
 
 namespace Kpi.Web.Data;
@@ -10,12 +12,13 @@ namespace Kpi.Web.Data;
 /// office has refreshed since CMS_KPI last published - Bad Debt and Exposure too when they were prepared since the last
 /// nightly publish. So the figures follow the office's schedule; nothing here has one of its own.
 ///
-/// Reads through ConnectionStrings:KpiExport - a SQL login in kpi_pull (Kpi.Tools grant-pull), which sees KPI_Export's
-/// copies and nothing in CMS - arriving from the site's own static IP through the office's port forward. Writes through
-/// the site's usual CmsKpi connection, whose identity is also in kpi_push (Kpi.Tools grant-push). Off when KpiExport isn't
-/// set (a developer's machine, unless you want it).
+/// Reads through the data source set in Settings > Integrations (CmsSource: a SQL login in kpi_pull, made by Kpi.Tools
+/// grant-pull, which sees KPI_Export's copies and nothing in CMS), arriving from the site's own static IP through the
+/// office's port forward; on a developer's machine ConnectionStrings:KpiExport can stand in. Looked up on every check, so a
+/// change on the card takes effect within two minutes. Writes through the site's usual CmsKpi connection, whose identity
+/// is also in kpi_push (Kpi.Tools grant-push). Off while there is no data source, or it is switched off.
 /// </summary>
-public sealed class KpiPull(IConfiguration config, ILogger<KpiPull> log) : BackgroundService
+public sealed class KpiPull(IConfiguration config, CmsSource cmsSource, IntegrationStore store, ILogger<KpiPull> log) : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(2);
 
@@ -26,13 +29,8 @@ public sealed class KpiPull(IConfiguration config, ILogger<KpiPull> log) : Backg
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var source = config.GetConnectionString("KpiExport");
-        var kpi = config.GetConnectionString("CmsKpi");
-        if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(kpi))
-        {
-            log.LogInformation("KPI copy is off: ConnectionStrings:KpiExport is not set");
-            return;
-        }
+        var kpi = config.GetConnectionString("CmsKpi")!;   // Program.cs refuses to start without it
+        bool? wasOn = null;
 
         await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);   // let the site start first
         using var timer = new PeriodicTimer(Interval);
@@ -42,9 +40,19 @@ public sealed class KpiPull(IConfiguration config, ILogger<KpiPull> log) : Backg
             var scope = "Frequent";
             try
             {
+                var source = await cmsSource.CopyConnectionAsync();
+                if ((source is not null) != wasOn)
+                    log.LogInformation(source is null ? "KPI copy is off: no data source connected, or it is switched off"
+                                                      : "KPI copy is on");
+                wasOn = source is not null;
+                if (source is null) continue;
+
                 scope = await CopyIfRefreshedAsync(source, kpi, stoppingToken) ?? scope;
                 if (_failingSinceUtc is not null)
+                {
                     log.LogInformation("KPI copy is working again (failing since {Since:u})", _failingSinceUtc);
+                    await store.RecordCallAsync(IntegrationProviders.CmsSource, null);
+                }
                 _failingSinceUtc = _lastRecordedUtc = null;
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
@@ -55,6 +63,8 @@ public sealed class KpiPull(IConfiguration config, ILogger<KpiPull> log) : Backg
                 if (ex is not PublishFailedException && (_lastRecordedUtc is null || DateTime.UtcNow - _lastRecordedUtc > RecordFailureEvery))
                 {
                     await KpiCopier.RecordFailureAsync(kpi, scope, startedUtc, ex.Message);
+                    try { await store.RecordCallAsync(IntegrationProviders.CmsSource, ex.Message); }   // the card's "Last problem"
+                    catch { /* CMS_KPI unreachable too: the load log and overdue flag cover it */ }
                     _lastRecordedUtc = DateTime.UtcNow;
                 }
             }
@@ -78,8 +88,11 @@ public sealed class KpiPull(IConfiguration config, ILogger<KpiPull> log) : Backg
 
         var outcome = await KpiCopier.CopyAsync(source, kpi, state, withSnapshots, ct: ct);
         if (outcome.Published)
+        {
+            await store.RecordCallAsync(IntegrationProviders.CmsSource, null);   // the card's "Last worked"
             log.LogInformation("KPI copy ({Scope}) published {Tables} tables, {Rows:N0} rows, as at {Date:dd/MM/yyyy}, in {Seconds:0.0} s",
                 outcome.Scope, outcome.Tables, outcome.Rows, outcome.ReportDate, outcome.Elapsed.TotalSeconds);
+        }
         else
             log.LogInformation("KPI copy ({Scope}) not published: {Reason}", outcome.Scope, outcome.Reason);
         return outcome.Scope;
