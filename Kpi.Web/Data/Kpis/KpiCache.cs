@@ -66,13 +66,52 @@ public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, 
     /// Instant if cached; otherwise loads once. <paramref name="load"/> returns the
     /// data plus its as-at date. Single-flight per key.
     /// </summary>
-    public async Task<KpiCacheEntry<T>> GetOrLoad<T>(string key, Func<Task<(T Data, DateTime AsAt)>> load)
+    public Task<KpiCacheEntry<T>> GetOrLoad<T>(string key, Func<Task<(T Data, DateTime AsAt)>> load)
+    {
+        Remember(key, k => Load(k, load));
+        return Load(key, load);
+    }
+
+    // ---- MORNING PRE-LOADING (Steve, 16 Oct 2026: "things seem a bit slow at times") --------------------------
+    // Entries are keyed by the business date, so when the morning's first copy moves the date every report starts
+    // cold and its first viewer waits for the full calculation on the small database. So the cache remembers each
+    // view people actually open (report + filters, the key with its date taken out, and its loader) and KpiWarmer
+    // reloads them under the new date in the background, one at a time. A loader is the page's "pure" one (no
+    // component state written - the same contract the 10-minute background refresh already relies on). Views
+    // nobody has opened for three days are forgotten. Empty after a restart: the first viewers then fill it.
+    private readonly ConcurrentDictionary<string, (Func<string, Task> Load, DateTime LastUsedUtc)> _views = new();
+    private static readonly TimeSpan ForgetAfter = TimeSpan.FromDays(3);
+    private const string DateSlot = "{date}";
+
+    private void Remember(string key, Func<string, Task> load)
+    {
+        var parts = key.Split(':', 4);   // kpi:{name}:{yyyyMMdd}:{params}
+        if (parts.Length == 4) _views[$"{parts[0]}:{parts[1]}:{DateSlot}:{parts[3]}"] = (load, DateTime.UtcNow);
+    }
+
+    /// <summary>Loads every remembered view under <paramref name="reportDate"/>, one at a time; returns how many.</summary>
+    public async Task<int> WarmAsync(DateTime reportDate, CancellationToken ct)
+    {
+        var date = reportDate.ToString("yyyyMMdd");
+        var warmed = 0;
+        foreach (var (view, v) in _views.ToArray())
+        {
+            if (ct.IsCancellationRequested) break;
+            if (DateTime.UtcNow - v.LastUsedUtc > ForgetAfter) { _views.TryRemove(view, out _); continue; }
+            try { await v.Load(view.Replace(DateSlot, date)); warmed++; }
+            catch (Exception ex) { _logger.LogWarning(ex, "KPI pre-load failed for {View}", view); }
+        }
+        return warmed;
+    }
+
+    private async Task<KpiCacheEntry<T>> Load<T>(string key, Func<Task<(T Data, DateTime AsAt)>> load)
     {
         if (cache.TryGetValue(key, out KpiCacheEntry<T>? hit) && hit is not null)
             return hit;
 
+        var deadline = DateTime.UtcNow + LoadTimeout;   // one minute for the wait AND the load, not one each
         var gate = _gates.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync();
+        if (!await gate.WaitAsync(LoadTimeout)) throw new TimeoutException(TimeoutMessage);
         try
         {
             // Someone may have loaded it while we waited on the gate.
@@ -80,7 +119,7 @@ public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, 
                 return hit;
 
             var now = DateTime.UtcNow;
-            var (data, asAt) = await load();
+            var (data, asAt) = await Bounded(load, deadline);
             var entry = new KpiCacheEntry<T>(data, asAt, Hash(data), now, now);
             Store(key, entry);
             _logger.LogInformation("KPI cache MISS loaded {Key}", key);
@@ -98,12 +137,13 @@ public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, 
     public async Task<(KpiCacheEntry<T> Entry, bool Changed)> RefreshAsync<T>(
         string key, Func<Task<(T Data, DateTime AsAt)>> load)
     {
+        var deadline = DateTime.UtcNow + LoadTimeout;   // one minute for the wait AND the load, not one each
         var gate = _gates.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        await gate.WaitAsync();
+        if (!await gate.WaitAsync(LoadTimeout)) throw new TimeoutException(TimeoutMessage);
         try
         {
             var now = DateTime.UtcNow;
-            var (data, asAt) = await load();
+            var (data, asAt) = await Bounded(load, deadline);
             var newHash = Hash(data);
 
             if (cache.TryGetValue(key, out KpiCacheEntry<T>? existing) && existing is not null
@@ -121,6 +161,28 @@ public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, 
             return (fresh, true);
         }
         finally { gate.Release(); }
+    }
+
+    /// <summary>
+    /// NO REPORT LOADS FOR EVER (16 Oct 2026). A load that hasn't finished by now is given up: the page shows
+    /// <see cref="TimeoutMessage"/> (pages already show a failed load's message) and the gate is released, so the next
+    /// viewer tries afresh instead of queueing behind it. Before this, one load stuck reaching the database held its
+    /// gate, and every user who opened that report afterwards waited on "Loading..." until the site restarted.
+    /// </summary>
+    public static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(60);
+
+    public const string TimeoutMessage =
+        "This report is taking too long to load, so it has stopped trying. Please try again in a minute.";
+
+    // The load runs on the thread pool, not the page's own thread: the reports' database calls are synchronous, and
+    // one that hangs there freezes the whole page (menu included). A load past the limit is left to finish or fail
+    // on its own; nothing waits for it.
+    private static async Task<TResult> Bounded<TResult>(Func<Task<TResult>> load, DateTime deadline)
+    {
+        var left = deadline - DateTime.UtcNow;
+        if (left <= TimeSpan.Zero) throw new TimeoutException(TimeoutMessage);
+        try { return await Task.Run(load).WaitAsync(left); }
+        catch (TimeoutException) { throw new TimeoutException(TimeoutMessage); }
     }
 
     private void Store<T>(string key, KpiCacheEntry<T> entry)

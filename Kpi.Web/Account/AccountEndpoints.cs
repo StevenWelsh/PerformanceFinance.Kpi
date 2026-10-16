@@ -321,5 +321,12 @@ public static class AccountEndpoints
         row.LastSignInUtc = DateTime.UtcNow;
         AuditLog.Add(db, AuditEvents.SignIn, row, row, detail, AuditLog.Ip(http));
         await db.SaveChangesAsync();
+        // "KPIs work best as an app": the bar shows on the first page after EACH sign-in, then not again until the next
+        // (js/appInstall.js reads and clears this; it says nothing, so the browser's script may see it)
+        http.Response.Cookies.Append(AppTipCookie, "1", new CookieOptions
+            { HttpOnly = false, Secure = true, SameSite = SameSiteMode.Lax, Path = "/", IsEssential = true });
     }
+
+    /// <summary>Set at each sign-in for js/appInstall.js (the Home Screen bar).</summary>
+    public const string AppTipCookie = "kpi-app-tip";
 }

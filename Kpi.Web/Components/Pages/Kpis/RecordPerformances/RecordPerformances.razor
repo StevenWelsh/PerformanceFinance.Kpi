@@ -102,7 +102,9 @@
             _asOf = entry.AsAt;
             _refreshedOn = entry.LoadedAtUtc;
         }
-        catch { /* leave _divisions null → the page shows its loading state */ }
+        // KPI site (16 Oct 2026): never sit on "Loading..." - without the division list the page carries on with "All",
+        // and each table loads (or reports its own failure) by itself
+        catch { _divisions = new(); }
         StateHasChanged();
     }
 

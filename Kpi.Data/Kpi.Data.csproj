@@ -4,18 +4,21 @@
        every table, staging table and report procedure is created by them. They are applied only by
        Kpi.Tools "migrate", run by a person, never by an app at start-up. -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.11" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.13" />
+    <!-- SqlClient 6.1.7 (under EF Core) brings Pkcs 9.0.11, which has known vulnerabilities (NU1902/NU1903): pinned to the
+         patched version. Kpi.Tools and Kpi.Web get it through this project; drop it once SqlClient no longer needs it. -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
     <!-- Update-Database / Add-Migration in Visual Studio's Package Manager Console, as DavidsonHR (Default project:
          Kpi.Data). The console's EF commands come from Tools; Design alone serves only `dotnet ef`. Tooling only. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.11" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.13" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" PrivateAssets="all" />
   </ItemGroup>
 
 </Project>

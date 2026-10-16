@@ -22,8 +22,18 @@
     else if (_qr is not null)
     {
         <Messages Error="@(Error is null ? null : "That code wasn't recognised. Codes change every 30 seconds - try the one showing now.")" />
+        @* A phone can't photograph its own screen (Steve): on a touch screen, the same otpauth link the QR holds opens the
+           authenticator app - or the iPhone's Passwords app - with the account already added (account.css .acc-phone). *@
+        <div class="acc-phone">
+            <p class="acc-phone-title">Setting up on this phone?</p>
+            <a class="login-button" href="@_uri"><i class="bi bi-phone" aria-hidden="true"></i> Set up on this phone</a>
+            <p>It opens your authenticator app with Performance Finance KPIs already added. Then come back here and type
+                the six-digit code it shows.</p>
+            <p><b>iPhone:</b> the built-in <b>Passwords</b> app works too, and then fills the code in for you when you sign in.</p>
+        </div>
         <ol class="acc-steps">
-            <li>Install an authenticator app on your phone if you don't have one: <b>Microsoft Authenticator</b> or <b>Google Authenticator</b> are free.</li>
+            <li>Install an authenticator app on your phone if you don't have one: <b>Microsoft Authenticator</b> or <b>Google Authenticator</b> are free.
+                On an iPhone the built-in <b>Passwords</b> app works too (point the Camera at the code below), and fills the code in for you when you sign in.</li>
             <li><b>Microsoft Authenticator:</b> tap <b>+</b> (Add account), choose <b>Other account (Google, Facebook, etc.)</b>, then point the camera at this code.<br />
                 <b>Google Authenticator:</b> tap <b>+</b>, then <b>Scan a QR code</b>.</li>
             <li>Type the six-digit code the app now shows for Performance Finance KPIs.</li>
@@ -53,6 +63,7 @@
     private bool _closed;
     private string? _qr;
     private string? _key;
+    private string? _uri;    // the otpauth link the QR holds: "Set up on this phone" opens it directly
 
     protected override async Task OnInitializedAsync()
     {
@@ -81,6 +92,7 @@
         var issuer = Env.IsProduction() ? "Performance Finance KPIs" : $"Performance Finance KPIs ({Env.EnvironmentName})";
         var uri = $"otpauth://totp/{UrlEncoder.Default.Encode(issuer)}:{UrlEncoder.Default.Encode(user.Email ?? "")}" +
                   $"?secret={key}&issuer={UrlEncoder.Default.Encode(issuer)}&digits=6";
+        _uri = uri;
         using var generator = new QRCodeGenerator();
         using var data = generator.CreateQrCode(uri, QRCodeGenerator.ECCLevel.Q);
         _qr = "data:image/svg+xml;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(new SvgQRCode(data).GetGraphic(4)));

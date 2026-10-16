@@ -19,7 +19,9 @@ var uk = new CultureInfo("en-GB");
 CultureInfo.DefaultThreadCurrentCulture = uk;
 CultureInfo.DefaultThreadCurrentUICulture = uk;
 
-builder.Services.AddRazorComponents().AddInteractiveServerComponents();
+// A phone that sleeps drops the live connection; its place is kept 30 minutes (default 3) so it comes back where it was,
+// not to a reload (js/reconnect.js reconnects the moment the page is looked at again).
+builder.Services.AddRazorComponents().AddInteractiveServerComponents(o => o.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(30));
 builder.Services.AddDevExpressBlazor(options => options.SizeMode = DevExpress.Blazor.SizeMode.Medium);
 
 // ---- the KPI database: reports through Rpt (Dapper), sign-in and settings through EF Core ------------------------
@@ -89,6 +91,7 @@ builder.Services.AddScoped<AuthenticationStateProvider, KpiAuthStateProvider>();
 builder.Services.AddSingleton<AccountLinks>();
 builder.Services.AddSingleton<UserAdmin>();
 builder.Services.AddHostedService<ExpireSetupsTask>();
+builder.Services.AddHostedService<Kpi.Web.Data.Kpis.KpiWarmer>();   // the morning pre-load of the reports people use
 
 // ---- integrations: Resend for email ----------------------------------------------------------------------------
 builder.Services.AddSingleton<IntegrationStore>();
@@ -140,6 +143,22 @@ app.UseRateLimiter();
 app.UseAntiforgery();
 
 app.MapGet("/", () => Results.Redirect("/kpis"));
+
+// HEALTH (16 Oct 2026, after a night when the site answered every page but never reached its database): /health = the
+// site is running; /health/db = a real round trip to CMS_KPI through the site's own sign-in - what App Service's health
+// check pings and the alert watches, and the check after every deploy. Anonymous and terse on purpose (a public
+// endpoint must not echo server names or errors); the detail goes to the log.
+app.MapGet("/health", () => Results.Text("ok"));
+app.MapGet("/health/db", (KpiSessionFactory sessions, ILogger<Program> log) =>
+{
+    try
+    {
+        using var db = sessions.Create();
+        if (db.Ping()) return Results.Text("ok");
+    }
+    catch (Exception ex) { log.LogError(ex, "Health check: CMS_KPI could not be reached"); }
+    return Results.Text("unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
+});
 app.MapAccountEndpoints();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 

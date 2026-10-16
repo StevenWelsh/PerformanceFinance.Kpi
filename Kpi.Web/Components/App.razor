@@ -2,11 +2,21 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    @* viewport-fit=cover: a phone held sideways draws edge to edge, and account.css keeps content clear of the notch *@
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <base href="/" />
     @* No fixed <title>: on the static account pages it would hide each page's own <PageTitle> (both are
        written and the browser takes the first). Every page sets its own. *@
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    @* THE HOME SCREEN APP (Steve, Oct 2026): added to a phone's Home Screen, the site opens full screen with no
+       address bar, under the KPI icon (img/kpi-icon-*, apple-touch-icon) and the name "PF KPIs". js/appInstall.js
+       offers it. *@
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="PF KPIs" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#d20d43" media="(pointer: coarse)" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="_content/DevExpress.Blazor.Themes/office-white.bs5.min.css" />
@@ -23,9 +33,67 @@
         <span class="dismiss">🗙</span>
     </div>
 
+    @* Blazor's own reconnect display, ours instead of its full-screen one (js/reconnect.js): a phone that slept lost its
+       connection, and this shows only while it comes back. *@
+    <div id="components-reconnect-modal" class="kpi-reconnect" data-nosnippet aria-live="polite">
+        <span class="kpi-reconnect-trying"><span class="kpi-reconnect-spinner" aria-hidden="true"></span> Reconnecting…</span>
+        <span class="kpi-reconnect-gave-up"><i class="bi bi-wifi-off" aria-hidden="true"></i> Can't reach the site. Tap to try again.</span>
+    </div>
+
+    @* "Add to Home Screen" (js/appInstall.js): the bar shows once after each sign-in on a phone not using the app; it
+       and the avatar menu's "Add to Home Screen" open the instructions below. Outside the Blazor app, so both work on
+       every page. *@
+    <div id="kpi-app-bar" class="kpi-app-bar" hidden data-nosnippet>
+        <button type="button" class="kpi-app-bar-text" data-app-how>
+            <img src="img/apple-touch-icon.png" alt="" />
+            <span><b>KPIs work best as an app.</b> Add them to your Home Screen: full screen, no address bar.
+                <span class="kpi-app-bar-how">Show me how</span></span>
+        </button>
+        <button type="button" class="kpi-app-bar-close" data-app-bar-close aria-label="Close"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+    </div>
+
+    <dialog id="kpi-app-how" class="kpi-app-how" aria-labelledby="kpi-app-how-title" data-nosnippet>
+        <div class="kpi-app-how-head">
+            <img class="kpi-app-how-icon" src="img/apple-touch-icon.png" alt="The PF KPIs app icon" />
+            <div>
+                <h2 id="kpi-app-how-title">Add KPIs to your Home Screen</h2>
+                <p>Then open them from this icon: full screen, like an app.</p>
+            </div>
+            <button type="button" class="kpi-app-how-x" data-app-how-close aria-label="Close"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+        </div>
+
+        <ol class="kpi-app-steps kpi-app-ios-only">
+            <li><span class="kpi-app-step-icon"><i class="bi bi-box-arrow-up" aria-hidden="true"></i></span>
+                <div>Tap <b>Share</b> in Safari.<small>On newer iPhones, tap <b>⋯</b> beside the address first.</small></div></li>
+            <li><span class="kpi-app-step-icon"><i class="bi bi-plus-square" aria-hidden="true"></i></span>
+                <div>Tap <b>Add to Home Screen</b>.<small>Scroll down the list, or look under <b>More</b>.</small></div></li>
+            <li><span class="kpi-app-step-icon kpi-app-step-img"><img src="img/apple-touch-icon.png" alt="" /></span>
+                <div>Tap <b>Add</b>, then open KPIs from the new <b>PF KPIs</b> icon.</div></li>
+        </ol>
+
+        <div class="kpi-app-other-only">
+            <button type="button" class="login-button kpi-app-install" data-app-install><i class="bi bi-download" aria-hidden="true"></i> Install the app</button>
+            <ol class="kpi-app-steps">
+                <li><span class="kpi-app-step-icon"><i class="bi bi-three-dots-vertical" aria-hidden="true"></i></span>
+                    <div>Tap the browser's menu <b>⋮</b>, top right.</div></li>
+                <li><span class="kpi-app-step-icon"><i class="bi bi-plus-square" aria-hidden="true"></i></span>
+                    <div>Tap <b>Add to Home screen</b> or <b>Install app</b>.</div></li>
+                <li><span class="kpi-app-step-icon kpi-app-step-img"><img src="img/apple-touch-icon.png" alt="" /></span>
+                    <div>Confirm, then open KPIs from the new <b>PF KPIs</b> icon.</div></li>
+            </ol>
+        </div>
+
+        <p class="kpi-app-note"><i class="bi bi-info-circle" aria-hidden="true"></i>
+            <span>The first time you open the app, sign in again (password and authenticator code): it doesn't share the
+                browser's sign-in. Tick <b>Keep me signed in</b> there so it stays signed in.</span></p>
+        <button type="button" class="login-button" data-app-how-close>Got it</button>
+    </dialog>
+
     <script src="_framework/blazor.web.js"></script>
     <script src="js/passwordToggle.js"></script>
     <script src="js/busyForms.js"></script>
+    <script src="js/appInstall.js"></script>
+    <script src="js/reconnect.js"></script>
     @* Heat Map loads Leaflet + geo data on demand; this only defines the loader (no cost elsewhere). *@
     <script src="js/heatmap/heatmap-loader.js"></script>
 </body>

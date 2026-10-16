@@ -20,11 +20,17 @@ Plan, object by object: `docs/analytics/kpi-database-plan.html` in the CMS repo
 
 | Project | Role |
 |---|---|
-| `Kpi.Data` | EF Core 8 migrations for `CMS_KPI` (history table `Ref.MigrationsHistory`). The schema is SQL in `migrationBuilder.Sql(...)`, not an EF model: there are no entity classes for the report tables. |
+| `Kpi.Data` | EF Core 10 migrations for `CMS_KPI` (history table `Ref.MigrationsHistory`). The schema is SQL in `migrationBuilder.Sql(...)`, not an EF model: there are no entity classes for the report tables. |
 | `Kpi.Tools` | Run by a person: `migrate`, `seed --email --name` (the first System Admin), `grant-site --app --app-id` (a web app's managed identity into `kpi_site`), each with `--azure` for the Azure database (`CmsKpiAzure`; a non-local server is refused without it); `compare [report]`. |
-| `Kpi.Push` | The copy (net8.0-windows console): `Frequent` every 10 minutes, `Nightly` also refreshes Bad Debt and Exposure; `--azure` copies into `CmsKpiAzure` from a developer's machine. |
+| `Kpi.Push` | The copy (net10.0-windows console): `Frequent` every 10 minutes, `Nightly` also refreshes Bad Debt and Exposure; `--azure` copies into `CmsKpiAzure` from a developer's machine. |
 | `Kpi.Web` | The site: Blazor Server, CMS.Web's KPI pages copied, reading `CMS_KPI`. |
 | `Local/KPI_Export.sql` | Local stand-in for CMS_Live's `KpiExport` schema (see below). |
+
+**.NET 10 (Oct 2026):** every project targets .NET 10 (LTS to Nov 2028; .NET 8 support ends 10 Nov 2026). EF Core and
+Identity 10.0.x, `Microsoft.Data.SqlClient` **6.1.x** - the version EF Core 10 is built on; 7.x moves Entra sign-in to a
+separate package, which would break the site's managed identity. `System.Security.Cryptography.Pkcs` is pinned to
+10.0.x in Kpi.Data and Kpi.Push: SqlClient 6.1 brings a vulnerable 9.0.11. DevExpress.Blazor 25.2 ships a .NET 8 build,
+which runs on 10. CMS.Web's KPI pages (the copies' originals) are still .NET 8.
 
 Connection strings live in **user-secrets** (each csproj has a `UserSecretsId` label) or environment variables,
 never in committed files: `Kpi.Tools` needs `CmsKpi` and `Cms` (for compare); `Kpi.Push` needs `Source` and
@@ -88,7 +94,7 @@ Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load
 - **ASP.NET Core Identity on EF Core** (`KpiUser` in `Auth.Users`), a COMPULSORY authenticator app (TOTP, QR by QRCoder),
   no recovery codes, **invitation only**. This departs from the CMS hub's "own tables, no Identity" rule deliberately:
   that rule exists so staff and customers share one implementation in CMS.Core (which also builds for the net48
-  desktop); this site is standalone net8.
+  desktop); this site is standalone .NET 10.
 - **Roles (one each), and who sees which report (Oct 2026, Steve):** **SystemAdmin** — every report, Settings, and ALL
   user management ("make it all system admin's job"); **User** — the reports ticked for them in Settings > Users, or
   "All reports, including new ones" (`KpiUser.AllReports` / `Reports`, slugs comma separated). The Admin role went:
@@ -130,6 +136,24 @@ Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load
   Protection, never shown back, blank keeps it; a TEST ADDRESS catches every email, and outside Production nothing is
   sent without one), Data sync, Audit. When an email can't be sent the invitation / reset link is shown to the System
   Admin to pass on.
+- **The Home Screen app (Oct 2026, Steve):** `manifest.webmanifest` + the head tags in App.razor make the site installable,
+  opening full screen with no address bar under the "PF KPIs" icon (`img/apple-touch-icon.png`, `kpi-icon-*`: the PF
+  dots with KPI in red - the KPI marks it as this site, the dots may serve another app). `js/appInstall.js` offers it
+  on a phone or tablet not already in the app: the avatar menu's **Add to Home Screen**, and a bar across the top ONCE
+  after each sign-in (`AccountEndpoints.SignedIn` sets the `kpi-app-tip` cookie, the script spends it); both open the
+  same instructions (Safari's steps on iOS, the browser menu's elsewhere, a real Install button when Android offers
+  one). The bar and instructions sit in App.razor OUTSIDE the Blazor app. **The app does not share the browser's
+  sign-in** - it signs in afresh (password + code), and needs "Keep me signed in" (14 days from last use; the code step's "don't ask again" is 30 days) to survive being closed on an iPhone.
+- **A phone that slept comes back quietly:** circuits are kept 30 minutes after a disconnect (`Program.cs`, default 3),
+  `js/reconnect.js` reconnects the moment the page is looked at again and reloads by itself when the server no longer
+  has the circuit, and Blazor's full-screen "Attempting to reconnect… 1 of 8" is replaced by a small note
+  (`#components-reconnect-modal` in App.razor). With `viewport-fit=cover`, account.css keeps the phone frame clear of
+  the notch (over kpi.css, which stays CMS.Web's copy).
+- **Morning pre-load (16 Oct 2026, Steve: "a bit slow at times"):** cache keys carry the business date, so the morning's
+  first copy leaves every report cold and its first viewer waited for the full calculation on the S0 database. `KpiCache`
+  remembers each view actually opened (key minus its date + its loader, forgotten after 3 days unused) and `KpiWarmer`
+  reloads them, one at a time, when the date moves (checked every 2 min). Empty after a restart. If it is still slow,
+  the next step is the database S0 -> S1 (one setting, reversible) - measure first.
 - **Data Protection key ring** encrypts cookies, emailed links and the Resend key: locally the user profile; **in Azure it
   must be a shared persisted ring (storage + Key Vault)** or every restart signs everyone out and the Resend key becomes
   unreadable. Pin `AllowedHosts` in Azure: emailed links are built from the request's host.
@@ -143,7 +167,7 @@ In Performance Finance's subscription ("Azure subscription 1", tenant `5917b69c-
   31 possible outbound IPs + developer IPs. **`CMS_KPI`**: Standard S0, CMS_Live's collation. Migrated, seeded and
   filled with `Kpi.Tools ... --azure` / `Kpi.Push ... --azure` (secrets `ConnectionStrings:CmsKpiAzure`,
   `Authentication=Active Directory Interactive`).
-- **App Service plan `plan-pf-apps`** (B1 Linux) + **web app `pf-kpi`**: .NET 8, Always On, WebSockets, HTTPS only, system
+- **App Service plan `plan-pf-apps`** (B1 Linux) + **web app `pf-kpi`**: .NET 10, Always On, WebSockets, HTTPS only, system
   managed identity (app id `61d59e76-...`, a user in `kpi_site` by `grant-site`). App settings: `ASPNETCORE_ENVIRONMENT`
   Production, `AllowedHosts` (the two kpi domains + `pf-kpi.azurewebsites.net`), `ConnectionStrings__CmsKpi`
   (`Authentication=Active Directory Managed Identity;Encrypt=Strict`), `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` (Azure
@@ -156,7 +180,12 @@ In Performance Finance's subscription ("Azure subscription 1", tenant `5917b69c-
   PowerShell 5.1's `Compress-Archive` writes backslashes, which Linux unpacks as flat file names), then POST it to
   `https://pf-kpi.scm.azurewebsites.net/api/publish?type=zip&clean=true&restart=true` with a bearer token from
   `az account get-access-token --subscription "Azure subscription 1"`. **`clean=true` empties the site first: never upload
-  if the publish failed** - an empty zip took the site down for 10 minutes on 15 Oct.
+  if the publish failed** - an empty zip took the site down for 10 minutes on 15 Oct. **After every deploy, `https://kpi.fendra.co.uk/health/db` must say `ok`**
+  (a real query through the site's managed identity - "the login page opens" proved nothing on 16 Oct).
+- **Health check and alert (16 Oct 2026):** `/health` (running) and `/health/db` (a real `SELECT 1`, 20 s limit; 503
+  `unavailable`, detail in the log) - anonymous, on the AccountGate's open list. App Service's health check pings
+  `/health/db`; the metric alert "KPI site cannot reach its database" (HealthCheckStatus < 100 over 5 min) emails
+  Steve through action group `ag-pf-kpi-alerts`.
 - **Still before go-live:** the Data Protection key ring is the App Service default (`/home`, survives restarts, not
   encrypted at rest) - wrap it with Key Vault; the office server's scheduled `Kpi.Push` (today's figures were pushed by
   hand from a developer's local `KPI_Export`).
@@ -187,6 +216,18 @@ In Performance Finance's subscription ("Azure subscription 1", tenant `5917b69c-
   waits that long** - "Connection reset by peer" / "error: 35", the site's "Something went wrong". Ruled out: firewall,
   encryption mode, driver, network. Handled by retrying a dropped connection (`Kpi.Data.KpiRetryStrategy` for EF,
   `KpiDb.Open` for Dapper); the start-up `ExpireSetupsTask` run takes the slow one.
+- **NO REPORT MAY LOAD FOR EVER (16 Oct 2026).** The night of the .NET 10 upgrade the live site reached its database
+  not once for six hours - no connection, no error logged - while every page still opened. Report loads go through
+  `KpiCache`'s per-report gate, SHARED by all users, so the first stuck load held every later viewer on "Loading..."
+  until a restart (laptop and phone alike; signing out didn't help), and the reports' database calls are synchronous,
+  so a stuck one froze the page's own thread - the menu too. Now: a load runs on the thread pool and gives up after
+  ONE minute, waiting for the gate included (`KpiCache.LoadTimeout`, `TimeoutMessage`, which the pages show as
+  their load error), releasing the gate; every `KpiDb` query is limited to 50 s off the page's thread; Record
+  Performances no longer swallows a failure into endless "Loading"; `KpiDataStatus` shows the date alone when it
+  can't ask. Proved with a load that never returns: each viewer gets the message within a minute of arriving, and
+  the next viewer loads normally once the database answers. Inside the container .NET 10 DID connect (first token
+  13 s, first connection ~10 s, then fast), and the site connected after a restart - what stuck that first start is
+  not known, which is why the limits matter more than the cause.
 - **Ctrl+C on `dotnet run` can leave the program running** (a seed waiting at `Password:`): its exe then locks
   `bin/` and every build fails with MSB3027 until it is stopped. Answer the seed's prompts promptly - its Azure sign-in
   expires.

@@ -37,15 +37,34 @@ public sealed class KpiDb : IDisposable
 
     internal KpiDb(string connectionString) => _connection = new SqlConnection(connectionString);
 
-    /// <summary>Runs a report procedure; its columns fill <typeparamref name="T"/> by name.</summary>
-    public List<T> Report<T>(string procedure, object? args = null) =>
-        Open().Query<T>(procedure, args, commandType: CommandType.StoredProcedure, commandTimeout: 120).ToList();
+    /// <summary>A query not finished by now is given up (KpiCache.LoadTimeout, the outer limit, is longer).</summary>
+    public static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(50);
+
+    /// <summary>
+    /// Runs a report procedure; its columns fill <typeparamref name="T"/> by name. Synchronous for the copied pages, but
+    /// the work runs on the thread pool and is time-limited: a call that hangs reaching the database (16 Oct 2026: the
+    /// whole site, for hours) fails with a message instead of freezing the page that made it.
+    /// </summary>
+    public List<T> Report<T>(string procedure, object? args = null)
+    {
+        var run = Task.Run(() =>
+            Open().Query<T>(procedure, args, commandType: CommandType.StoredProcedure, commandTimeout: 45).ToList());
+        try { return run.WaitAsync(QueryTimeout).GetAwaiter().GetResult(); }
+        catch (TimeoutException) { throw new TimeoutException(Kpis.KpiCache.TimeoutMessage); }
+    }
 
     /// <summary>The business "as at" date of the figures, from the last copy.</summary>
     public DateTime ReportDate() => Report<DataStatusRow>("Rpt.spDataStatus").Single().ReportDate;
 
     /// <summary>A filter list: "Divisions" | "Salespeople" | "Arrangements" | "Years" | "Offices".</summary>
     public List<OptionRow> Options(string list) => Report<OptionRow>("Rpt.spFilterOptions", new { List = list });
+
+    /// <summary>The health check's round trip (/health/db): opens a connection and asks for one row.</summary>
+    public bool Ping()
+    {
+        var run = Task.Run(() => Open().ExecuteScalar<int>("SELECT 1", commandTimeout: 15) == 1);
+        return run.WaitAsync(TimeSpan.FromSeconds(20)).GetAwaiter().GetResult();
+    }
 
     public void Dispose() => _connection.Dispose();
 

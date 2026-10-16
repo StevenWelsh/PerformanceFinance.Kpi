@@ -3,6 +3,7 @@
 @using Kpi.Web.Account
 
 @* The signed-in person's avatar, top right, as DavidsonHR: their initials, and a menu with who they are, My Account,
+   Add to Home Screen (a phone or tablet not using the app),
    Settings (System Admin only) and Log out. Log out is a real form: the sign-in cookie can only be removed by an
    ordinary request. *@
 
@@ -21,6 +22,10 @@
                 <div class="um-role">@_role</div>
             </div>
             <a href="/my-account" role="menuitem"><i class="bi bi-person-circle" aria-hidden="true"></i> My Account</a>
+            @* on a phone or tablet not using the Home Screen app only (account.css); js/appInstall.js opens the instructions *@
+            <button type="button" role="menuitem" class="um-app" data-app-how @onclick="() => _open = false">
+                <i class="bi bi-plus-square" aria-hidden="true"></i> Add to Home Screen
+            </button>
             @if (_systemAdmin)
             {
                 <a href="/settings" role="menuitem"><i class="bi bi-gear" aria-hidden="true"></i> Settings</a>

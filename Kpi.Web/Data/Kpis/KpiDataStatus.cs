@@ -13,14 +13,19 @@ public sealed class KpiDataStatus(KpiSessionFactory sessions, IMemoryCache cache
 
     public sealed record Status(DateTime? LastCopyUtc, bool Stale);
 
-    public Status Get() =>
-        cache.GetOrCreate(Key, e =>
+    // Only a line on the page: if the database can't be reached it shows the date alone rather than breaking the
+    // page, and the next call (nothing cached) tries again.
+    public Status Get()
+    {
+        if (cache.TryGetValue(Key, out Status? hit) && hit is not null) return hit;
+        try
         {
-            e.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(1);
             using var db = sessions.Create();
             var row = db.Report<Row>("Rpt.spDataStatus").SingleOrDefault();
-            return new Status(row?.LastFrequentLoadUtc, row?.FiguresStale ?? false);
-        })!;
+            return cache.Set(Key, new Status(row?.LastFrequentLoadUtc, row?.FiguresStale ?? false), TimeSpan.FromMinutes(1));
+        }
+        catch (Exception) { return new Status(null, false); }
+    }
 
     /// <summary>
     /// "15 Oct 2026 21:12": the business date, with the time of the last copy when it is that same day (a past year's

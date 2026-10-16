@@ -20,11 +20,13 @@ else
         </div>
     </KpiMobileFilters>
 
-    <div class="kpim-rp-seg">
-        <KpiSegmented Label="Record type" Value="@_grain" ValueChanged="OnGrain" Options="@GrainOptions" />
-    </div>
+    @* Top 10 / Best each year first, then the record type (Steve, Oct 2026) - KPI site only so far; CMS.Web's copy
+       still has the record type first *@
     <div class="kpim-rp-seg">
         <KpiSegmented Label="View" Value="@_view" ValueChanged="v => _view = v" Options="@ViewOptions" />
+    </div>
+    <div class="kpim-rp-seg">
+        <KpiSegmented Label="Record type" Value="@_grain" ValueChanged="OnGrain" Options="@GrainOptions" />
     </div>
 
     <section class="kpim-card kpim-rp-list">

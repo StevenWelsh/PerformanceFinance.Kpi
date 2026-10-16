@@ -114,8 +114,9 @@ public sealed class ReportHandler : AuthorizationHandler<ReportRequirement>
 public static class AccountGate
 {
     // What a half-signed-in person (password right, no authenticator yet) may still reach: the account screens,
-    // the framework's plumbing and static assets. Everything else is redirected - and refused by the policies.
-    private static readonly string[] Open = { "/account", "/_blazor", "/_framework", "/_content", "/css", "/js", "/lib", "/img", "/favicon", "/Error" };
+    // the framework's plumbing and static assets, and the health checks (Azure pings them signed out). Everything else
+    // is redirected - and refused by the policies.
+    private static readonly string[] Open = { "/account", "/_blazor", "/_framework", "/_content", "/css", "/js", "/lib", "/img", "/favicon", "/Error", "/health" };
 
     private static readonly string[] AssetExtensions =
         { ".css", ".js", ".map", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".woff", ".woff2", ".ttf", ".json" };

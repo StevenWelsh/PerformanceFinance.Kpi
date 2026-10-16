@@ -5,6 +5,15 @@
    colour in the phone menu, the sidebar and My Account. */
 :root { --kpim-star: #f5b301; }
 
+/* The Home Screen bar and instructions, and the reconnect note: PF crimson (kpi.css's value - it loads only on report
+   pages), and the shadows and dimming they sit on. */
+:root {
+    --kpim-crimson: #d20d43;
+    --kpi-shadow: rgba(0, 0, 0, 0.18);
+    --kpi-overlay: rgba(0, 0, 0, 0.45);
+    --kpi-on-dark-rule: rgba(255, 255, 255, 0.35);
+}
+
 /* ---- account screens (inside CMS.Web's .login-card) -------------------------------------------------------- */
 .acc-title { font-size: 19px; font-weight: 600; color: var(--text); margin: -10px 0 16px; text-align: center; }
 .acc-text { font-size: 14px; color: var(--text-2); margin: 0 0 14px; line-height: 1.45; }
@@ -250,3 +259,108 @@
    as well ("Signing in…"), so this never leans on the dimming alone. */
 .login-page .is-busy, .login-page .is-busy:hover,
 .acc-page .is-busy, .acc-page .is-busy:hover { opacity: .65; cursor: progress; }
+
+/* ---- The Home Screen app (App.razor, js/appInstall.js) ----------------------------------------------------- */
+/* the avatar menu's "Add to Home Screen": a phone or tablet not already using the app */
+.um-menu .um-app { display: none; }
+html.kpi-app-eligible .um-menu .um-app { display: flex; }
+
+/* the bar, once after each sign-in, over the top of the page and clear of the notch */
+.kpi-app-bar {
+    position: fixed; z-index: 1000;
+    top: calc(8px + env(safe-area-inset-top));
+    left: calc(8px + env(safe-area-inset-left)); right: calc(8px + env(safe-area-inset-right));
+    display: flex; align-items: center; gap: 4px;
+    background: var(--surface); color: var(--text); border-radius: 12px; box-shadow: 0 6px 24px var(--kpi-shadow);
+}
+.kpi-app-bar[hidden] { display: none; }
+.kpi-app-bar-text {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 10px 4px 10px 12px;
+    background: none; border: 0; text-align: left; font: inherit; font-size: 14px; line-height: 1.35; color: var(--text); cursor: pointer;
+}
+.kpi-app-bar-text img { width: 40px; height: 40px; border-radius: 9px; flex: 0 0 auto; box-shadow: 0 0 0 1px var(--line); }
+.kpi-app-bar-how { color: var(--kpim-crimson); font-weight: 600; white-space: nowrap; }
+.kpi-app-bar-close { flex: 0 0 auto; width: 44px; height: 44px; border: 0; background: none; color: var(--text-3); font-size: 18px; cursor: pointer; }
+
+/* the instructions: the icon they will see, then the steps with the buttons' own symbols */
+.kpi-app-how {
+    border: 0; border-radius: 16px; padding: 20px; width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 24px);
+    overflow: auto; background: var(--surface); color: var(--text); box-shadow: 0 12px 40px var(--kpi-shadow);
+}
+.kpi-app-how::backdrop { background: var(--kpi-overlay); }
+.kpi-app-how-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
+.kpi-app-how-icon { width: 60px; height: 60px; border-radius: 13px; flex: 0 0 auto; box-shadow: 0 0 0 1px var(--line); }
+.kpi-app-how-head h2 { font-size: 18px; font-weight: 600; margin: 4px 0; }
+.kpi-app-how-head p { font-size: 13.5px; color: var(--text-2); margin: 0; line-height: 1.4; }
+.kpi-app-how-x { margin-left: auto; flex: 0 0 auto; width: 36px; height: 36px; border: 0; background: none; color: var(--text-3); font-size: 18px; cursor: pointer; }
+.kpi-app-steps { list-style: none; padding: 0; margin: 0 0 16px; display: flex; flex-direction: column; gap: 14px; }
+.kpi-app-steps li { display: flex; align-items: center; gap: 12px; font-size: 15px; line-height: 1.35; }
+.kpi-app-steps small { display: block; font-size: 12.5px; color: var(--text-3); margin-top: 2px; }
+.kpi-app-step-icon {
+    width: 40px; height: 40px; flex: 0 0 auto; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    background: var(--panel-head); color: var(--link, var(--brand)); font-size: 20px;
+}
+.kpi-app-step-img { background: none; }
+.kpi-app-step-img img { width: 40px; height: 40px; border-radius: 10px; box-shadow: 0 0 0 1px var(--line); }
+.kpi-app-note { display: flex; gap: 8px; font-size: 12.5px; color: var(--text-3); margin: 0 0 16px; line-height: 1.4; }
+/* Safari's steps on an iPhone or iPad, the browser menu's elsewhere; Install only when the browser offers it */
+.kpi-app-ios-only, .kpi-app-other-only, .kpi-app-install { display: none; }
+html.kpi-app-ios .kpi-app-ios-only { display: flex; }
+html:not(.kpi-app-ios) .kpi-app-other-only { display: block; }
+html.kpi-app-can-install .kpi-app-install { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 16px; }
+
+/* ---- Blazor's reconnect display (App.razor, js/reconnect.js): a small note, top centre, never a full-screen block -- */
+#components-reconnect-modal.kpi-reconnect { display: none; }
+#components-reconnect-modal.kpi-reconnect.components-reconnect-show,
+#components-reconnect-modal.kpi-reconnect.components-reconnect-failed {
+    display: flex; position: fixed; z-index: 1100; left: 50%; transform: translateX(-50%);
+    top: calc(10px + env(safe-area-inset-top)); align-items: center;
+    padding: 8px 14px; border-radius: 20px; max-width: calc(100vw - 24px);
+    background: var(--text); color: var(--surface); font-size: 13.5px; box-shadow: 0 4px 16px var(--kpi-shadow);
+}
+.kpi-reconnect-trying, .kpi-reconnect-gave-up { align-items: center; gap: 8px; }
+.kpi-reconnect-trying { display: inline-flex; }
+.kpi-reconnect-gave-up { display: none; cursor: pointer; }
+.components-reconnect-failed .kpi-reconnect-trying { display: none; }
+.components-reconnect-failed .kpi-reconnect-gave-up { display: inline-flex; }
+.kpi-reconnect-spinner {
+    width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--kpi-on-dark-rule); border-top-color: var(--surface);
+    animation: kpi-reconnect-spin 0.7s linear infinite;
+}
+@keyframes kpi-reconnect-spin { to { transform: rotate(360deg); } }
+
+/* ---- A phone held sideways (viewport-fit=cover, App.razor) ------------------------------------------------- */
+/* The page now draws under the notch and the rounded corners: the phone frame's crimson bar runs to both edges (the
+   pale strip down one side is gone) and every screen's content keeps clear of them. kpi.css is CMS.Web's copy, so the
+   insets are added here, over its rules (html ...). env() is 0 on a desktop or with no notch. */
+body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+html .kpim-bar {
+    padding-top: env(safe-area-inset-top); height: calc(60px + env(safe-area-inset-top));
+    padding-left: calc(4px + env(safe-area-inset-left)); padding-right: calc(12px + env(safe-area-inset-right));
+}
+@media (orientation: landscape) {
+    html .kpim-bar { height: calc(48px + env(safe-area-inset-top)); padding-right: calc(16px + env(safe-area-inset-right)); }
+}
+html .kpim-port {
+    padding-left: calc(16px + env(safe-area-inset-left)); padding-right: calc(16px + env(safe-area-inset-right));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+}
+html .kpim-land {
+    padding-left: calc(16px + env(safe-area-inset-left)); padding-right: calc(16px + env(safe-area-inset-right));
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+}
+html .kpim-menu-head {
+    padding-top: env(safe-area-inset-top); height: calc(60px + env(safe-area-inset-top));
+    padding-left: calc(20px + env(safe-area-inset-left));
+}
+html .kpim-menu-list { padding-left: calc(10px + env(safe-area-inset-left)); padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+
+/* ---- "Set up on this phone" (Authenticator page): only on a touch screen - a computer scans the QR with a phone --- */
+.acc-phone { display: none; }
+@media (pointer: coarse) {
+    .acc-phone { display: block; margin: 0 0 18px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-head); }
+}
+.acc-phone .acc-phone-title { font-weight: 600; color: var(--text); font-size: 14.5px; margin-bottom: 10px; }
+.acc-phone .login-button { display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; margin-bottom: 10px; }
+.acc-phone p { font-size: 13px; color: var(--text-2); margin: 0 0 6px; line-height: 1.45; }
+.acc-phone p:last-child { margin-bottom: 0; }

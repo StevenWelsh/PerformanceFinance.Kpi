@@ -32,7 +32,15 @@
             {
                 if (row.IsSpacer)
                 {
-                    <tr class="kcc-spacer"><td colspan="@(Columns.Count + 1)"></td></tr>
+                    @* a cell per column, not one spanning them all, so the highlighted column's tint runs through
+                       the gap (KPI site, Steve Oct 2026; CMS.Web's copy still spans) *@
+                    <tr class="kcc-spacer">
+                        <td></td>
+                        @for (var i = 0; i < Columns.Count; i++)
+                        {
+                            <td class="@(IsNow(i) ? "kcc-now" : "")"></td>
+                        }
+                    </tr>
                     continue;
                 }
                 <tr class="@(row.Strong ? "kcc-headrow" : "")">

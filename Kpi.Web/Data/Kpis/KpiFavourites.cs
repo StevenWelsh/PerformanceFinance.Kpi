@@ -69,8 +69,7 @@ public sealed class KpiFavourites(AuthenticationStateProvider auth, IDbContextFa
         await SaveAsync(u => u.SetProperty(x => x.FavouritesMenuView, value));
     }
 
-    private async Task SaveAsync(System.Linq.Expressions.Expression<Func<Microsoft.EntityFrameworkCore.Query.SetPropertyCalls<Kpi.Data.Auth.KpiUser>,
-                                     Microsoft.EntityFrameworkCore.Query.SetPropertyCalls<Kpi.Data.Auth.KpiUser>>> set)
+    private async Task SaveAsync(Action<Microsoft.EntityFrameworkCore.Query.UpdateSettersBuilder<Kpi.Data.Auth.KpiUser>> set)
     {
         if (_userId is null) return;
         await using var db = await dbs.CreateDbContextAsync();

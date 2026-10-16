@@ -2,7 +2,7 @@
 
   <!-- The KPI website: CMS.Web's KPI pages, reading the KPI database (CMS_KPI) instead of CMS. -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- a label, not a secret: each developer's connection string lives in their own profile, outside the repo -->
@@ -12,11 +12,11 @@
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="DevExpress.Blazor" Version="25.2.7" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.7" />
     <PackageReference Include="QRCoder" Version="1.8.0" />
     <!-- The EF tools (Add-Migration, Update-Database) with this as Visual Studio's startup project. Tooling only -
          never shipped. The context they make is Kpi.Data's design-time factory: the local CMS_KPI, and only that. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.11" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
