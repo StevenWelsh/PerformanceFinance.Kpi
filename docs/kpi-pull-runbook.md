@@ -97,7 +97,7 @@ Do the parts in order. Part B's password is shown once and typed into the site i
    dotnet run --project Kpi.Tools -- grant-push --app pf-kpi --app-id 61d59e76-9728-4eea-930b-856fddbd2a8b --azure
    ```
    Sign in when the browser asks. It ends: `pf-kpi is a user in kpi_push.`
-2. **Connect the data source in the site.** Sign in to https://kpi.fendra.co.uk as a System Admin, then: avatar menu
+2. **Connect the data source in the site.** Sign in to https://kpi.performancefinance.co.uk as a System Admin, then: avatar menu
    (top right) > **Settings** > **Integrations** > the **CMS data source** card > **Connect data source**. Fill in:
 
    | Field | Value |

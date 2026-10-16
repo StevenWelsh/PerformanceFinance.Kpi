@@ -220,20 +220,24 @@ NAT gateway can't move and is recreated:
   `Authentication=Active Directory Interactive`).
 - **App Service plan `plan-pf-apps`** (B1 Linux) + **web app `pf-kpi`**: .NET 10, Always On, WebSockets, HTTPS only, system
   managed identity (app id `61d59e76-...`, a user in `kpi_site` by `grant-site`). App settings: `ASPNETCORE_ENVIRONMENT`
-  Production, `AllowedHosts` (the two kpi domains + `pf-kpi.azurewebsites.net`), `ConnectionStrings__CmsKpi`
+  Production, `AllowedHosts` (`kpi.performancefinance.co.uk;pf-kpi.azurewebsites.net`), `ConnectionStrings__CmsKpi`
   (`Authentication=Active Directory Managed Identity;Encrypt=Strict`), `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` (Azure
   ends HTTPS in front of the app; without it the site thinks it is on http and builds http:// links). Container logs to
   the filesystem (`/home/LogFiles/*_default_docker.log`, through Kudu).
-- **Domains:** `kpi.fendra.co.uk` live (123-reg CNAME `kpi` → `pf-kpi.azurewebsites.net` + TXT `asuid.kpi` = the app's
-  Custom Domain Verification ID; free App Service certificate, SNI, renews itself). `kpi.performancefinance.co.uk`: the
-  same two records, given to PF's DNS people - its old A record (their IIS server) has to go first.
+- **Domain: `kpi.performancefinance.co.uk`** (live 16 Oct 2026): PF's DNS people pointed it here (CNAME `kpi` →
+  `pf-kpi.azurewebsites.net` + TXT `asuid.kpi` = the app's Custom Domain Verification ID); free App Service certificate
+  (SNI, renews itself, first one to Apr 2027). A name bound WITHOUT a certificate shows browsers Azure's
+  `*.azurewebsites.net` one (`ERR_CERT_COMMON_NAME_INVALID`) - what people saw when PF's DNS change reached them before
+  the certificate existed. `kpi.fendra.co.uk` (the testing address) was RETIRED the same day: its binding, certificate
+  and `AllowedHosts` entry removed; its 123-reg records (`kpi` CNAME, `asuid.kpi` TXT) are Steve's to delete. Sign-ins,
+  "don't ask again" and the Home Screen app belong to each address, so they start afresh on the new one.
 - **Deploying** (no pipeline yet): `dotnet publish Kpi.Web -c Release`, zip with FORWARD-SLASH paths (Windows
   PowerShell 5.1's `Compress-Archive` writes backslashes, which Linux unpacks as flat file names), then POST it to
   `https://pf-kpi.scm.azurewebsites.net/api/publish?type=zip&clean=true&restart=false` with a bearer token from
   `az account get-access-token --subscription "Azure subscription 1"`. **`clean=true` empties the site first: never upload
   if the publish failed** - an empty zip took the site down for 10 minutes on 15 Oct. **Stop the app first (`az webapp stop`),
   upload, then `az webapp start`**: uploading over the RUNNING site swaps files under the open process and left a damaged
-  DLL behind (16 Oct: `BadImageFormatException: Index not found` on some pages until a clean redeploy). **After every deploy, `https://kpi.fendra.co.uk/health/db` must say `ok`**
+  DLL behind (16 Oct: `BadImageFormatException: Index not found` on some pages until a clean redeploy). **After every deploy, `https://kpi.performancefinance.co.uk/health/db` must say `ok`**
   (a real query through the site's managed identity - "the login page opens" proved nothing on 16 Oct).
 - **Health check and alert (16 Oct 2026):** `/health` (running) and `/health/db` (a real `SELECT 1`, 20 s limit; 503
   `unavailable`, detail in the log) - anonymous, on the AccountGate's open list. App Service's health check pings
