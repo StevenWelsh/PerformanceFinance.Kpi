@@ -332,28 +332,29 @@ html.kpi-app-can-install .kpi-app-install { display: flex; align-items: center; 
 /* ---- A phone held sideways (viewport-fit=cover, App.razor) ------------------------------------------------- */
 /* The page now draws under the notch and the rounded corners: the phone frame's crimson bar runs to both edges (the
    pale strip down one side is gone) and every screen's content keeps clear of them. kpi.css is CMS.Web's copy, so the
-   insets are added here, over its rules (html ...). env() is 0 on a desktop or with no notch. */
+   insets are added here, over its rules (html ...). Each side gets its usual margin OR the notch space,
+   whichever is larger - never both: the landscape tables are built to fit the width exactly. env() is 0 on a desktop or with no notch. */
 body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
 html .kpim-bar {
     padding-top: env(safe-area-inset-top); height: calc(60px + env(safe-area-inset-top));
-    padding-left: calc(4px + env(safe-area-inset-left)); padding-right: calc(12px + env(safe-area-inset-right));
+    padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right));
 }
 @media (orientation: landscape) {
-    html .kpim-bar { height: calc(48px + env(safe-area-inset-top)); padding-right: calc(16px + env(safe-area-inset-right)); }
+    html .kpim-bar { height: calc(48px + env(safe-area-inset-top)); padding-right: max(16px, env(safe-area-inset-right)); }
 }
 html .kpim-port {
-    padding-left: calc(16px + env(safe-area-inset-left)); padding-right: calc(16px + env(safe-area-inset-right));
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
 }
 html .kpim-land {
-    padding-left: calc(16px + env(safe-area-inset-left)); padding-right: calc(16px + env(safe-area-inset-right));
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
 }
 html .kpim-menu-head {
     padding-top: env(safe-area-inset-top); height: calc(60px + env(safe-area-inset-top));
-    padding-left: calc(20px + env(safe-area-inset-left));
+    padding-left: max(20px, env(safe-area-inset-left));
 }
-html .kpim-menu-list { padding-left: calc(10px + env(safe-area-inset-left)); padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 
 /* ---- "Set up on this phone" (Authenticator page): only on a touch screen - a computer scans the QR with a phone --- */
 .acc-phone { display: none; }
