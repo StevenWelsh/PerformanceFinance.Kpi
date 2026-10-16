@@ -21,27 +21,41 @@ Plan, object by object: `docs/analytics/kpi-database-plan.html` in the CMS repo
 | Project | Role |
 |---|---|
 | `Kpi.Data` | EF Core 10 migrations for `CMS_KPI` (history table `Ref.MigrationsHistory`). The schema is SQL in `migrationBuilder.Sql(...)`, not an EF model: there are no entity classes for the report tables. |
-| `Kpi.Tools` | Run by a person: `migrate`, `seed --email --name` (the first System Admin), `grant-site --app --app-id` (a web app's managed identity into `kpi_site`), `grant-push --app --app-id` (the copy's app registration into `kpi_push`), each with `--azure` for the Azure database (`CmsKpiAzure`; a non-local server is refused without it); `export-apply --cms <db>` / `export-check` (KPI_Export, server = `ConnectionStrings:Export`, `--remote` to change another server); `compare [report]`. |
-| `Kpi.Push` | The copy (net10.0-windows console): `Frequent` every 10 minutes, `Nightly` also refreshes Bad Debt and Exposure; `--azure` copies into `CmsKpiAzure` from a developer's machine. Refuses a KPI_Export whose `KpiExport.Version` isn't `ExportVersion.Current`. |
-| `Kpi.Web` | The site: Blazor Server, CMS.Web's KPI pages copied, reading `CMS_KPI`. |
-| `Kpi.Push/Export/KPI_Export.sql` | The KPI_Export database beside CMS (see below), applied by `Kpi.Tools export-apply` (embedded there). |
+| `Kpi.Tools` | Run by a person: `migrate`, `seed --email --name` (the first System Admin), `grant-site --app --app-id` (a web app's managed identity into `kpi_site`), `grant-push --app --app-id` (an Entra identity - the site's, which copies - into `kpi_push`), each with `--azure` for the Azure database (`CmsKpiAzure`; a non-local server is refused without it); `export-apply --cms <db>` / `export-check` / `grant-pull --user <name>` (KPI_Export: server = `ConnectionStrings:Export`, `--remote` to change another server; grant-pull makes the site's SQL login there with a NEW password shown once); `compare [report]`. |
+| `Kpi.Copy` | The copy itself, shared by the site and Kpi.Push: `KpiCopier` (read `KpiCopy.Refresh`, copy `KpiCopy.*` into `Stage`, publish) and `Export/` - the KPI_Export script and `ExportVersion`. |
+| `Kpi.Push` | The copy from a DEVELOPER'S machine: refreshes the local KPI_Export as the office's Agent jobs would (`Nightly` prepares Bad Debt and Exposure first; `--no-refresh` skips), then runs Kpi.Copy into local CMS_KPI, or `--azure` into `CmsKpiAzure`. Not used in production. |
+| `Kpi.Web` | The site: Blazor Server, CMS.Web's KPI pages copied, reading `CMS_KPI`; `Data/KpiPull` is the production copy. |
 
 **.NET 10 (Oct 2026):** every project targets .NET 10 (LTS to Nov 2028; .NET 8 support ends 10 Nov 2026). EF Core and
 Identity 10.0.x, `Microsoft.Data.SqlClient` **6.1.x** - the version EF Core 10 is built on; 7.x moves Entra sign-in to a
 separate package, which would break the site's managed identity. `System.Security.Cryptography.Pkcs` is pinned to
-10.0.x in Kpi.Data and Kpi.Push: SqlClient 6.1 brings a vulnerable 9.0.11. DevExpress.Blazor 25.2 ships a .NET 8 build,
+10.0.x in Kpi.Data and Kpi.Copy: SqlClient 6.1 brings a vulnerable 9.0.11. DevExpress.Blazor 25.2 ships a .NET 8 build,
 which runs on 10. CMS.Web's KPI pages (the copies' originals) are still .NET 8.
 
 Connection strings live in **user-secrets** (each csproj has a `UserSecretsId` label) or environment variables,
-never in committed files: `Kpi.Tools` needs `CmsKpi`, `Cms` (for compare) and `Export` (the KPI_Export server); `Kpi.Push` needs `Source` and
-`CmsKpi`; `Kpi.Web` needs `CmsKpi`. Local values: `Server=.\SQLEXPRESS;Database=<db>;Trusted_Connection=True;TrustServerCertificate=True`.
+never in committed files: `Kpi.Tools` needs `CmsKpi`, `Cms` (for compare) and `Export` (the KPI_Export server); `Kpi.Push` needs `Source`
+(local KPI_Export, Windows sign-in) and `CmsKpi`; `Kpi.Web` needs `CmsKpi`, and `KpiExport` to copy (in Azure: the office's
+public IP and forwarded port, database KPI_Export, the grant-pull login, `Encrypt=True;TrustServerCertificate=True` - no
+certificate on that SQL Server, Steve chose not to ask PCS for one; without `KpiExport` the copy is off). Local values: `Server=.\SQLEXPRESS;Database=<db>;Trusted_Connection=True;TrustServerCertificate=True`.
 
 ## The data flow
 
-`KpiExport` views (in the `KPI_Export` database beside CMS: CMS_Live's server in production, beside CMS_Dev locally) → `Kpi.Push` bulk-copies each into
-`Stage.*` in `CMS_KPI` → `Stage.spPublish` swaps everything into `Dim`/`Fact` in ONE transaction (read-committed
-snapshot, so a report never sees half a load; it refuses an empty `Stage.Lead`) → the site runs only `Rpt.*`.
-Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load locally).
+**A PULL (16 Oct 2026, Steve; it replaced a planned push from the office):** `KpiExport` views in the `KPI_Export`
+database beside CMS (CMS_Live on PF-APP1; CMS_Dev locally) → SQL Server Agent on PF-APP1 copies them into `KpiCopy.*`
+every 10 minutes, 07:00-20:00 Mon-Sat (`spRefreshCopies`, one transaction, stamps `KpiCopy.Refresh`), and at 00:15 first
+prepares Bad Debt and Exposure → the SITE (`KpiPull`, every 2 minutes) reads that one row and, when it is newer than
+CMS_KPI's last publish (`Rpt.spDataStatus`), bulk-copies `KpiCopy.*` (+ the snapshots when prepared since the last
+nightly publish) into `Stage.*` in `CMS_KPI` → `Stage.spPublish` swaps everything into `Dim`/`Fact` in ONE transaction
+(read-committed snapshot, so a report never sees half a load; it refuses an empty `Stage.Lead`) → the site runs only
+`Rpt.*`. Figures are at most ~12 minutes behind CMS; the timings can't drift, because only the office has a schedule. A
+refresh during a copy is noticed (the row is re-read) and nothing is published until the next try. Every load replaces
+the tables in full (25k paid leads).
+
+- **Why a pull with local copies:** the site reaches the office through ONE port-forward rule that admits only its own
+  static IP (20.90.27.132, below); its login (`kpi_pull`) can read `KpiCopy.*`, the two snapshots and the version -
+  NOTHING in CMS (ownership chaining is off on PF-APP1, so reading the views would have needed rights on CMS_Live's
+  tables, as Klipfolio's `Fendra` login has). The copies also make a refresh one consistent moment and keep the long
+  read over the internet off CMS_Live.
 
 - **Schemas in CMS_KPI:** `Stage` (landing + `spPublish`), `Ref` (`Setting` report date and load times, `LoadRun`
   log, EF history), `Cfg` (KPI-owned settings: `SalespersonScope`, `PostcodeArea`; later `Integration`), `Dim`, `Fact`
@@ -50,23 +64,28 @@ Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load
   and the append-only `Auth.AuditEntry`), `Cfg.Integration` (Resend). Nothing about CMS's users is copied: KPI rights are
   set on the KPI site (Oct 2026, Steve).
 - **Roles:** `kpi_site` (EXECUTE `Rpt`; read/write its own `Auth` tables and `Cfg.Integration`, with UPDATE/DELETE on
-  `Auth.AuditEntry` DENIED), `kpi_push` (fill `Stage`, run `spPublish` and `spRecordFailure`, nothing else), `kpi_reader`
-  (EXECUTE `Rpt`). Logins/users are added by hand per server.
+  `Auth.AuditEntry` DENIED), `kpi_push` (fill `Stage`, run `spPublish` and `spRecordFailure`, nothing else - the SITE's
+  identity is in it too, to copy), `kpi_reader` (EXECUTE `Rpt`). Logins/users are added by hand per server. In
+  KPI_Export: `kpi_pull` (made by the script; members by `grant-pull`).
 - **The copy logs every failure it can:** `Stage.spPublish` logs its own; a copy that fails BEFORE publishing (reading
   CMS, the bulk copy) calls `Stage.spRecordFailure` if it can still reach CMS_KPI. Settings > Data sync shows
-  `Ref.LoadRun` (`Rpt.spLoadHistory`) and the overdue flags (`Rpt.spDataStatus`); a copy that can't reach CMS_KPI at all
-  shows only as Overdue (then: the office server's scheduled task and its Windows event log, source `Kpi.Push`).
+  `Ref.LoadRun` (`Rpt.spLoadHistory`) and the overdue flags (`Rpt.spDataStatus`). The site records a failing copy
+  once when it starts failing and then hourly (not every 2 minutes); every attempt is in the site's log. A refresh
+  that stops in the office shows as Overdue, with the Agent job's history on PF-APP1.
 - **"As at" on every report = the business date AND the time of the last copy** (`KpiDataStatus`, Rpt.spDataStatus,
   cached a minute; full view and phone bar), so a reader sees how fresh the figures are; amber with a warning when the
   copy is overdue. A past year's figures (CMS's current year set back) show the date alone. "Refreshed" is only when
   that browser last fetched.
-- **KPI_Export** (Oct 2026, plan section 9): its own database beside CMS, so nothing KPI-specific is added to CMS. It
-  reads CMS through SYNONYMS (`Lead.vLead` there = `<CMS db>.Lead.vLead`); `@CmsDb` (set by `export-apply --cms`) picks
-  the CMS database. Rerunnable (drops and recreates its objects). **Versioned:** the script's last statement stamps
-  `KpiExport.Version`; raise it and `Kpi.Push/Export/ExportVersion.cs` TOGETHER whenever the script changes - Kpi.Push
-  copies nothing from any other version, `export-apply` refuses a script that disagrees with the code, `export-check`
-  (read only) reports the version, a synonym whose CMS object is gone, or a view that no longer runs. Applied by the
-  user, never by Claude.
+- **KPI_Export** (Oct 2026): its own database beside CMS, so nothing KPI-specific is added to CMS - and NO migrations
+  (Steve): one rerunnable script, `Kpi.Copy/Export/KPI_Export.sql`, applied by `export-apply`. It reads CMS through
+  SYNONYMS (`Lead.vLead` there = `<CMS db>.Lead.vLead`); `@CmsDb` (set by `--cms`) picks the CMS database. Each run drops
+  and recreates its objects but keeps the `kpi_pull` role and its members, and creates the two Agent jobs ONLY IF MISSING
+  (a schedule changed in SSMS survives; not on SQL Express, which has no Agent). Simple recovery (all of it is rebuilt
+  from CMS). `KpiCopy.X` is `SELECT INTO` from `KpiExport.vX` on every refresh, so a new view gets a copy by itself - but
+  the site copies only the tables listed in `KpiCopier`. **Versioned:** raise `KpiExport.Version`'s number and
+  `Kpi.Copy/Export/ExportVersion.cs` TOGETHER whenever the script changes - the copy refuses any other version,
+  `export-apply` refuses a script that disagrees with the code, `export-check` (read only) reports the version, a synonym
+  whose CMS object is gone, or a view that no longer runs. Applied by the user, never by Claude.
 - **Exposure has no fund filter on the KPI site (Oct 2026, Steve):** nightly runs = 3 groupings × (all lenders +
   each lender), a few minutes. Per fund would be ~300 more runs a night (830 funds in CMS_Dev, ~300 with book).
 
@@ -174,11 +193,24 @@ Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load
 
 ## Azure (LIVE for testing, 16 Oct 2026)
 
-In Performance Finance's subscription ("Azure subscription 1", tenant `5917b69c-...`), resource group **`attachment-prod`**
-(Steve is Contributor there only; `rg-pf-apps` was never created), UK West - generic, so other apps can share them:
+In Performance Finance's subscription ("Azure subscription 1", tenant `5917b69c-...`), UK West, named generically so
+other apps can share them. Steve is **Contributor on the whole subscription** (16 Oct 2026, granted through PF's admin
+account; before that only on `attachment-prod`/`-dev`). The site and database are in **`attachment-prod`**; the network
+pieces in **`rg-pf-apps`** (created 16 Oct). Resources can move between groups later - a public IP keeps its address; a
+NAT gateway can't move and is recreated:
 
-- **SQL server `pf-sql-uk`**: Entra-only, admin = group **PF Database Admins** (Steve, Andy). Firewall: the web app's
-  31 possible outbound IPs + developer IPs. **`CMS_KPI`**: Standard S0, CMS_Live's collation. Migrated, seeded and
+- **Static outbound IP (16 Oct 2026, for the pull):** `pip-pf-apps-out` = **20.90.27.132** (Standard, static) on NAT gateway
+  `nat-pf-apps`, on subnet `snet-pf-apps-web` (10.20.1.0/26, delegated to App Service) of `vnet-pf-apps` (10.20.0.0/16), all in
+  `rg-pf-apps`. `pf-kpi` is VNet-integrated there with ALL application traffic routed through it, so everything the site
+  sends out leaves from 20.90.27.132 - the ONE address PF's office firewall admits (port forward requested from PCS
+  16 Oct: outside port of their choice -> PF-APP1 192.168.1.9:1433). About GBP 30 a month. `Microsoft.Network` had to be
+  registered on the subscription first.
+
+- **SQL server `pf-sql-uk`**: admin = group **PF Database Admins** (Steve, Andy). Entra-only until 16 Oct, when password
+  sign-in was switched on for the abandoned push's `kpi-push-office` user - switch it back off and drop that user once
+  the pull works. Firewall: `pf-apps-nat` (20.90.27.132, the site), `steve-current`, and `pf-office` (51.148.118.225,
+  also from the push - remove). The site's 31 shared-address rules were deleted 16 Oct; with only these, the site
+  restarted and `/health/db` said ok - the proof that it goes out through 20.90.27.132. **`CMS_KPI`**: Standard S0, CMS_Live's collation. Migrated, seeded and
   filled with `Kpi.Tools ... --azure` / `Kpi.Push ... --azure` (secrets `ConnectionStrings:CmsKpiAzure`,
   `Authentication=Active Directory Interactive`).
 - **App Service plan `plan-pf-apps`** (B1 Linux) + **web app `pf-kpi`**: .NET 10, Always On, WebSockets, HTTPS only, system
@@ -203,8 +235,14 @@ In Performance Finance's subscription ("Azure subscription 1", tenant `5917b69c-
   `/health/db`; the metric alert "KPI site cannot reach its database" (HealthCheckStatus < 100 over 5 min) emails
   Steve through action group `ag-pf-kpi-alerts`.
 - **Still before go-live:** the Data Protection key ring is the App Service default (`/home`, survives restarts, not
-  encrypted at rest) - wrap it with Key Vault; the office server's scheduled `Kpi.Push` (today's figures were pushed by
-  hand from a developer's local `KPI_Export`).
+  encrypted at rest) - wrap it with Key Vault (the KpiExport connection's password belongs there too); the pull switched
+  on (PCS's port forward, KPI_Export + its jobs + `grant-pull` on PF-APP1, `grant-push` for the site's identity, the
+  `KpiExport` app setting) - until then the figures are a developer's hand copy from CMS_Dev.
+- **The office SQL Server (PF-APP1, found 16 Oct 2026):** SQL Server 2017 Standard, security updates current (support
+  ends 12 Oct 2027); ownership chaining off; KPI_Export / CMS_Live / Dashboard owned by Steve's Windows account.
+  Klipfolio already reaches it through a port forward of 1433 (Klipfolio's shared addresses) as **`Fendra`, a sysadmin**,
+  unencrypted, the login the CMS desktop also uses - a separate fix (own read-only login for Klipfolio, encryption,
+  then a new Fendra password with a desktop update) for Steve and PCS, not part of the KPI site.
 
 ## Gotchas met building it
 
@@ -244,6 +282,12 @@ In Performance Finance's subscription ("Azure subscription 1", tenant `5917b69c-
   the next viewer loads normally once the database answers. Inside the container .NET 10 DID connect (first token
   13 s, first connection ~10 s, then fast), and the site connected after a restart - what stuck that first start is
   not known, which is why the limits matter more than the cause.
+- **Windows PowerShell 5.1's `ConvertFrom-Json` passes a JSON ARRAY down the pipe as ONE object**: `... | ConvertFrom-Json |
+  Where-Object { $_.name -like "x*" } | ForEach-Object { az ... delete --ids $_.id }` matched the whole list and deleted
+  ALL 34 SQL firewall rules (16 Oct; the 3 keepers restored from a saved copy within minutes - firewall changes take a
+  few minutes to apply, so the site never noticed). Wrap it: `(... | ConvertFrom-Json) | Where-Object ...`, and list
+  what a delete will hit before running it. JMESPath queries with quotes (`[?starts_with(name,'x')]`) don't survive
+  PowerShell -> az.cmd either.
 - **Ctrl+C on `dotnet run` can leave the program running** (a seed waiting at `Password:`): its exe then locks
   `bin/` and every build fails with MSB3027 until it is stopped. Answer the seed's prompts promptly - its Azure sign-in
   expires.

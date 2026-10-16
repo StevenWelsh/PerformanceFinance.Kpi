@@ -1,12 +1,12 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
-using Kpi.Push;
+using Kpi.Copy;
 using Microsoft.Data.SqlClient;
 
 namespace Kpi.Tools;
 
-// The KPI_Export database beside CMS (docs/kpi-copy-plan.html, section 9): the script is Kpi.Push's
-// (Kpi.Push/Export/KPI_Export.sql, embedded here), so the tool and the copy always agree on its version.
+// The KPI_Export database beside CMS (docs/kpi-copy-plan.html): the script is Kpi.Copy's
+// (Kpi.Copy/Export/KPI_Export.sql, embedded here), so the tool and the copy always agree on its version.
 //   export-apply --cms <CMS database>   create or bring KPI_Export up to date, its synonyms pointing at that database
 //   export-check                        read only: the version, every synonym's target, every view still runs
 // ConnectionStrings:Export names the SERVER (any database on it; KPI_Export is used by name).
@@ -37,6 +37,7 @@ public static partial class Export
         var batches = GoLine().Split(script).Where(b => !string.IsNullOrWhiteSpace(b)).ToList();
 
         await using var conn = new SqlConnection(cs);
+        conn.InfoMessage += (_, e) => Console.WriteLine($"  {e.Message}");   // the script's PRINTs: the Agent jobs made or kept
         await conn.OpenAsync();
         Console.WriteLine($"{conn.DataSource}: applying {Database} version {ExportVersion.Current}, reading {cmsDb} ({batches.Count} batches)...");
         for (var i = 0; i < batches.Count; i++)

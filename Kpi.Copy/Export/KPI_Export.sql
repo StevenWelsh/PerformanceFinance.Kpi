@@ -1,25 +1,32 @@
-/*  KPI_Export - the database, beside CMS on the same SQL Server, that defines EXACTLY what the KPI copy reads
-    (docs/kpi-copy-plan.html). Kpi.Push reads only these views; nothing KPI-specific is created inside CMS itself.
+/*  KPI_Export - the database, beside CMS on the same SQL Server, that defines EXACTLY what leaves for the KPI site
+    (docs/kpi-copy-plan.html). Nothing KPI-specific is created inside CMS itself.
 
-    It holds views, two functions, the two nightly snapshot tables and the procedure that fills them, reading CMS
-    through SYNONYMS (named pointers: Lead.vLead here means <CMS database>.Lead.vLead). The CMS database is set on
-    ONE line below (@CmsDb): CMS_Dev on a developer's machine, CMS_Live on the office server. The one difference
-    from CMS's own text: KpiExport.ConisterRCF_IWFA points at CMS's WebKPI.ConisterRCF_IWFA.
+    The views (KpiExport.v*) read CMS through SYNONYMS (named pointers: Lead.vLead here means <CMS database>.Lead.vLead);
+    the CMS database is set on ONE line below (@CmsDb): CMS_Dev on a developer's machine, CMS_Live on the office server.
+    The one difference from CMS's own text: KpiExport.ConisterRCF_IWFA points at CMS's WebKPI.ConisterRCF_IWFA.
+
+    THE PULL (Oct 2026): SQL Server Agent refreshes the copies here (KpiExport.spRefreshCopies: every view vX into the
+    table KpiCopy.X, in one transaction) every 10 minutes, and nightly prepares Bad Debt and Exposure first. The KPI site
+    in Azure reads KpiCopy.Refresh every two minutes and copies when it has moved, through a login in kpi_pull that can
+    read the copies and nothing else - it has no user in CMS. The script creates the Agent jobs too (when missing).
 
     Apply it with Kpi.Tools (sets @CmsDb for you, checks the version, runs every batch):
-        dotnet run --project Kpi.Tools -- export-apply --cms CMS_Live      (or CMS_Dev on a developer's machine)
-        dotnet run --project Kpi.Tools -- export-check                     (is every view still valid?)
+        dotnet run --project Kpi.Tools -- export-apply --cms CMS_Live --remote   (or CMS_Dev on a developer's machine)
+        dotnet run --project Kpi.Tools -- export-check                          (is every view still valid?)
     or in SSMS, after changing @CmsDb by hand. Safe to run again: it drops and recreates everything except the
-    database. Run by a person, never by an app.
+    database, the kpi_pull role and its members, and the Agent jobs. Run by a person, never by an app.
 
-    VERSION: when this script changes, raise the number in KpiExport.Version at the bottom AND ExportVersion.Current
-    (Kpi.Push/Export/ExportVersion.cs) together - Kpi.Push refuses to copy from a KPI_Export of any other version, and
-    export-apply refuses a script whose number disagrees with the code.  */
+    VERSION: when this script changes, raise the number in KpiExport.Version near the bottom AND ExportVersion.Current
+    (Kpi.Copy/Export/ExportVersion.cs) together - the copy refuses a KPI_Export of any other version, and export-apply
+    refuses a script whose number disagrees with the code.  */
 
 USE master;
 GO
 IF DB_ID(N'KPI_Export') IS NULL
     CREATE DATABASE KPI_Export COLLATE Latin1_General_CI_AS;
+GO
+-- nothing here needs restoring to a point in time (it is all rebuilt from CMS), so the log never needs backing up
+ALTER DATABASE KPI_Export SET RECOVERY SIMPLE;
 GO
 USE KPI_Export;
 GO
@@ -38,9 +45,10 @@ EXEC (@sql);
 GO
 
 -- ================================================================================================
--- schemas: KpiExport, and the CMS schemas the synonyms sit in
+-- schemas: KpiExport, KpiCopy (what the KPI site reads), and the CMS schemas the synonyms sit in
 -- ================================================================================================
 IF SCHEMA_ID(N'KpiExport') IS NULL EXEC (N'CREATE SCHEMA KpiExport');
+IF SCHEMA_ID(N'KpiCopy')   IS NULL EXEC (N'CREATE SCHEMA KpiCopy');
 IF SCHEMA_ID(N'Lead')      IS NULL EXEC (N'CREATE SCHEMA Lead');
 IF SCHEMA_ID(N'CON')       IS NULL EXEC (N'CREATE SCHEMA CON');
 IF SCHEMA_ID(N'CMS')       IS NULL EXEC (N'CREATE SCHEMA CMS');
@@ -540,13 +548,134 @@ BEGIN
 
         DELETE KpiExport.ExposureSnapshot;
         INSERT KpiExport.ExposureSnapshot SELECT * FROM #Exposure;
+
+        -- tells the KPI site to copy Bad Debt and Exposure with its next copy
+        UPDATE KpiCopy.Refresh SET SnapshotsUtc = SYSUTCDATETIME();
+        IF @@ROWCOUNT = 0           -- a new database, never refreshed: the nightly job's refresh follows at once
+            INSERT KpiCopy.Refresh (RefreshedUtc, ReportDate, SnapshotsUtc)
+            VALUES ('2000-01-01', KpiExport.fnReportDate(), SYSUTCDATETIME());
     COMMIT TRANSACTION;
 END
 GO
 
 -- ================================================================================================
--- the version: Kpi.Push copies only from the KPI_Export it was built for (ExportVersion.Current) - raise both together
+-- KpiCopy.Refresh  (table)
+-- One row: when the copies were last refreshed, the business date they are 'as at', and when Bad Debt / Exposure were
+-- last prepared. The KPI site reads only this every two minutes, and copies only when a time has moved.
+-- ================================================================================================
+CREATE TABLE KpiCopy.Refresh
+(
+    RefreshedUtc  datetime2(3)  NOT NULL,
+    ReportDate    date          NOT NULL,
+    SnapshotsUtc  datetime2(3)  NULL
+);
+GO
+
+-- ================================================================================================
+-- KpiExport.spRefreshCopies  (procedure)
+-- Copies every KpiExport view vX into the table KpiCopy.X, all in ONE transaction with the refresh time, so the site
+-- never sees half a refresh. Run by the 'KPI_Export - refresh' Agent job (and by Kpi.Push on a developer's machine).
+-- The tables are rebuilt each time (SELECT INTO), so they always have exactly the views' columns; a new view gets a copy
+-- without any change here. The site's login reads only these copies: it has no rights in CMS at all.
+-- ================================================================================================
+CREATE PROCEDURE KpiExport.spRefreshCopies
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @sql nvarchar(max) = N'';
+    SELECT @sql += N'DROP TABLE IF EXISTS KpiCopy.' + QUOTENAME(STUFF(V.name, 1, 1, N'')) + N'; '
+                 + N'SELECT * INTO KpiCopy.' + QUOTENAME(STUFF(V.name, 1, 1, N''))
+                 + N' FROM KpiExport.' + QUOTENAME(V.name) + N';' + CHAR(10)
+    FROM   sys.views V
+    WHERE  V.schema_id = SCHEMA_ID(N'KpiExport')
+      AND  V.name LIKE N'v%';
+
+    DECLARE @ReportDate date = KpiExport.fnReportDate();
+
+    BEGIN TRANSACTION;
+        -- one refresh at a time: a second one started while this runs gives up at once (not a failure)
+        DECLARE @lock int;
+        EXEC @lock = sp_getapplock @Resource = N'KpiExportRefresh', @LockMode = N'Exclusive',
+                                   @LockOwner = N'Transaction', @LockTimeout = 0;
+        IF @lock < 0
+        BEGIN
+            ROLLBACK TRANSACTION;
+            PRINT 'Another refresh was still running, so this one was skipped.';
+            RETURN;
+        END
+
+        EXEC (@sql);
+
+        UPDATE KpiCopy.Refresh SET RefreshedUtc = SYSUTCDATETIME(), ReportDate = @ReportDate;
+        IF @@ROWCOUNT = 0
+            INSERT KpiCopy.Refresh (RefreshedUtc, ReportDate) VALUES (SYSUTCDATETIME(), @ReportDate);
+    COMMIT TRANSACTION;
+END
+GO
+
+-- ================================================================================================
+-- kpi_pull: the KPI site's login (Kpi.Tools grant-pull) reads the copies, the two snapshots and the version - nothing
+-- else here, and it has no user in CMS. The role and its members survive a rerun; the grants are made again each time.
+-- ================================================================================================
+IF DATABASE_PRINCIPAL_ID(N'kpi_pull') IS NULL CREATE ROLE kpi_pull;
+GRANT SELECT ON SCHEMA::KpiCopy               TO kpi_pull;
+GRANT SELECT ON KpiExport.BadDebtSnapshot     TO kpi_pull;
+GRANT SELECT ON KpiExport.ExposureSnapshot    TO kpi_pull;
+GO
+
+-- ================================================================================================
+-- the version: the KPI site and Kpi.Push copy only from the KPI_Export they were built for (ExportVersion.Current) -
+-- raise both together
 -- ================================================================================================
 CREATE TABLE KpiExport.Version (Version int NOT NULL, AppliedUtc datetime2(0) NOT NULL);
-INSERT KpiExport.Version (Version, AppliedUtc) VALUES (1, SYSUTCDATETIME());
+INSERT KpiExport.Version (Version, AppliedUtc) VALUES (2, SYSUTCDATETIME());
+GRANT SELECT ON KpiExport.Version TO kpi_pull;
+GO
+
+-- ================================================================================================
+-- the SQL Server Agent jobs (not on SQL Express, which has no Agent: there run EXEC KpiExport.spRefreshCopies by hand,
+-- or let Kpi.Push do it). Created only when MISSING, so a schedule changed in SSMS survives running this again.
+--   KPI_Export - refresh   every 10 minutes, 07:00-20:00, Monday to Saturday
+--   KPI_Export - nightly   00:15 daily: Bad Debt and Exposure (a few minutes), then a refresh
+-- Owned by sa (whatever it is called here), so the steps can read CMS through the synonyms; no program, no password.
+-- ================================================================================================
+IF CAST(SERVERPROPERTY('EngineEdition') AS int) = 4
+    PRINT 'SQL Express has no SQL Server Agent: no jobs created. Refresh by hand with EXEC KPI_Export.KpiExport.spRefreshCopies.';
+ELSE
+BEGIN
+    DECLARE @owner sysname = SUSER_SNAME(0x01);
+
+    IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'KPI_Export - refresh')
+    BEGIN
+        EXEC msdb.dbo.sp_add_job @job_name = N'KPI_Export - refresh', @owner_login_name = @owner,
+             @description = N'Refreshes KPI_Export''s copies (KpiCopy) from CMS for the KPI website, which collects them within two minutes. From the PerformanceFinance.Kpi repo (Kpi.Push/Export/KPI_Export.sql).';
+        EXEC msdb.dbo.sp_add_jobstep @job_name = N'KPI_Export - refresh', @step_name = N'Refresh the copies',
+             @subsystem = N'TSQL', @database_name = N'KPI_Export', @command = N'EXEC KpiExport.spRefreshCopies;';
+        EXEC msdb.dbo.sp_add_jobschedule @job_name = N'KPI_Export - refresh', @name = N'Every 10 minutes, 07:00-20:00, Mon-Sat',
+             @freq_type = 8, @freq_interval = 126, @freq_recurrence_factor = 1,    -- weekly: Mon+Tue+Wed+Thu+Fri+Sat
+             @freq_subday_type = 4, @freq_subday_interval = 10,                  -- every 10 minutes
+             @active_start_time = 70000, @active_end_time = 200000;
+        EXEC msdb.dbo.sp_add_jobserver @job_name = N'KPI_Export - refresh', @server_name = N'(local)';
+        PRINT 'Created the job KPI_Export - refresh.';
+    END
+    ELSE PRINT 'The job KPI_Export - refresh already exists: left as it is.';
+
+    IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'KPI_Export - nightly')
+    BEGIN
+        EXEC msdb.dbo.sp_add_job @job_name = N'KPI_Export - nightly', @owner_login_name = @owner,
+             @description = N'Prepares the Bad Debt and Exposure snapshots for the KPI website, then refreshes the copies. From the PerformanceFinance.Kpi repo (Kpi.Push/Export/KPI_Export.sql).';
+        EXEC msdb.dbo.sp_add_jobstep @job_name = N'KPI_Export - nightly', @step_name = N'Bad Debt and Exposure',
+             @subsystem = N'TSQL', @database_name = N'KPI_Export', @command = N'EXEC KpiExport.spPrepareSnapshots;',
+             @on_success_action = 3;                                              -- then the next step
+        EXEC msdb.dbo.sp_add_jobstep @job_name = N'KPI_Export - nightly', @step_name = N'Refresh the copies',
+             @subsystem = N'TSQL', @database_name = N'KPI_Export', @command = N'EXEC KpiExport.spRefreshCopies;';
+        EXEC msdb.dbo.sp_add_jobschedule @job_name = N'KPI_Export - nightly', @name = N'Daily at 00:15',
+             @freq_type = 4, @freq_interval = 1, @active_start_time = 1500;
+        EXEC msdb.dbo.sp_add_jobserver @job_name = N'KPI_Export - nightly', @server_name = N'(local)';
+        PRINT 'Created the job KPI_Export - nightly.';
+    END
+    ELSE PRINT 'The job KPI_Export - nightly already exists: left as it is.';
+END
 GO

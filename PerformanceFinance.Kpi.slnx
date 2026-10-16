@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="Kpi.Copy/Kpi.Copy.csproj" />
   <Project Path="Kpi.Data/Kpi.Data.csproj" />
   <Project Path="Kpi.Push/Kpi.Push.csproj" />
   <Project Path="Kpi.Tools/Kpi.Tools.csproj" />

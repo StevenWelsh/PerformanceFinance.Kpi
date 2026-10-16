@@ -6,10 +6,11 @@ CMS (the desktop / web / hub solution); CMS's own KPI pages stay as they are unt
 | Project | Role |
 |---|---|
 | `Kpi.Data` | EF Core migrations for `CMS_KPI`: schemas, copied tables, staging tables, the publish procedure, the report procedures (ports of CMS's `WebKPI` ones), roles. |
-| `Kpi.Tools` | Run by a person: `migrate` applies the migrations, `seed` creates the first System Admin of a new database, `grant-site` / `grant-push` let an Entra identity in, `export-apply` / `export-check` create and check KPI_Export, `compare` checks each report against CMS's `WebKPI` version. |
-| `Kpi.Push` | The copy: reads the `KpiExport` views, bulk-loads `Stage.*` in `CMS_KPI`, then runs `Stage.spPublish` (one transaction, so reports never see half a load). `Frequent` every 10 minutes, `Nightly` also refreshes Bad Debt and Exposure. |
-| `Kpi.Web` | The site: CMS.Web's KPI pages (shell, every report, phone views, the cache and 10-minute refresh), copied, reading `CMS_KPI` through the `Rpt` procedures; sign-in (ASP.NET Identity + a compulsory authenticator app, invitation only), My Account and Settings. |
-| `Kpi.Push/Export/KPI_Export.sql` | The `KPI_Export` database beside CMS (CMS_Live in production, CMS_Dev locally): the views the copy reads, reading CMS through synonyms. CMS itself is not changed. Versioned with `ExportVersion.cs`; apply it with `Kpi.Tools export-apply`. |
+| `Kpi.Tools` | Run by a person: `migrate` applies the migrations, `seed` creates the first System Admin of a new database, `grant-site` / `grant-push` let the web app's identity in (reports / copying), `grant-pull` makes the site's login on the office SQL Server (new password each run), `export-apply` / `export-check` create and check KPI_Export, `compare` checks each report against CMS's `WebKPI` version. |
+| `Kpi.Copy` | The copy, shared: reads KPI_Export's copy tables, bulk-loads `Stage.*` in `CMS_KPI`, then runs `Stage.spPublish` (one transaction, so reports never see half a load). In production the site runs it every two minutes, copying only when the office has refreshed. |
+| `Kpi.Push` | The same copy from a developer's machine: refreshes the local KPI_Export first. `Frequent`, or `Nightly` to prepare Bad Debt and Exposure too. |
+| `Kpi.Web` | The site: CMS.Web's KPI pages (shell, every report, phone views, the cache and 10-minute refresh), copied, reading `CMS_KPI` through the `Rpt` procedures; sign-in (ASP.NET Identity + a compulsory texted code, invitation only), My Account and Settings. |
+| `Kpi.Copy/Export/KPI_Export.sql` | The `KPI_Export` database beside CMS (CMS_Live in production, CMS_Dev locally): views reading CMS through synonyms, the copy tables the site reads, and the SQL Server Agent jobs that refresh them. CMS itself is not changed. Versioned with `ExportVersion.cs`; apply it with `Kpi.Tools export-apply`. |
 
 ## First run on a developer machine
 

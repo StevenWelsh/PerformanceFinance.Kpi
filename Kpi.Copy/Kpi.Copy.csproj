@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The KPI copy itself, shared: KPI_Export's script and version (Export/), and the steps that copy its KpiCopy tables
+       into CMS_KPI's Stage and publish them. Run every two minutes by the site (KpiPull, reading KPI_Export on the office
+       server) and by Kpi.Push on a developer's machine - the same steps, so the two can't drift apart. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.7" />
+    <!-- SqlClient 6.1.7 brings Pkcs 9.0.11, which has known vulnerabilities: pinned to the patched version (as Kpi.Data) -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+  </ItemGroup>
+
+  <!-- the script is applied by Kpi.Tools export-apply, which embeds it; here it is only kept with the code that reads it -->
+  <ItemGroup>
+    <None Include="Export\KPI_Export.sql" />
+  </ItemGroup>
+
+</Project>

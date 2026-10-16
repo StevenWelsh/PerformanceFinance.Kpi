@@ -11,7 +11,9 @@ using Microsoft.Extensions.Configuration;
 //   dotnet run --project Kpi.Tools -- grant-site --app <name> --app-id <guid> [--azure]
 //                                                                 let a web app's managed identity in, as kpi_site
 //   dotnet run --project Kpi.Tools -- grant-push --app <name> --app-id <guid> [--azure]
-//                                                                 let the copy's app registration in, as kpi_push
+//                                                                 an Entra identity (the site's, which copies) into kpi_push
+//   dotnet run --project Kpi.Tools -- grant-pull --user <name> [--remote]   the site's SQL login on the office server, reading
+//                                                                 KPI_Export's copies only; a NEW password, shown once
 //   dotnet run --project Kpi.Tools -- export-apply --cms <CMS db> [--remote]   create / update KPI_Export beside CMS
 //   dotnet run --project Kpi.Tools -- export-check [--remote]     read only: KPI_Export's version, synonyms and views
 //                                                                 (ConnectionStrings:Export names that server)
@@ -39,7 +41,8 @@ try
         "migrate" => await Migrate(),
         "seed" => RemoteAllowed(Required(kpiName)) ? await Kpi.Tools.Seed.RunAsync(Required(kpiName), args.Append("--remote").ToArray()) : 1,
         "grant-site" => await Grant("kpi_site", "web app name", "its managed identity's application id"),
-        "grant-push" => await Grant("kpi_push", "app registration name", "its application (client) id"),
+        "grant-push" => await Grant("kpi_push", "web app or app registration name", "its application (client) id"),
+        "grant-pull" => RemoteAllowed(Required("Export")) ? await GrantPull() : 1,
         "export-apply" => RemoteAllowed(Required("Export")) ? await Kpi.Tools.Export.ApplyAsync(Required("Export"), Arg("--cms")) : 1,
         "export-check" => RemoteAllowed(Required("Export"), readOnly: true) ? await Kpi.Tools.Export.CheckAsync(Required("Export")) : 1,
         "reset-sign-in" => RemoteAllowed(Required(kpiName)) ? await Kpi.Tools.ResetSignIn.RunAsync(Required(kpiName), args) : 1,
@@ -99,6 +102,56 @@ async Task<int> Grant(string role, string what, string idWhat)
     return 0;
 }
 
+// The KPI site's login on the office SQL Server: a SQL login (the site is in Azure, outside the office's Windows domain),
+// whose user in KPI_Export is in kpi_pull - it reads the copies, the snapshots and the version, nothing else, and it has
+// no user in CMS. Every run sets a NEW random password and shows it once (the old one stops working at once), so a lost
+// or leaked one is replaced by running this again. Run export-apply first: it makes the role.
+async Task<int> GrantPull()
+{
+    var name = Arg("--user");
+    if (name is null || !Regex.IsMatch(name, "^[A-Za-z0-9._-]{1,60}$"))
+    {
+        Console.Error.WriteLine("Kpi.Tools grant-pull --user <name, e.g. kpi_site_azure> [--remote]");
+        return 1;
+    }
+    var password = NewPassword();
+
+    await using var conn = new SqlConnection(Required("Export"));
+    await conn.OpenAsync();
+    await using (var login = new SqlCommand(
+        $"IF SUSER_ID(N'{name}') IS NULL " +
+        $"CREATE LOGIN [{name}] WITH PASSWORD = N'{password}', DEFAULT_DATABASE = KPI_Export, CHECK_POLICY = ON, CHECK_EXPIRATION = OFF " +
+        $"ELSE ALTER LOGIN [{name}] WITH PASSWORD = N'{password}' UNLOCK;", conn))
+        await login.ExecuteNonQueryAsync();
+
+    await conn.ChangeDatabaseAsync("KPI_Export");
+    await using (var user = new SqlCommand(
+        "IF DATABASE_PRINCIPAL_ID(N'kpi_pull') IS NULL THROW 50001, 'KPI_Export has no kpi_pull role: run export-apply first.', 1; " +
+        $"IF USER_ID(N'{name}') IS NULL CREATE USER [{name}] FOR LOGIN [{name}]; " +
+        $"ALTER ROLE kpi_pull ADD MEMBER [{name}];", conn))
+        await user.ExecuteNonQueryAsync();
+
+    Console.WriteLine($"{conn.DataSource}: {name} can read KPI_Export's copies. Its password - shown ONCE, not saved anywhere:");
+    Console.WriteLine();
+    Console.WriteLine($"    {password}");
+    Console.WriteLine();
+    Console.WriteLine("Put it in the site's KpiExport connection string (the runbook's Azure step). Any previous password has stopped working.");
+    return 0;
+}
+
+// 40 characters of every kind (SQL Server's password policy), none that needs quoting in SQL or a connection string
+static string NewPassword()
+{
+    const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ", lower = "abcdefghijkmnopqrstuvwxyz", digits = "23456789", symbols = "!#*+-?@^_~";
+    var all = upper + lower + digits + symbols;
+    var chars = new[] { upper, lower, digits, symbols }
+        .Select(set => set[System.Security.Cryptography.RandomNumberGenerator.GetInt32(set.Length)])
+        .Concat(Enumerable.Range(0, 36).Select(_ => all[System.Security.Cryptography.RandomNumberGenerator.GetInt32(all.Length)]))
+        .ToArray();
+    System.Security.Cryptography.RandomNumberGenerator.Shuffle(chars.AsSpan());
+    return new string(chars);
+}
+
 // another server is changed only when asked for (--azure / --remote); a read-only check may look anywhere
 bool RemoteAllowed(string cs, bool readOnly = false)
 {
@@ -119,6 +172,6 @@ string Required(string name) =>
 
 static int Usage()
 {
-    Console.WriteLine("Kpi.Tools  migrate [--azure] | seed --email <a> --name \"<n>\" [--azure] | reset-sign-in --email <a> [--azure] | grant-site|grant-push --app <name> --app-id <guid> [--azure] | export-apply --cms <db> [--remote] | export-check | compare [report]");
+    Console.WriteLine("Kpi.Tools  migrate [--azure] | seed --email <a> --name \"<n>\" [--azure] | reset-sign-in --email <a> [--azure] | grant-site|grant-push --app <name> --app-id <guid> [--azure] | grant-pull --user <name> [--remote] | export-apply --cms <db> [--remote] | export-check | compare [report]");
     return 1;
 }

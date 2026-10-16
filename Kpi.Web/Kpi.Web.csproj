@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Kpi.Data\Kpi.Data.csproj" />
+    <ProjectReference Include="..\Kpi.Copy\Kpi.Copy.csproj" />
   </ItemGroup>
 
 </Project>

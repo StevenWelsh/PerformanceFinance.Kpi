@@ -93,6 +93,7 @@ builder.Services.AddSingleton<AccountLinks>();
 builder.Services.AddSingleton<UserAdmin>();
 builder.Services.AddHostedService<ExpireSetupsTask>();
 builder.Services.AddHostedService<Kpi.Web.Data.Kpis.KpiWarmer>();   // the morning pre-load of the reports people use
+builder.Services.AddHostedService<Kpi.Web.Data.KpiPull>();          // the KPI copy from the office (KPI_Export), every two minutes
 
 // ---- integrations: Resend for email ----------------------------------------------------------------------------
 builder.Services.AddSingleton<IntegrationStore>();
