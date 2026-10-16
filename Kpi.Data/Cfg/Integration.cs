@@ -14,8 +14,8 @@ public class Integration
     public string? SettingsJson { get; set; }
     public string? SecretsCipher { get; set; }
     public DateTime? SecretsUpdatedUtc { get; set; }
-    /// <summary>Testing: every email goes here instead, subject marked. Empty = real recipients (and outside
-    /// Production nothing is sent at all without it).</summary>
+    /// <summary>Testing: every email (Resend) or text code (Twilio) goes here instead. Empty = the real recipients (and
+    /// outside Production nothing is sent at all without it).</summary>
     public string? RedirectTo { get; set; }
     public string? ConnectedByUserId { get; set; }
     public DateTime? ConnectedUtc { get; set; }
@@ -30,6 +30,8 @@ public class Integration
 public static class IntegrationProviders
 {
     public const string Resend = "Resend";
+    /// <summary>The sign-in's text codes (Twilio Verify). Its row is made on first use.</summary>
+    public const string Twilio = "Twilio";
 }
 
 public static class IntegrationStatus

@@ -91,8 +91,18 @@ Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load
 
 ## Sign-in, My Account, Settings (built Oct 2026, as DavidsonHR `C:\GitRepo\DavidsonHR`)
 
-- **ASP.NET Core Identity on EF Core** (`KpiUser` in `Auth.Users`), a COMPULSORY authenticator app (TOTP, QR by QRCoder),
-  no recovery codes, **invitation only**. This departs from the CMS hub's "own tables, no Identity" rule deliberately:
+- **ASP.NET Core Identity on EF Core** (`KpiUser` in `Auth.Users`), a COMPULSORY **code texted to the person's mobile**
+  (Oct 2026, Steve: "Twilio SMS in all cases" - the authenticator app's QR couldn't be scanned on the phone it was shown
+  on), no recovery codes, **invitation only**. **Twilio Verify** (`Integrations/TwilioConnection`, copied from DavidsonHR):
+  Twilio makes, texts, expires and checks the code, so the site holds none; the two-factor step is Identity's own
+  (`SmsTokenProvider` registered as "Sms", so `TwoFactorSignInAsync`, lockout and "don't ask again for 30 days" work
+  unchanged). UK mobiles only (`UkMobile`, stored +447...). Settings > Integrations > Twilio: Account SID, Auth Token
+  (encrypted), Verify Service SID, and a TEST NUMBER that receives every code - outside Production nothing is sent without
+  one. Until Twilio is connected (`TextCodes`), the code is written to the SITE'S LOG instead: on a developer's machine
+  for anyone, on the live site only for the seeded first account before its first use (a new database has no Twilio
+  yet). A forgotten password is reset by the emailed link alone - signing in afterwards still needs the texted code.
+  `Kpi.Tools reset-sign-in --email <a> [--azure]` puts an account back to the seeded state (password kept) for an admin
+  who can't get in. This departs from the CMS hub's "own tables, no Identity" rule deliberately:
   that rule exists so staff and customers share one implementation in CMS.Core (which also builds for the net48
   desktop); this site is standalone .NET 10.
 - **Roles (one each), and who sees which report (Oct 2026, Steve):** **SystemAdmin** — every report, Settings, and ALL
@@ -109,10 +119,10 @@ Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load
   `OBEnquiryExposure.View` are the same check for those two slugs. No request touches the database to authorise.
 - **Two-factor is enforced three ways:** `AccountGate` middleware (runs BEFORE authorization, so a half-set-up account is
   sent to finish rather than told "no access"), every policy requires `kpi:2fa = on` (covers the live Blazor connection),
-  and **a password alone NEVER leads to authenticator setup** — only an emailed link (invitation, reset, re-enrol) or
-  My Account's new-phone form (needs the password inside a signed-in session) opens the ONE-HOUR setup window
+  and **a password alone NEVER leads to registering a mobile** — only an emailed link (invitation, reset, re-enrol) or
+  My Account's change-mobile form (needs the password inside a signed-in session) opens the ONE-HOUR setup window
   (`AccountSetup`: random value in a `__Host-` cookie, its hash on the user row; `ExpireSetupsTask` closes stale ones and
-  clears an unactivated account's password). The one exception: the account made by `Kpi.Tools seed` (`IsSeeded`), on
+  clears an unactivated account's password). The page is `/account/mobile`: the number, a code texted to it, the code. The one exception: the account made by `Kpi.Tools seed` (`IsSeeded`), on
   its first sign-in, because a new database has no email yet.
 - **Sign-in pages are STATIC SSR under `/account`** (App.razor picks the render mode by path) posting plain forms to
   `AccountEndpoints` (minimal API: the cookie can only be written in an ordinary request). Every POST is antiforgery
@@ -132,7 +142,7 @@ Every load replaces the tables in full (25k paid leads, ~90 s for a nightly load
   menu's head, turned white-on-crimson there): My Account, Settings (System Admin only), Log out - the ONLY way to
   them; the sidebar holds reports alone (Steve).
 - **Settings** (`/settings`, System Admin only): Users (`UserAdmin` — invite, edit role/rights, send again / withdraw,
-  reset authenticator with "how did you check it was them?", disable), Integrations (Resend: key encrypted with Data
+  reset mobile with "how did you check it was them?", disable, and DELETE - disabled first so every session ends, then removed; the audit keeps their name and history; never yourself or the last System Admin), Integrations (Resend: key encrypted with Data
   Protection, never shown back, blank keeps it; a TEST ADDRESS catches every email, and outside Production nothing is
   sent without one), Data sync, Audit. When an email can't be sent the invitation / reset link is shown to the System
   Admin to pass on.
@@ -178,9 +188,11 @@ In Performance Finance's subscription ("Azure subscription 1", tenant `5917b69c-
   same two records, given to PF's DNS people - its old A record (their IIS server) has to go first.
 - **Deploying** (no pipeline yet): `dotnet publish Kpi.Web -c Release`, zip with FORWARD-SLASH paths (Windows
   PowerShell 5.1's `Compress-Archive` writes backslashes, which Linux unpacks as flat file names), then POST it to
-  `https://pf-kpi.scm.azurewebsites.net/api/publish?type=zip&clean=true&restart=true` with a bearer token from
+  `https://pf-kpi.scm.azurewebsites.net/api/publish?type=zip&clean=true&restart=false` with a bearer token from
   `az account get-access-token --subscription "Azure subscription 1"`. **`clean=true` empties the site first: never upload
-  if the publish failed** - an empty zip took the site down for 10 minutes on 15 Oct. **After every deploy, `https://kpi.fendra.co.uk/health/db` must say `ok`**
+  if the publish failed** - an empty zip took the site down for 10 minutes on 15 Oct. **Stop the app first (`az webapp stop`),
+  upload, then `az webapp start`**: uploading over the RUNNING site swaps files under the open process and left a damaged
+  DLL behind (16 Oct: `BadImageFormatException: Index not found` on some pages until a clean redeploy). **After every deploy, `https://kpi.fendra.co.uk/health/db` must say `ok`**
   (a real query through the site's managed identity - "the login page opens" proved nothing on 16 Oct).
 - **Health check and alert (16 Oct 2026):** `/health` (running) and `/health/db` (a real `SELECT 1`, 20 s limit; 503
   `unavailable`, detail in the log) - anonymous, on the AccountGate's open list. App Service's health check pings

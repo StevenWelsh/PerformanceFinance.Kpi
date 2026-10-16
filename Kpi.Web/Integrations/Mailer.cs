@@ -31,19 +31,19 @@ public sealed class Mailer(IntegrationStore store, IHttpClientFactory http, IWeb
             new[]
             {
                 $"{invitedBy} has invited you to the Performance Finance KPI site.",
-                "Follow the link to choose a password and set up an authenticator app on your phone (Microsoft Authenticator, Google Authenticator or similar). The link works for 7 days."
+                "Follow the link to choose a password and register your mobile number - each time you sign in we text it a code. The link works for 7 days."
             },
             "Accept invitation", link);
 
     public Task<MailOutcome> ReenrolAsync(string to, string name, string link) =>
-        SendAsync(to, "Set up your authenticator again",
+        SendAsync(to, "Register your mobile again",
             $"Hello {name},",
             new[]
             {
-                "Your authenticator for the Performance Finance KPI site has been reset, so the next step is to set it up on your phone again.",
+                "The mobile number you sign in to the Performance Finance KPI site with has been reset, so the next step is to register your mobile again.",
                 "Follow the link within 24 hours and sign in with your password. If you didn't ask for this, tell your administrator."
             },
-            "Set up my authenticator", link);
+            "Register my mobile", link);
 
     public Task<MailOutcome> PasswordResetAsync(string to, string name, string link) =>
         SendAsync(to, "Reset your password",

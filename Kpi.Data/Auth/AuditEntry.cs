@@ -38,5 +38,6 @@ public static class AuditEvents
     public const string UserChanged = "UserChanged";
     public const string UserDisabled = "UserDisabled";
     public const string UserEnabled = "UserEnabled";
+    public const string UserDeleted = "UserDeleted";
     public const string IntegrationChanged = "IntegrationChanged";
 }

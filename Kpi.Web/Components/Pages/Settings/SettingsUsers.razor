@@ -69,13 +69,14 @@ else
                             {
                                 @if (u.Status != "Disabled")
                                 {
-                                    <button type="button" class="set-act" @onclick="() => StartReset(u)">Reset authenticator</button>
+                                    <button type="button" class="set-act" @onclick="() => StartReset(u)">Reset mobile</button>
                                     <button type="button" class="set-act set-act-danger" @onclick="() => ConfirmDisable(u)">Disable</button>
                                 }
                                 else
                                 {
                                     <button type="button" class="set-act" @onclick="() => Run(() => Admin.SetDisabledAsync(User, u.Id, false))">Enable</button>
                                 }
+                                <button type="button" class="set-act set-act-danger" @onclick="() => ConfirmDelete(u)">Delete</button>
                             }
                         </td>
                     </tr>
@@ -136,10 +137,10 @@ else
                 <p class="acc-hint">You can't change your own role.</p>
             }
         }
-        else if (_dialog == "Reset authenticator")
+        else if (_dialog == "Reset mobile")
         {
-            <p class="acc-text">Use this when @_target?.Name has lost or replaced their phone. Their authenticator stops working at once,
-               and they're emailed a link (it lasts a day) to set it up again with their password.</p>
+            <p class="acc-text">Use this when @_target?.Name has lost their phone or changed their number. Codes stop going to the old
+               number at once, and they're emailed a link (it lasts a day) to register their mobile again with their password.</p>
             <p class="acc-text"><b>This is the one way round two-factor, so check it really is them first</b> - a phone call to a number you already have, or in person.</p>
             <label class="login-label" for="u-how">How did you check it was them?</label>
             <input id="u-how" @bind="_how" placeholder="e.g. phoned them on their mobile" />
@@ -155,8 +156,8 @@ else
             {
                 "Invite someone" => "Send invitation",
                 "Edit user" => "Save",
-                "Reset authenticator" => "Reset and email them",
-                _ => "Yes"
+                "Reset mobile" => "Reset and email them",
+                _ => _confirmOk
             })</button>
         </div>
     </div>
@@ -181,6 +182,7 @@ else
     private HashSet<string> _reports = new();
     private string? _confirmText;
     private Func<Task>? _confirmAction;
+    private string _confirmOk = "Yes";
 
     protected override async Task OnInitializedAsync()
     {
@@ -201,7 +203,7 @@ else
 
     private void StartReset(UserAdmin.UserRow u)
     {
-        Open("Reset authenticator", u, "", "", "", false, Array.Empty<string>());
+        Open("Reset mobile", u, "", "", "", false, Array.Empty<string>());
         _how = "";
     }
 
@@ -216,11 +218,18 @@ else
     private void ConfirmDisable(UserAdmin.UserRow u) =>
         Confirm($"Disable {u.Name}? They can no longer sign in, and any open session ends within a minute.", () => Admin.SetDisabledAsync(User, u.Id, true));
 
-    private void Confirm(string text, Func<Task> action)
+    // Delete (Steve, Oct 2026): the account goes for good - disabled first, so every session ends - and the audit keeps their history
+    private void ConfirmDelete(UserAdmin.UserRow u) =>
+        Confirm($"Delete {u.Name} ({u.Email}) for good? Their account is disabled at once - any open session ends within a minute - " +
+                "and then removed, with their report rights and favourites. It can't be undone: to give them access again, invite them " +
+                "afresh. The audit keeps their name and what they did.", () => Admin.DeleteAsync(User, u.Id), "Delete for good");
+
+    private void Confirm(string text, Func<Task> action, string okText = "Yes")
     {
         Open("Are you sure?", null, "", "", "", false, Array.Empty<string>());
         _confirmText = text;
         _confirmAction = action;
+        _confirmOk = okText;
     }
 
     private void Open(string dialog, UserAdmin.UserRow? target, string name, string email, string role, bool allReports,
@@ -247,7 +256,7 @@ else
                 case "Edit user":
                     await Admin.UpdateAsync(User, _target!.Id, _name, _role, _allReports, _reports);
                     break;
-                case "Reset authenticator":
+                case "Reset mobile":
                     _link = await Admin.ResetTwoFactorAsync(User, _target!.Id, _how, Nav.BaseUri);
                     break;
                 default:

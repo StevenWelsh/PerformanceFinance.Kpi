@@ -29,13 +29,13 @@
     [SupplyParameterFromQuery(Name = "reset")] public string? Reset { get; set; }
     [SupplyParameterFromQuery(Name = "signedout")] public string? SignedOut { get; set; }
 
-    // One message for every refusal, including a right password on an account with no authenticator yet:
+    // One message for every refusal, including a right password on an account with no mobile registered yet:
     // a different message there would confirm the password.
     private string? ErrorText => Error is null ? null
         : "Email or password not recognised. Not set up yet? Use the link in your invitation email.";
 
     private string? NoticeText =>
-        SetupExpired is not null ? "Setting up your authenticator has to be finished within an hour of following your email link. Follow the link again, or ask your System Admin for a new one."
+        SetupExpired is not null ? "Registering your mobile has to be finished within an hour of following your email link. Follow the link again, or ask your System Admin for a new one."
         : Reset is not null ? "Your password has been changed. Sign in with your new password."
         : SignedOut is not null ? "You have signed out."
         : null;

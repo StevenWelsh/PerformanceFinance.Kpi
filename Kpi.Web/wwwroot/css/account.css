@@ -12,6 +12,7 @@
     --kpi-shadow: rgba(0, 0, 0, 0.18);
     --kpi-overlay: rgba(0, 0, 0, 0.45);
     --kpi-on-dark-rule: rgba(255, 255, 255, 0.35);
+    --intg-twilio: #f22f46;             /* Twilio's own red, for its name on its card */
 }
 
 /* ---- account screens (inside CMS.Web's .login-card) -------------------------------------------------------- */
@@ -132,7 +133,7 @@
 .set-pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--panel-head); color: var(--text-2); white-space: nowrap; }
 .set-pill-active, .set-pill-connected { background: var(--success-bg); color: var(--success); }
 .set-pill-disabled, .set-pill-needsattention, .set-pill-inviteexpired { background: var(--error-bg); color: var(--error); }
-.set-pill-invited, .set-pill-settingup, .set-pill-authenticatorreset, .set-pill-switchedoff { background: var(--warning-bg); color: var(--warning); }
+.set-pill-invited, .set-pill-settingup, .set-pill-mobilereset, .set-pill-switchedoff { background: var(--warning-bg); color: var(--warning); }
 
 .set-link { position: relative; border: 1px solid var(--brand-tint-2); background: var(--brand-tint); border-radius: 6px; padding: 10px 40px 10px 12px; margin-bottom: 14px; font-size: 13.5px; }
 .set-link p { margin: 0 0 8px; display: flex; gap: 8px; align-items: flex-start; }
@@ -365,3 +366,36 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .acc-phone .login-button { display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; margin-bottom: 10px; }
 .acc-phone p { font-size: 13px; color: var(--text-2); margin: 0 0 6px; line-height: 1.45; }
 .acc-phone p:last-child { margin-bottom: 0; }
+
+/* ---- Settings > Integrations: a card per service, as DavidsonHR (ResendCard, TwilioCard) ----------------------- */
+.intg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 340px)); gap: 14px; }
+.intg-card { display: flex; flex-direction: column; min-height: 150px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-alt); }
+.intg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; min-height: 24px; }
+.intg-name { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--text-strong); }
+.intg-logo { height: 18px; width: auto; display: block; }
+.intg-twilio { gap: 6px; color: var(--intg-twilio); font-size: 17px; letter-spacing: -0.01em; }
+.intg-twilio img { width: 20px; height: 20px; display: block; }
+.intg-plug { font-size: 18px; color: var(--text-3); }
+.intg-plug.on { color: var(--success); }
+.intg-plug.warn { color: var(--warning); }
+.intg-desc { flex: 1 1 auto; margin: 0 0 12px; font-size: 13px; line-height: 1.4; color: var(--text-2); }
+.intg-btn {
+    width: 100%; height: 36px; margin-top: auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: 0; border-radius: 6px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.intg-btn-connect { background: var(--text-strong); color: var(--surface); }
+.intg-btn-on { background: var(--success); color: var(--surface); }
+.intg-btn-warn { background: var(--warning-bg); color: var(--warning); }
+.intg-btn:hover:not(:disabled) { filter: brightness(1.12); }
+.intg-btn:disabled { opacity: 0.55; cursor: default; }
+/* the two-step Connect dialog */
+.set-dialog.set-dialog-wide { width: 560px; }
+.intg-steps { display: flex; gap: 18px; list-style: none; padding: 0; margin: 0 0 16px; font-size: 13px; color: var(--text-3); }
+.intg-steps li { display: inline-flex; align-items: center; gap: 6px; }
+.intg-steps li span { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    background: var(--panel-head); font-size: 12px; font-weight: 700; color: var(--text-2); }
+.intg-steps li.on { color: var(--text-strong); font-weight: 600; }
+.intg-steps li.on span { background: var(--brand); color: var(--surface); }
+.intg-steps li.done span { background: var(--success-bg); color: var(--success); }
+.intg-howto { margin: 0 0 12px; padding-left: 20px; font-size: 13.5px; line-height: 1.5; color: var(--text-2); }
+.intg-howto li { margin-bottom: 6px; }

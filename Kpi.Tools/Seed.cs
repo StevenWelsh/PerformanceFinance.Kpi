@@ -10,7 +10,8 @@ namespace Kpi.Tools;
 /// <summary>
 /// "seed": the first account of a brand-new KPI database - a System Admin - plus the three roles. A new database has
 /// no way in otherwise: invitations are emailed, and email (Resend) is connected by somebody already signed in. The
-/// seeded account's first sign-in may set up its authenticator without an emailed link, once, within the hour.
+/// seeded account's first sign-in may register its mobile without an emailed link, once, within the hour (until Twilio is
+/// connected its code is written to the site's log).
 /// The password is typed here by the person it belongs to, hidden, and never written anywhere but as Identity's hash.
 /// </summary>
 public static class Seed
@@ -87,11 +88,11 @@ public static class Seed
         {
             OccurredUtc = DateTime.UtcNow, Event = AuditEvents.Invited, ActorName = "Kpi.Tools seed",
             SubjectUserId = user.Id, SubjectName = user.DisplayName,
-            Detail = "First System Admin of a new database, created by Kpi.Tools seed; sets up an authenticator at first sign-in"
+            Detail = "First System Admin of a new database, created by Kpi.Tools seed; registers a mobile at first sign-in"
         });
         await db.SaveChangesAsync();
 
-        Console.WriteLine("Done. Sign in on the site: you'll set up an authenticator app straight away, and have an hour to finish it.");
+        Console.WriteLine("Done. Sign in on the site: you'll register your mobile straight away, and have an hour to finish it.");
         return 0;
     }
 

@@ -1,0 +1,95 @@
+@page "/account/mobile"
+@layout EmptyLayout
+@using Kpi.Data
+@using Kpi.Data.Auth
+@using Kpi.Web.Integrations
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<KpiUser> Users
+@inject KpiDbContext Db
+@inject NavigationManager Nav
+
+<PageTitle>Your mobile number — Performance Finance KPIs</PageTitle>
+
+@* Registering the mobile the sign-in codes are texted to (Steve, Oct 2026: Twilio SMS in all cases): the number, a code
+   texted to it, the code typed back. Only inside the one-hour window an emailed link (invitation, a System Admin's reset)
+   or My Account's "change mobile" opened in this browser - a password alone never gets here. *@
+<AuthCard Title="Your mobile number">
+    @if (_closed)
+    {
+        <Messages Notice="Registering your mobile has to be done within an hour of following your email link, in the same browser. Follow the link again, or ask your System Admin for a new one." />
+    }
+    else if (_user is not null)
+    {
+        @if (Sent is not null && !string.IsNullOrEmpty(_user.PhoneNumber))
+        {
+            <Messages Error="@ErrorText" />
+            <p class="acc-text">We've texted a six-digit code to <b>@UkMobile.Display(_user.PhoneNumber)</b>. Type it below to finish.</p>
+            <form method="post" action="/account/mobile/confirm">
+                <AntiforgeryToken />
+                <label class="login-label" for="code">Code from the text</label>
+                <input id="code" name="code" class="acc-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" autofocus required />
+                <button type="submit" class="login-button" data-busy-text="Checking…">Finish</button>
+            </form>
+            <form method="post" action="/account/mobile/send">
+                <AntiforgeryToken />
+                <input type="hidden" name="mobile" value="@_user.PhoneNumber" />
+                <button type="submit" class="acc-link acc-link-btn" data-busy-text="Sending…">Text me a new code</button>
+            </form>
+            <a class="acc-link" href="/account/mobile">Wrong number? Change it</a>
+        }
+        else
+        {
+            <Messages Error="@ErrorText" />
+            <p class="acc-text">Each time you sign in we'll text a six-digit code to your mobile. Enter your number and we'll text a code now to check it.</p>
+            <form method="post" action="/account/mobile/send">
+                <AntiforgeryToken />
+                <label class="login-label" for="mobile">UK mobile number</label>
+                <input id="mobile" name="mobile" type="tel" inputmode="tel" autocomplete="tel" placeholder="07700 900 123" required
+                       value="@(string.IsNullOrEmpty(_user.PhoneNumber) ? "" : UkMobile.Display(_user.PhoneNumber))" />
+                <button type="submit" class="login-button" data-busy-text="Sending…">Text me a code</button>
+            </form>
+        }
+    }
+
+    @* No Cancel: there is nowhere to go until this is done. Signing out leaves the account as it was. *@
+    <form method="post" action="/account/logout">
+        <AntiforgeryToken />
+        <button type="submit" class="acc-link acc-link-btn" data-busy-text="Signing out…">Sign out</button>
+    </form>
+</AuthCard>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromQuery(Name = "sent")] public string? Sent { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+
+    private bool _closed;
+    private KpiUser? _user;
+
+    private string? ErrorText => Error switch
+    {
+        null => null,
+        "number" => "That isn't a UK mobile number. Check it and try again.",
+        "notsetup" => TextCodes.NotSetUp,
+        "send" => "The text couldn't be sent just now. Try again in a minute.",
+        "code" => "That code wasn't right. Check the text, or ask for a new code.",
+        _ => "The code couldn't be checked just now. Try again in a minute."
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await Users.GetUserAsync(HttpContext.User);
+        if (user is null) { Nav.NavigateTo("/account/login"); return; }
+        // already registered: refresh this browser's sign-in rather than go round the gate again (a dropped answer to
+        // the confirm step leaves the old cookie - without it the gate and this page sent each other round for ever)
+        if (user.TwoFactorEnabled) { Nav.NavigateTo("/account/refresh"); return; }
+
+        // only inside the one-hour window an emailed link (or My Account's change of mobile) opened in this browser
+        if (!await new Kpi.Web.Account.AccountSetup(Db, Users).IsOpenAsync(user.Id, Kpi.Web.Account.SetupCookie.Read(HttpContext)))
+        {
+            _closed = true;
+            return;
+        }
+        _user = user;
+    }
+}

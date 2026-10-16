@@ -1,0 +1,25 @@
+@using Kpi.Data.Cfg
+
+@* A card's one button, as DavidsonHR: black "Connect ...", green "Connected" (with " - switched off" when it is), amber
+   "Needs attention"; the cog opens the details. *@
+@if (Row is null)
+{
+    <button type="button" class="intg-btn intg-btn-connect" disabled>Loading…</button>
+}
+else if (Row.Status == IntegrationStatus.NotConnected)
+{
+    <button type="button" class="intg-btn intg-btn-connect" @onclick="OnClick"><i class="bi bi-plug" aria-hidden="true"></i> @ConnectText</button>
+}
+else
+{
+    var warn = Row.Status == IntegrationStatus.NeedsAttention;
+    <button type="button" class="intg-btn @(warn ? "intg-btn-warn" : "intg-btn-on")" @onclick="OnClick">
+        <i class="bi bi-gear" aria-hidden="true"></i> @(warn ? "Needs attention" : "Connected")@(Row.Enabled ? "" : " - switched off")
+    </button>
+}
+
+@code {
+    [Parameter] public Integration? Row { get; set; }
+    [Parameter] public string ConnectText { get; set; } = "Connect";
+    [Parameter] public EventCallback OnClick { get; set; }
+}

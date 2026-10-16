@@ -45,7 +45,7 @@ builder.Services.AddScoped<KpiRefreshStatus>();
 builder.Services.AddScoped<KpiFavourites>();
 builder.Services.AddSingleton<KpiScripts>();
 
-// ---- sign-in: ASP.NET Identity with a compulsory authenticator app, as DavidsonHR ------------------------------
+// ---- sign-in: ASP.NET Identity with a compulsory text code to the person's mobile (Twilio Verify), as DavidsonHR's portal
 // The key ring encrypts the sign-in cookies, the emailed links and the integration secrets. Locally it lives in the
 // user profile; in Azure it must be a shared, persisted ring (storage + Key Vault) or every restart signs everyone
 // out and the saved Resend key becomes unreadable.
@@ -79,7 +79,8 @@ builder.Services.AddIdentityCore<KpiUser>(KpiIdentityRules.Apply)
     .AddEntityFrameworkStores<KpiDbContext>()
     .AddSignInManager()
     .AddClaimsPrincipalFactory<KpiClaimsPrincipalFactory>()
-    .AddDefaultTokenProviders();
+    .AddDefaultTokenProviders()
+    .AddTokenProvider<SmsTokenProvider>(SmsTokenProvider.Name);   // the two-factor step is a texted code
 // a forgotten-password link works for an hour
 builder.Services.Configure<DataProtectionTokenProviderOptions>(o => o.TokenLifespan = TimeSpan.FromHours(1));
 
@@ -96,6 +97,8 @@ builder.Services.AddHostedService<Kpi.Web.Data.Kpis.KpiWarmer>();   // the morni
 // ---- integrations: Resend for email ----------------------------------------------------------------------------
 builder.Services.AddSingleton<IntegrationStore>();
 builder.Services.AddSingleton<Mailer>();
+builder.Services.AddSingleton<TwilioConnection>();
+builder.Services.AddSingleton<TextCodes>();
 builder.Services.AddHttpClient(Mailer.HttpClientName, c =>
 {
     c.BaseAddress = new Uri("https://api.resend.com/");

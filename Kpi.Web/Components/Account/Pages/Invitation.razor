@@ -16,7 +16,7 @@
     else
     {
         <Messages Error="@ErrorText" />
-        <p class="acc-text">Hello @_user.DisplayName. Choose a password for <b>@_user.Email</b>; next you'll set up an authenticator app on your phone.</p>
+        <p class="acc-text">Hello @_user.DisplayName. Choose a password for <b>@_user.Email</b>; next you'll register your mobile number for sign-in codes.</p>
         <form method="post" action="/account/invitation">
             <AntiforgeryToken />
             <input type="hidden" name="userId" value="@UserId" />

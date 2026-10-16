@@ -11,9 +11,9 @@ namespace Kpi.Web.Account;
 
 /// <summary>
 /// THE ONE-HOUR SETUP WINDOW (DavidsonHR's security review H1). A correct password alone NEVER leads to setting up
-/// an authenticator - otherwise whoever learnt a password could add their own phone. An authenticator can be added
+/// a mobile for sign-in codes - otherwise whoever learnt a password could register their own phone. A mobile can be registered
 /// only in a browser that has just followed one of our emailed links (an invitation, a password reset, a System
-/// Admin's two-factor reset), or has just proved the password inside a signed-in session (My Account, new phone),
+/// Admin's mobile reset), or has just proved the password inside a signed-in session (My Account, change mobile),
 /// and only for an hour. A random value goes in that browser's cookie and its hash on the person's row.
 /// </summary>
 public sealed class AccountSetup(KpiDbContext db, UserManager<KpiUser> users)
@@ -27,7 +27,7 @@ public sealed class AccountSetup(KpiDbContext db, UserManager<KpiUser> users)
         var row = await db.Users.SingleAsync(u => u.Id == user.Id);
         row.SetupTokenHash = Hash(raw);
         row.SetupStartedUtc = DateTime.UtcNow;
-        AuditLog.Add(db, AuditEvents.SetupStarted, row, row, $"Started setting up an authenticator ({how}); it has an hour, in this browser");
+        AuditLog.Add(db, AuditEvents.SetupStarted, row, row, $"Started registering a mobile ({how}); it has an hour, in this browser");
         await db.SaveChangesAsync();
         return raw;
     }
@@ -42,7 +42,7 @@ public sealed class AccountSetup(KpiDbContext db, UserManager<KpiUser> users)
                && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(hash), Encoding.ASCII.GetBytes(Hash(raw)));
     }
 
-    /// <summary>The authenticator is verified: the window closes, any re-enrolment link dies, and an invited
+    /// <summary>The mobile is confirmed: the window closes, any re-enrolment link dies, and an invited
     /// account becomes an active one.</summary>
     public async Task FinishAsync(string userId)
     {
@@ -74,7 +74,7 @@ public sealed class AccountSetup(KpiDbContext db, UserManager<KpiUser> users)
             else await users.UpdateSecurityStampAsync(row);
             AuditLog.Add(db, AuditEvents.SetupExpired, null, row, cleared
                 ? "Didn't finish setting up within the hour, so the password they chose was cleared"
-                : "Didn't finish setting up their authenticator within the hour");
+                : "Didn't finish registering their mobile within the hour");
         }
         await db.SaveChangesAsync();
         return stale.Count;
@@ -105,7 +105,7 @@ public static class SetupCookie
 }
 
 /// <summary>
-/// The token behind an emailed account link (an invitation, "set up your authenticator again"): encrypted with this
+/// The token behind an emailed account link (an invitation, "register your mobile again"): encrypted with this
 /// site's key ring, holding when it was made, whose it is and its purpose - which carries the nonce on the person's
 /// row, so a new nonce (resend) or none (withdrawn, used) kills the link. Not tied to the security stamp, so choosing
 /// a password doesn't kill it.
@@ -159,9 +159,9 @@ public sealed class ExpireSetupsTask(IServiceScopeFactory scopes, ILogger<Expire
                 await using var scope = scopes.CreateAsyncScope();
                 var n = await new AccountSetup(scope.ServiceProvider.GetRequiredService<KpiDbContext>(),
                     scope.ServiceProvider.GetRequiredService<UserManager<KpiUser>>()).ExpireUnfinishedAsync();
-                if (n > 0) log.LogInformation("Closed {Count} unfinished authenticator setup(s)", n);
+                if (n > 0) log.LogInformation("Closed {Count} unfinished mobile registration(s)", n);
             }
-            catch (Exception ex) { log.LogError(ex, "Closing unfinished authenticator setups failed"); }
+            catch (Exception ex) { log.LogError(ex, "Closing unfinished mobile registrations failed"); }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 }

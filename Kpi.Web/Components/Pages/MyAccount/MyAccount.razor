@@ -69,15 +69,15 @@
             </section>
 
             <section class="acc-card">
-                <h2>New phone</h2>
+                <h2>Mobile number</h2>
                 <Kpi.Web.Components.Account.Messages Error="@(NewPhone == "wrong" ? "That password wasn't right." : null)" />
-                <p class="acc-text">Moving to a new phone? Enter your password and you'll set up your authenticator app on the new one
-                   straight away. You are signed out everywhere else, and the old phone's codes stop working.</p>
-                <p class="acc-hint">Lost your phone and can't sign in? Ask your System Admin to reset your authenticator.</p>
-                <form method="post" action="/account/authenticator/reset" class="acc-form">
+                <p class="acc-text">Changed your mobile number? Enter your password and you'll register the new number straight away
+                   - we text it a code to check it. You are signed out everywhere else.</p>
+                <p class="acc-hint">Lost your phone and can't sign in? Ask your System Admin to reset your mobile.</p>
+                <form method="post" action="/account/mobile/change" class="acc-form">
                     <AntiforgeryToken />
                     <Kpi.Web.Components.Account.PasswordInput Id="phone-password" Name="currentPassword" />
-                    <button type="submit" class="acc-btn-secondary" data-busy-text="Checking…">Set up a new phone</button>
+                    <button type="submit" class="acc-btn-secondary" data-busy-text="Checking…">Change my mobile number</button>
                 </form>
             </section>
         </div>

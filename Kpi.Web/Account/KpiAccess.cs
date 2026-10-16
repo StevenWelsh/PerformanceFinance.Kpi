@@ -11,14 +11,14 @@ namespace Kpi.Web.Account;
 
 // WHO MAY SEE WHAT, decided from the signed-in principal alone (no database per request), as DavidsonHR.
 //
-// TWO-FACTOR IS COMPULSORY. Until an authenticator is set up the account reaches nothing but the account screens:
+// TWO-FACTOR IS COMPULSORY. Until a mobile is registered the account reaches nothing but the account screens:
 // the gate redirects ordinary requests, and every policy below also requires it, which covers the live Blazor
 // connection the gate never sees.
 
 /// <summary>The claims the sign-in cookie carries beyond Identity's own.</summary>
 public static class KpiClaims
 {
-    public const string TwoFactor = "kpi:2fa";          // "on" once an authenticator is set up
+    public const string TwoFactor = "kpi:2fa";          // "on" once a mobile is registered for sign-in codes
     public const string Reports = "kpi:reports";        // "*" = every report, else the report slugs, comma separated
     public const string Name = "kpi:name";              // display name, for the avatar
 }
@@ -50,7 +50,7 @@ public static class KpiPolicies
     public const string BadDebt = "OBEnquiryBadDebt.View";
     public const string Exposure = "OBEnquiryExposure.View";
     public const string Settings = "Settings";
-    /// <summary>Signed in with an authenticator: My Account.</summary>
+    /// <summary>Signed in with the texted code: My Account.</summary>
     public const string SignedIn = "SignedIn";
 
     public static void Add(AuthorizationOptions o)
@@ -113,7 +113,7 @@ public sealed class ReportHandler : AuthorizationHandler<ReportRequirement>
 
 public static class AccountGate
 {
-    // What a half-signed-in person (password right, no authenticator yet) may still reach: the account screens,
+    // What a half-signed-in person (password right, no mobile registered yet) may still reach: the account screens,
     // the framework's plumbing and static assets, and the health checks (Azure pings them signed out). Everything else
     // is redirected - and refused by the policies.
     private static readonly string[] Open = { "/account", "/_blazor", "/_framework", "/_content", "/css", "/js", "/lib", "/img", "/favicon", "/Error", "/health" };
@@ -150,7 +150,7 @@ public static class AccountGate
 
             if (!IsOpen(path) && user.FindFirstValue(KpiClaims.TwoFactor) != "on")
             {
-                context.Response.Redirect("/account/authenticator");
+                context.Response.Redirect("/account/mobile");
                 return;
             }
             await next();

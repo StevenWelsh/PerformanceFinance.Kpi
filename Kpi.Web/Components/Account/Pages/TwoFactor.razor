@@ -1,29 +1,60 @@
 @page "/account/two-factor"
 @layout EmptyLayout
+@using Kpi.Data.Auth
+@using Kpi.Web.Integrations
+@using Microsoft.AspNetCore.Identity
+@inject SignInManager<KpiUser> SignIn
 
-<PageTitle>Authenticator code — Performance Finance KPIs</PageTitle>
+<PageTitle>Your code — Performance Finance KPIs</PageTitle>
 
-<AuthCard Title="Authenticator code">
-    <Messages Error="@(Error is null ? null : "That code wasn't recognised. Codes change every 30 seconds - try the one showing now.")" />
-    <p class="acc-text">Open your authenticator app and enter the six-digit code for Performance Finance KPIs.</p>
+@* The second step of signing in: the code texted to their mobile (AccountEndpoints sent it). Only the last four digits
+   of the number are shown, and only after the right password. *@
+<AuthCard Title="Your code">
+    <Messages Error="@ErrorText" Notice="@(Resent is null ? null : "A new code is on its way.")" />
+    @if (SendFailed is null)
+    {
+        <p class="acc-text">We've texted a six-digit code to your mobile@(_lastFour is null ? "" : $" ending {_lastFour}"). Type it below.</p>
+    }
 
     <form method="post" action="/account/two-factor">
         <AntiforgeryToken />
         <input type="hidden" name="returnUrl" value="@ReturnUrl" />
         <input type="hidden" name="rememberMe" value="@(RememberMe == "true" ? "true" : "false")" />
 
-        <label class="login-label" for="code">Code</label>
+        <label class="login-label" for="code">Code from the text</label>
         <input id="code" name="code" class="acc-code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" autofocus required />
 
         <label class="acc-check"><input type="checkbox" name="rememberDevice" value="true" /> Don't ask again on this device for 30 days</label>
 
         <button type="submit" class="login-button" data-busy-text="Verifying…">Sign in</button>
-        <a class="acc-link" href="/account/login">Back to sign in</a>
     </form>
+    <form method="post" action="/account/two-factor/resend">
+        <AntiforgeryToken />
+        <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+        <input type="hidden" name="rememberMe" value="@(RememberMe == "true" ? "true" : "false")" />
+        <button type="submit" class="acc-link acc-link-btn" data-busy-text="Sending…">Text me a new code</button>
+    </form>
+    <a class="acc-link" href="/account/login">Back to sign in</a>
 </AuthCard>
 
 @code {
     [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
     [SupplyParameterFromQuery] public string? RememberMe { get; set; }
     [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+    [SupplyParameterFromQuery(Name = "sendfailed")] public string? SendFailed { get; set; }
+    [SupplyParameterFromQuery(Name = "resent")] public string? Resent { get; set; }
+
+    private string? _lastFour;
+
+    private string? ErrorText =>
+        SendFailed is not null ? "We couldn't text you a code just now. Try \"Text me a new code\" in a minute."
+        : Error == "check" ? "The code couldn't be checked just now. Try again in a minute."
+        : Error is not null ? "That code wasn't right. Check the text, or ask for a new code."
+        : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = await SignIn.GetTwoFactorAuthenticationUserAsync();
+        if (user?.PhoneNumber is { Length: > 0 } p) _lastFour = UkMobile.LastFour(p);
+    }
 }

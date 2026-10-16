@@ -47,7 +47,7 @@ public sealed class UserAdmin(IServiceScopeFactory scopes, Mailer mailer, Accoun
         if (u.ActivatedUtc is null)
             return u.InviteExpiresUtc is { } exp && exp < now ? "Invite expired"
                  : u.SetupStartedUtc is not null ? "Setting up" : "Invited";
-        return u.TwoFactorEnabled ? "Active" : "Authenticator reset";
+        return u.TwoFactorEnabled ? "Active" : "Mobile reset";
     }
 
     public async Task<LinkResult> InviteAsync(ClaimsPrincipal caller, string name, string email, string role,
@@ -163,26 +163,49 @@ public sealed class UserAdmin(IServiceScopeFactory scopes, Mailer mailer, Accoun
         await s.Db.SaveChangesAsync();
     }
 
-    /// <summary>A lost or new phone: their authenticator is cleared and they are emailed a link (a day) to set it
-    /// up again with their password. Check who is asking before doing this - it is the one way round two-factor.</summary>
+    /// <summary>
+    /// Removes an account for good (Steve, Oct 2026). It is DISABLED first - locked, every session ended within a minute -
+    /// and then deleted with its role, tokens and favourites. The audit trail keeps their name and everything they did
+    /// (entries hold names, not links). Never your own account; never the last System Admin.
+    /// </summary>
+    public async Task DeleteAsync(ClaimsPrincipal caller, string userId)
+    {
+        await using var s = await BeginAsync(caller);
+        var user = await Find(s, userId);
+        if (user.Id == s.Actor.Id) throw new InvalidOperationException("You can't delete your own account.");
+        if ((await s.Users.GetRolesAsync(user)).Contains(KpiRoles.SystemAdmin)) await KeepOneSystemAdmin(s, user);
+
+        user.DisabledUtc = DateTime.UtcNow;
+        user.DisabledByUserId = s.Actor.Id;
+        Check(await s.Users.UpdateAsync(user));
+        await s.Users.SetLockoutEndDateAsync(user, DateTimeOffset.MaxValue);
+        await s.Users.UpdateSecurityStampAsync(user);
+        AuditLog.Add(s.Db, AuditEvents.UserDeleted, s.Actor, user, $"Deleted ({user.Email}): disabled, every session ended, and the account removed");
+        await s.Db.SaveChangesAsync();
+        Check(await s.Users.DeleteAsync(user));
+    }
+
+    /// <summary>A lost phone or new number: their registered mobile stops receiving sign-in codes and they are emailed a
+    /// link (a day) to register one again with their password. Check who is asking first - it is the one way round
+    /// two-factor.</summary>
     public async Task<LinkResult> ResetTwoFactorAsync(ClaimsPrincipal caller, string userId, string howChecked, string baseUrl)
     {
         if (string.IsNullOrWhiteSpace(howChecked)) throw new InvalidOperationException("Say how you checked it was them.");
         await using var s = await BeginAsync(caller);
         var user = await Find(s, userId);
-        if (user.Id == s.Actor.Id) throw new InvalidOperationException("Use My Account to move to a new phone.");
+        if (user.Id == s.Actor.Id) throw new InvalidOperationException("Use My Account to change your own mobile.");
         if (user.ActivatedUtc is null) throw new InvalidOperationException("They haven't set one up yet: send the invitation again instead.");
 
         await s.Users.SetTwoFactorEnabledAsync(user, false);
-        await s.Users.ResetAuthenticatorKeyAsync(user);
+        user.PhoneNumberConfirmed = false;
         user.ReenrolNonce = AccountLinks.NewNonce();
         user.ReenrolExpiresUtc = DateTime.UtcNow + AccountLinks.ReenrolLifespan;
         Check(await s.Users.UpdateAsync(user));
         await s.Users.UpdateSecurityStampAsync(user);
-        AuditLog.Add(s.Db, AuditEvents.AuthenticatorReset, s.Actor, user, $"Authenticator reset; identity checked by: {howChecked.Trim()}");
+        AuditLog.Add(s.Db, AuditEvents.AuthenticatorReset, s.Actor, user, $"Mobile reset; identity checked by: {howChecked.Trim()}");
         await s.Db.SaveChangesAsync();
 
-        var link = $"{baseUrl}account/setup-authenticator?userId={Uri.EscapeDataString(user.Id)}&code={links.Make(user.Id, ReenrolPurpose, user.ReenrolNonce)}";
+        var link = $"{baseUrl}account/setup-mobile?userId={Uri.EscapeDataString(user.Id)}&code={links.Make(user.Id, ReenrolPurpose, user.ReenrolNonce)}";
         return new LinkResult(await mailer.ReenrolAsync(user.Email!, user.DisplayName, link), link);
     }
 

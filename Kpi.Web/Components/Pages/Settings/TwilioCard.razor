@@ -1,0 +1,214 @@
+@using Kpi.Data.Cfg
+@using Kpi.Web.Integrations
+@inject IntegrationStore Store
+@inject TwilioConnection Twilio
+@inject IServiceScopeFactory Scopes
+
+@* The Twilio card (Settings > Integrations), DavidsonHR's TwilioCard: the sign-in's text codes through Twilio Verify.
+   Connect is two steps - what to do in Twilio, then the three values, checked with Twilio before they're saved. The Auth
+   Token is encrypted on the server and never shown back: a blank box keeps the saved one. The test number receives every
+   code while testing; outside the live site nothing is sent without one. Until Twilio is connected, codes go to the
+   site's log on a developer's machine (and, on a brand-new database, for the seeded first account only). *@
+
+<div class="intg-card">
+    <div class="intg-head">
+        <span class="intg-name intg-twilio"><img src="img/twilio-mark.svg" alt="" aria-hidden="true" />twilio</span>
+        <IntegrationPlug Row="_row" />
+    </div>
+    <p class="intg-desc">Texts the six-digit code people sign in with to their mobile.</p>
+    <IntegrationButton Row="_row" ConnectText="Connect Twilio" OnClick="Open" />
+</div>
+
+@if (_open && _row is not null)
+{
+    <div class="set-backdrop" @onclick="() => _open = false"></div>
+    <div class="set-dialog set-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="twilio-title">
+        <h3 id="twilio-title">@(_step == 0 ? "Twilio" : "Connect Twilio")</h3>
+        @if (_message is not null)
+        {
+            <div class="@(_messageOk ? "login-notice" : "login-error")" role="status">
+                <i class="bi @(_messageOk ? "bi-check-circle" : "bi-exclamation-triangle-fill")"></i> @_message
+            </div>
+        }
+
+        @if (_step == 0)
+        {
+            <dl class="acc-facts">
+                <dt>Texts say</dt><dd>@(_settings?.VerifyServiceName ?? "-")</dd>
+                <dt>Account SID</dt><dd>@Hint(_settings?.AccountSid)</dd>
+                <dt>Service SID</dt><dd>@Hint(_settings?.VerifyServiceSid)</dd>
+                <dt>Auth Token</dt><dd>@(_settings?.TokenHint ?? "-")</dd>
+                <dt>Test number</dt><dd>@(_row.RedirectTo is { } t ? UkMobile.Display(t) : "None - codes go to people's own mobiles")</dd>
+                <dt>Sending</dt><dd>@(_row.Enabled ? "On" : "Switched off")</dd>
+                <dt>Last worked</dt><dd>@Kpi.Web.Data.UkTime.Show(_row.LastOkUtc)</dd>
+                @if (_row.LastErrorUtc is not null && (_row.LastOkUtc is null || _row.LastErrorUtc > _row.LastOkUtc))
+                {
+                    <dt>Last problem</dt><dd class="set-bad">@Kpi.Web.Data.UkTime.Show(_row.LastErrorUtc): @_row.LastError</dd>
+                }
+            </dl>
+            <div class="set-buttons">
+                <button type="button" class="acc-btn" @onclick="() => StartEdit(2)">Change</button>
+                <button type="button" class="acc-btn-secondary" disabled="@_busy" @onclick="SendTest">Text me a test code</button>
+                <button type="button" class="acc-btn-secondary set-act-danger" @onclick="() => _confirmDisconnect = true">Disconnect</button>
+            </div>
+            @if (_confirmDisconnect)
+            {
+                <div class="set-confirm">
+                    <p>Disconnect Twilio? The saved token is deleted and nobody can be texted a sign-in code - so nobody can sign in
+                       - until it is connected again.</p>
+                    <button type="button" class="acc-btn-secondary" @onclick="() => _confirmDisconnect = false">Cancel</button>
+                    <button type="button" class="acc-btn" @onclick="Disconnect">Disconnect</button>
+                </div>
+            }
+        }
+        else
+        {
+            <ol class="intg-steps">
+                <li class="@(_step == 1 ? "on" : "done")"><span>1</span> Set up in Twilio</li>
+                <li class="@(_step == 2 ? "on" : "")"><span>2</span> Details</li>
+            </ol>
+            @if (_step == 1)
+            {
+                <p class="acc-text">Once, in the <a href="https://console.twilio.com/" target="_blank" rel="noopener">Twilio console <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i></a>:</p>
+                <ol class="intg-howto">
+                    <li><b>Sign up or sign in</b>, and upgrade from the trial account (a trial only texts numbers you have verified).</li>
+                    <li><b>Verify → Services → Create new</b>. The <b>friendly name</b> is what each text says it is from - e.g.
+                        <b>Performance Finance</b>. Code length 6.</li>
+                    <li>Copy the service's <b>SID</b> (starts VA).</li>
+                    <li>From the console's home page copy the <b>Account SID</b> (starts AC) and the <b>Auth Token</b>.</li>
+                </ol>
+            }
+            else
+            {
+                <label class="login-label" for="t-sid">Account SID</label>
+                <input id="t-sid" @bind="_accountSid" spellcheck="false" autocomplete="off" data-lpignore="true" data-1p-ignore placeholder="AC…" />
+                <label class="login-label" for="t-token">Auth Token</label>
+                <input id="t-token" type="password" @bind="_authToken" spellcheck="false" autocomplete="new-password" data-lpignore="true" data-1p-ignore
+                       placeholder="@(_settings is null ? "" : "Leave blank to keep the saved token")" />
+                <label class="login-label" for="t-service">Verify Service SID</label>
+                <input id="t-service" @bind="_serviceSid" spellcheck="false" autocomplete="off" placeholder="VA…" />
+                <label class="login-label" for="t-test">Test number</label>
+                <input id="t-test" type="tel" @bind="_testNumber" placeholder="While testing, every code goes to this mobile instead" />
+                <label class="acc-check"><input type="checkbox" @bind="_enabled" /> Send texts</label>
+            }
+        }
+
+        <div class="set-dialog-buttons">
+            @if (_step == 0)
+            {
+                <button type="button" class="acc-btn-secondary" @onclick="() => _open = false">Close</button>
+            }
+            else if (_step == 1)
+            {
+                <button type="button" class="acc-btn-secondary" @onclick="() => _open = false">Cancel</button>
+                <button type="button" class="acc-btn" @onclick="() => _step = 2">I've done this - next</button>
+            }
+            else
+            {
+                <button type="button" class="acc-btn-secondary" @onclick="Back">Back</button>
+                <button type="button" class="acc-btn" disabled="@_busy" @onclick="Save">@(_busy ? "Checking…" : "Save & check")</button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private Integration? _row;
+    private TwilioSettings? _settings;
+    private bool _open, _busy, _confirmDisconnect, _messageOk;
+    private int _step;   // 0 the details, 1 what to do in Twilio, 2 the values
+    private string? _message;
+    private string _accountSid = "", _authToken = "", _serviceSid = "", _testNumber = "";
+    private bool _enabled = true;
+
+    // the first and last few characters - enough to tell SIDs apart
+    private static string Hint(string? sid) => sid is { Length: > 10 } s ? $"{s[..6]}…{s[^4..]}" : sid ?? "-";
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _row = await Store.GetAsync(IntegrationProviders.Twilio);
+        _settings = IntegrationStore.ReadSettings<TwilioSettings>(_row);
+    }
+
+    private void Open()
+    {
+        _message = null; _confirmDisconnect = false;
+        if (_row?.Status == IntegrationStatus.NotConnected) StartEdit(1); else _step = 0;
+        _open = true;
+    }
+
+    private void StartEdit(int step)
+    {
+        _accountSid = _settings?.AccountSid ?? "";
+        _serviceSid = _settings?.VerifyServiceSid ?? "";
+        _authToken = "";
+        _testNumber = _row?.RedirectTo is { } t ? UkMobile.Display(t) : "";
+        _enabled = _row?.Status == IntegrationStatus.NotConnected || (_row?.Enabled ?? true);
+        _message = null;
+        _step = step;
+    }
+
+    private void Back()
+    {
+        _message = null;
+        if (_row?.Status == IntegrationStatus.NotConnected) _step = 1; else _step = 0;
+    }
+
+    // Twilio is asked first: the three values are saved only once they have worked
+    private async Task Save()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            var sid = _accountSid.Trim();
+            var service = _serviceSid.Trim();
+            var problem = TwilioConnection.ShapeProblem(sid, _authToken, service, tokenSaved: _row?.SecretsCipher is not null);
+            if (problem is not null) { Say(false, problem); return; }
+            string? test = null;
+            if (!string.IsNullOrWhiteSpace(_testNumber))
+                test = UkMobile.Normalise(_testNumber) ?? throw new InvalidOperationException("The test number must be a UK mobile.");
+            var token = string.IsNullOrWhiteSpace(_authToken) ? Store.ReadSecrets<TwilioSecrets>(_row!)?.AuthToken ?? "" : _authToken.Trim();
+
+            var name = await TwilioConnection.FetchServiceNameAsync(sid, token, service);
+            await Store.SaveTwilioAsync(await SettingsActor.GetAsync(AuthState, Scopes), sid, _authToken, service, name, test, _enabled);
+            _authToken = "";
+            await Load();
+            _step = 0;
+            Say(true, $"Twilio answered: texts will say they're from \"{name}\".");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IntegrationSecretsUnreadableException) { Say(false, ex.Message); }
+        finally { _busy = false; }
+    }
+
+    // to the System Admin's own registered mobile (or the test number)
+    private async Task SendTest()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            var me = await SettingsActor.GetAsync(AuthState, Scopes);
+            if (string.IsNullOrEmpty(me.PhoneNumber) || !me.PhoneNumberConfirmed)
+                throw new InvalidOperationException("You haven't a registered mobile to text yet.");
+            var outcome = await Twilio.SendCodeAsync(me.PhoneNumber);
+            Say(true, outcome.Redirected
+                ? $"Sent - to the test number, {UkMobile.Display(outcome.DeliveredTo)}. (It's a real sign-in code; nothing needs doing with it.)"
+                : $"Sent to your mobile ending {UkMobile.LastFour(outcome.DeliveredTo)}. (It's a real sign-in code; nothing needs doing with it.)");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or IntegrationSecretsUnreadableException) { Say(false, ex.Message); }
+        finally { _busy = false; await Load(); }
+    }
+
+    private async Task Disconnect()
+    {
+        await Store.DisconnectAsync(IntegrationProviders.Twilio, await SettingsActor.GetAsync(AuthState, Scopes));
+        _confirmDisconnect = false;
+        _open = false;
+        await Load();
+    }
+
+    private void Say(bool ok, string message) { _messageOk = ok; _message = message; }
+}

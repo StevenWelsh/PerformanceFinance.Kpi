@@ -31,7 +31,24 @@ public sealed class IntegrationStore(IDbContextFactory<KpiDbContext> dbs, IDataP
     public async Task<Integration> GetAsync(string provider)
     {
         await using var db = await dbs.CreateDbContextAsync();
+        return await db.Integrations.AsNoTracking().SingleOrDefaultAsync(i => i.Provider == provider)
+               ?? await AddRowAsync(db, provider);
+    }
+
+    // A provider added after the database was made (Twilio) gets its empty row on first use - kpi_site may insert one.
+    private static async Task<Integration> AddRowAsync(KpiDbContext db, string provider)
+    {
+        var row = new Integration { Provider = provider, Enabled = false, Status = IntegrationStatus.NotConnected };
+        db.Integrations.Add(row);
+        try { await db.SaveChangesAsync(); }
+        catch (DbUpdateException) { db.ChangeTracker.Clear(); }   // someone else made it a moment ago
         return await db.Integrations.AsNoTracking().SingleAsync(i => i.Provider == provider);
+    }
+
+    private static async Task<Integration> TrackedAsync(KpiDbContext db, string provider)
+    {
+        if (!await db.Integrations.AnyAsync(i => i.Provider == provider)) await AddRowAsync(db, provider);
+        return await db.Integrations.SingleAsync(i => i.Provider == provider);
     }
 
     public static T? ReadSettings<T>(Integration row) =>
@@ -49,7 +66,7 @@ public sealed class IntegrationStore(IDbContextFactory<KpiDbContext> dbs, IDataP
                                       string? redirectTo, bool enabled)
     {
         await using var db = await dbs.CreateDbContextAsync();
-        var row = await db.Integrations.SingleAsync(i => i.Provider == IntegrationProviders.Resend);
+        var row = await TrackedAsync(db, IntegrationProviders.Resend);
         var hint = ReadSettings<ResendSettings>(row)?.KeyHint ?? "";
         var changes = new List<string>();
 
@@ -87,14 +104,58 @@ public sealed class IntegrationStore(IDbContextFactory<KpiDbContext> dbs, IDataP
         await db.SaveChangesAsync();
     }
 
+    /// <summary>Saves Twilio's details - already checked with Twilio by the caller - and, when one is given, a new token.</summary>
+    public async Task SaveTwilioAsync(KpiUser actor, string accountSid, string? newAuthToken, string verifyServiceSid,
+                                      string serviceName, string? testNumber, bool enabled)
+    {
+        await using var db = await dbs.CreateDbContextAsync();
+        var row = await TrackedAsync(db, IntegrationProviders.Twilio);
+        var hint = ReadSettings<TwilioSettings>(row)?.TokenHint ?? "";
+        var changes = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(newAuthToken))
+        {
+            var token = newAuthToken.Trim();
+            row.SecretsCipher = _secrets.Protect(JsonSerializer.Serialize(new TwilioSecrets(token)));
+            row.SecretsUpdatedUtc = DateTime.UtcNow;
+            hint = $"{token[..4]}…{token[^4..]}";
+            changes.Add("a new auth token");
+        }
+        if (row.SecretsCipher is null) throw new InvalidOperationException("Enter the Auth Token.");
+
+        var settings = new TwilioSettings(accountSid, verifyServiceSid, serviceName, hint);
+        if (row.SettingsJson != JsonSerializer.Serialize(settings)) changes.Add($"Verify service \"{serviceName}\"");
+        row.SettingsJson = JsonSerializer.Serialize(settings);
+
+        if (testNumber != row.RedirectTo) changes.Add(testNumber is null ? "test number cleared" : $"test number ending {UkMobile.LastFour(testNumber)}");
+        row.RedirectTo = testNumber;
+
+        if (enabled != row.Enabled) changes.Add(enabled ? "enabled" : "disabled");
+        row.Enabled = enabled;
+
+        if (row.Status != IntegrationStatus.Connected)
+        {
+            row.Status = IntegrationStatus.Connected;
+            row.ConnectedByUserId = actor.Id;
+            row.ConnectedUtc = DateTime.UtcNow;
+        }
+        row.LastOkUtc = DateTime.UtcNow;   // Twilio has just answered
+        row.UpdatedByUserId = actor.Id;
+        row.UpdatedUtc = DateTime.UtcNow;
+        AuditLog.Add(db, AuditEvents.IntegrationChanged, actor, null,
+            $"Twilio saved{(changes.Count > 0 ? ": " + string.Join(", ", changes) : "")}");
+        await db.SaveChangesAsync();
+    }
+
     public async Task DisconnectAsync(string provider, KpiUser actor)
     {
         await using var db = await dbs.CreateDbContextAsync();
-        var row = await db.Integrations.SingleAsync(i => i.Provider == provider);
+        var row = await TrackedAsync(db, provider);
         row.SecretsCipher = null;
         row.SettingsJson = null;
         row.SecretsUpdatedUtc = null;
         row.Enabled = false;
+        row.RedirectTo = null;
         row.Status = IntegrationStatus.NotConnected;
         row.UpdatedByUserId = actor.Id;
         row.UpdatedUtc = DateTime.UtcNow;
@@ -106,7 +167,7 @@ public sealed class IntegrationStore(IDbContextFactory<KpiDbContext> dbs, IDataP
     public async Task RecordCallAsync(string provider, string? error)
     {
         await using var db = await dbs.CreateDbContextAsync();
-        var row = await db.Integrations.SingleAsync(i => i.Provider == provider);
+        var row = await TrackedAsync(db, provider);
         if (error is null) row.LastOkUtc = DateTime.UtcNow;
         else
         {

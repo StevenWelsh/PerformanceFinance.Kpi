@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 // The KPI database's command line. Run by a person, never by an app:
 //   dotnet run --project Kpi.Tools -- migrate [--azure]           apply CMS_KPI's migrations
 //   dotnet run --project Kpi.Tools -- seed --email <a> --name "<n>" [--azure]   the first System Admin of a new database
+//   dotnet run --project Kpi.Tools -- reset-sign-in --email <a> [--azure]   back to first sign-in: register a mobile
 //   dotnet run --project Kpi.Tools -- grant-site --app <name> --app-id <guid> [--azure]
 //                                                                 let a web app's managed identity in, as kpi_site
 //   dotnet run --project Kpi.Tools -- compare [report]            every report (or those whose name contains [report]): as
@@ -33,6 +34,7 @@ try
         "migrate" => await Migrate(),
         "seed" => RemoteAllowed(Required(kpiName)) ? await Kpi.Tools.Seed.RunAsync(Required(kpiName), args.Append("--remote").ToArray()) : 1,
         "grant-site" => await GrantSite(),
+        "reset-sign-in" => RemoteAllowed(Required(kpiName)) ? await Kpi.Tools.ResetSignIn.RunAsync(Required(kpiName), args) : 1,
         "compare" => await Kpi.Tools.Compare.RunAsync(Required("Cms"), Required("CmsKpi"), config["CmsRepo"], args.ElementAtOrDefault(1)),
         _ => Usage()
     };
@@ -106,6 +108,6 @@ string Required(string name) =>
 
 static int Usage()
 {
-    Console.WriteLine("Kpi.Tools  migrate [--azure] | seed --email <a> --name \"<n>\" [--azure] | grant-site --app <name> --app-id <guid> [--azure] | compare [report]");
+    Console.WriteLine("Kpi.Tools  migrate [--azure] | seed --email <a> --name \"<n>\" [--azure] | reset-sign-in --email <a> [--azure] | grant-site --app <name> --app-id <guid> [--azure] | compare [report]");
     return 1;
 }

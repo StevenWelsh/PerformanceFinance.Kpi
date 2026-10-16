@@ -1,0 +1,19 @@
+@using Kpi.Data.Cfg
+
+@* A card's state at a glance, as DavidsonHR: a plug - green connected, amber needing attention, grey not connected. *@
+@if (Row?.Status == IntegrationStatus.Connected)
+{
+    <i class="bi bi-plug-fill intg-plug on" title="Connected" aria-label="Connected"></i>
+}
+else if (Row?.Status == IntegrationStatus.NeedsAttention)
+{
+    <i class="bi bi-exclamation-triangle-fill intg-plug warn" title="Needs attention" aria-label="Needs attention"></i>
+}
+else
+{
+    <i class="bi bi-plug intg-plug" title="Not connected" aria-label="Not connected"></i>
+}
+
+@code {
+    [Parameter] public Integration? Row { get; set; }
+}
