@@ -291,6 +291,9 @@ namespace Kpi.Data.Migrations
                     b.Property<DateTime>("CreatedUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("KeyCipher")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<byte[]>("KeyHash")
                         .IsRequired()
                         .HasMaxLength(32)

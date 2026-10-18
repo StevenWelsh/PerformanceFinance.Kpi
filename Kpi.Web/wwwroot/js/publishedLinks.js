@@ -1,5 +1,5 @@
 // Settings > Published links: the address this browser reaches the site from (for the allowed list), and copying a
-// new link's URL - shown once - to the clipboard.
+// link's URL to the clipboard.
 export async function myAddress() {
     try {
         const r = await fetch("/settings/my-address", { cache: "no-store", credentials: "same-origin" });

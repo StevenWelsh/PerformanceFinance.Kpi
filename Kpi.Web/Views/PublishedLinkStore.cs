@@ -7,6 +7,7 @@ using Kpi.Data;
 using Kpi.Data.Auth;
 using Kpi.Data.Cfg;
 using Kpi.Web.Account;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kpi.Web.Views;
@@ -19,12 +20,15 @@ public sealed record PublishedLinkRow(PublishedLink Link, string? CreatedBy, str
 
 /// <summary>
 /// Published links (Oct 2026, Steve - to replace the Klipfolio dashboards in CMS's KPI tabs): one report, opened at
-/// /view/{key} without signing in. The key is 32 random bytes; only its SHA-256 hash is kept, so the full URL is shown
-/// once, when the link is made. Optionally only from the allowed addresses (empty = any address - the key alone).
+/// /view/{key} without signing in. The key is 32 random bytes; a link is found by its SHA-256 hash, and the key is kept
+/// encrypted (Data Protection) so Settings can show the URL again. Optionally only from the allowed addresses (empty =
+/// any address - the key alone).
 /// A System Admin makes and revokes them in Settings > Published links.
 /// </summary>
-public sealed class PublishedLinkStore(IDbContextFactory<KpiDbContext> dbs)
+public sealed class PublishedLinkStore(IDbContextFactory<KpiDbContext> dbs, IDataProtectionProvider protection)
 {
+    private readonly IDataProtector _keys = protection.CreateProtector("Kpi.Web.PublishedLinks.Key.v1");
+
     public const string SettingsProvider = "PublishedLinks";
 
     // a refused open is audited at most once an hour per link (or unknown key) and address
@@ -56,7 +60,7 @@ public sealed class PublishedLinkStore(IDbContextFactory<KpiDbContext> dbs)
             l.RevokedByUserId is { } r && names.TryGetValue(r, out var rn) ? rn : null)).ToList();
     }
 
-    /// <summary>Makes a link; the key is returned this once and never kept.</summary>
+    /// <summary>Makes a link and returns its key.</summary>
     public async Task<string> CreateAsync(KpiUser actor, string label, string reportSlug)
     {
         label = label.Trim();
@@ -70,12 +74,20 @@ public sealed class PublishedLinkStore(IDbContextFactory<KpiDbContext> dbs)
         await using var db = await dbs.CreateDbContextAsync();
         db.PublishedLinks.Add(new PublishedLink
         {
-            Label = label, ReportSlug = report.Slug, KeyHash = Hash(key), KeyHint = key[..6],
+            Label = label, ReportSlug = report.Slug, KeyHash = Hash(key), KeyCipher = _keys.Protect(key), KeyHint = key[..6],
             CreatedUtc = DateTime.UtcNow, CreatedByUserId = actor.Id
         });
         AuditLog.Add(db, AuditEvents.PublishedLinkChanged, actor, null, $"Published link made: \"{label}\" ({report.Label}), key {key[..6]}…");
         await db.SaveChangesAsync();
         return key;
+    }
+
+    /// <summary>A link's key, for its URL; null when it can't be read (the site's key ring changed - make it again).</summary>
+    public string? KeyOf(PublishedLink link)
+    {
+        if (string.IsNullOrEmpty(link.KeyCipher)) return null;
+        try { return _keys.Unprotect(link.KeyCipher); }
+        catch (CryptographicException) { return null; }
     }
 
     public async Task RevokeAsync(KpiUser actor, int id)

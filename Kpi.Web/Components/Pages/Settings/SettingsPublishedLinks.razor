@@ -10,8 +10,8 @@
 @inject KpiScripts Scripts
 
 @* Settings > Published links (Oct 2026, Steve): one report opened by URL without signing in - for CMS's KPI tabs,
-   replacing Klipfolio's published dashboards. The full URL is shown ONCE, when the link is made (only a hash of its
-   key is kept); a lost one is revoked and made again. The allowed addresses limit where links open from: CMS runs
+   replacing Klipfolio's published dashboards. Every active link's URL can be copied or opened here at any time (its key
+   is kept encrypted - Steve: not sensitive, and locked to the allowed addresses). The allowed addresses limit where links open from: CMS runs
    over the VPN, but a VPN that sends only office traffic through the office leaves people at home on their own
    address - so empty (any address) is a real choice, with the key the only protection. *@
 
@@ -80,10 +80,10 @@
     @if (_newUrl is not null)
     {
         <div class="pl-made" role="status">
-            <p><b>Copy this link now - it won't be shown again.</b> Paste it into CMS's Dashboards table for that tab.</p>
+            <p><b>Link made.</b> Paste it into CMS's Dashboards table for that tab. You can copy it again from the list below at any time.</p>
             <div class="pl-url">
                 <input readonly value="@_newUrl" aria-label="The new link" />
-                <button type="button" class="acc-btn" @onclick="CopyUrl">@(_copied ? "Copied" : "Copy")</button>
+                <button type="button" class="acc-btn" @onclick="() => Copy(_newUrl, -1)">@(_copiedId == -1 ? "Copied" : "Copy")</button>
                 <a class="acc-btn-secondary" href="@_newUrl" target="_blank" rel="noreferrer">Open</a>
                 <button type="button" class="acc-btn-secondary" @onclick="() => _newUrl = null">Done</button>
             </div>
@@ -128,6 +128,16 @@ else
                             }
                             else
                             {
+                                var url = UrlOf(l);
+                                if (url is null)
+                                {
+                                    <span class="set-sub" title="The site's key ring changed since it was made: revoke it and make another">Link can't be shown</span>
+                                }
+                                else
+                                {
+                                    <button type="button" class="acc-btn-secondary" @onclick="() => Copy(url, l.Id)">@(_copiedId == l.Id ? "Copied" : "Copy link")</button>
+                                    <a class="acc-btn-secondary" href="@url" target="_blank" rel="noreferrer">Open</a>
+                                }
                                 <button type="button" class="acc-btn-secondary set-act-danger" @onclick="() => _confirmRevoke = l.Id">Revoke</button>
                             }
                         </td>
@@ -147,7 +157,8 @@ else
     private string? _myAddress;
     private string _label = "", _slug = "";
     private string? _newUrl, _message;
-    private bool _busy, _copied, _messageOk;
+    private bool _busy, _messageOk;
+    private int? _copiedId;
     private int? _confirmRevoke;
     private IJSObjectReference? _module;
 
@@ -187,7 +198,7 @@ else
 
     private async Task Create()
     {
-        _busy = true; _message = null; _newUrl = null; _copied = false;
+        _busy = true; _message = null; _newUrl = null; _copiedId = null;
         try
         {
             var key = await Links.CreateAsync(await SettingsActor.GetAsync(AuthState, Scopes), _label, _slug);
@@ -199,9 +210,11 @@ else
         finally { _busy = false; }
     }
 
-    private async Task CopyUrl()
+    private string? UrlOf(PublishedLink link) => Links.KeyOf(link) is { } key ? $"{Nav.BaseUri}view/{key}" : null;
+
+    private async Task Copy(string? url, int id)
     {
-        if (_module is not null && _newUrl is not null) _copied = await _module.InvokeAsync<bool>("copy", _newUrl);
+        if (_module is not null && url is not null && await _module.InvokeAsync<bool>("copy", url)) _copiedId = id;
     }
 
     private async Task Revoke(int id)

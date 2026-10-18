@@ -184,9 +184,10 @@ the tables in full (25k paid leads).
   sent without one), Data sync, Audit. When an email can't be sent the invitation / reset link is shown to the System
   Admin to pass on.
 - **Published links (18 Oct 2026, Steve - to replace the Klipfolio dashboards in CMS's KPI tabs):** Settings > Published
-  links makes a link to ONE report, opened at `/view/{key}` without signing in. The key is 32 random bytes; only its
-  SHA-256 is kept (`Cfg.PublishedLink`, migration `PublishedLinks`), so the full URL is shown ONCE - lost = revoke and
-  make another. `PublishedLinkDoor` (before AccountGate; `/view` is on the gate's open list) checks the key and the
+  links makes a link to ONE report, opened at `/view/{key}` without signing in. The key is 32 random bytes; a link is
+  found by its SHA-256 (`Cfg.PublishedLink`, migrations `PublishedLinks`, `PublishedLinkUrls`) and the key is kept
+  ENCRYPTED (Data Protection), so Settings shows Copy link / Open on every active link (Steve: not sensitive, and locked
+  to the allowed addresses; a key ring change makes old URLs unshowable - they still open; remake them). `PublishedLinkDoor` (before AccountGate; `/view` is on the gate's open list) checks the key and the
   ALLOWED ADDRESSES (a `Cfg.Integration` row, provider `PublishedLinks`; EMPTY = any address - CMS's users at home
   come from their own address, the VPN carrying only office traffic), counts the open, sets no-store / no-referrer.
   `PublishedView` renders the report page as a plain component (its route, layout and [Authorize] don't apply) inside
