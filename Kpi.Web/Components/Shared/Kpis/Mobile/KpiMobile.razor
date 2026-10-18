@@ -142,6 +142,10 @@
     /// <summary>The KPI home: the phone shows the reports menu as the page itself.</summary>
     [Parameter] public bool MenuPage { get; set; }
 
+    /// <summary>Open the reports menu (the drawer) as the page arrives - the KPI site's phone home page (Oct 2026,
+    /// Steve: the full-page menu read as a different, oversized menu). Closing it shows the page beneath.</summary>
+    [Parameter] public bool MenuOpenAtStart { get; set; }
+
     private bool _menuOpen;
 
     private string HintText => Hint switch
@@ -159,6 +163,7 @@
 
     protected override void OnInitialized()
     {
+        _menuOpen = MenuOpenAtStart;
         RefreshStatus.Changed += OnRefreshStatus;
         Favourites.Changed += OnRefreshStatus;
     }

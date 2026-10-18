@@ -27,8 +27,15 @@
     </main>
 </div>
 
-@* On a phone the KPI home is the reports menu itself. *@
-<KpiMobile MenuPage="true" />
+@* On a phone: the usual bar and the usual reports menu, already open - closing it shows the phone version of the
+   message above. (CMS.Web's copy shows the menu as the whole page instead; changed here only, Oct 2026, Steve: it
+   read as a different, oversized menu.) *@
+<KpiMobile Title="KPIs" MenuOpenAtStart="true">
+    <div class="kpim-home">
+        <img src="img/pf-logo.png" alt="Performance Finance" class="kpim-home-logo" />
+        <p>@(_any ? "Choose a report from the menu." : "No reports have been made available to you yet. Ask your System Admin.")</p>
+    </div>
+</KpiMobile>
 
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }

@@ -410,6 +410,12 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .intg-howto { margin: 0 0 12px; padding-left: 20px; font-size: 13.5px; line-height: 1.5; color: var(--text-2); }
 .intg-howto li { margin-bottom: 6px; }
 
+/* The phone home page (KpiHome): the logo and "Choose a report from the menu." beneath the menu, which opens at once */
+.kpim-home { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+             padding: 48px 24px; text-align: center; color: var(--text-2); }
+.kpim-home-logo { width: 180px; height: auto; }
+.kpim-home p { margin: 0; font-size: 15px; }
+
 /* Published links (/view/{key}, Settings > Published links): ONE report as CMS's KPI tabs show it - no sidebar, no
    avatar menu, never the phone view, whatever the width. The report page is CMS.Web's copy, untouched: this wraps it. */
 .kpi-view .kpi-sidebar, .kpi-view .um, .kpi-view .kpim { display: none !important; }
