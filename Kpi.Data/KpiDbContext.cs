@@ -11,7 +11,7 @@ namespace Kpi.Data;
 /// <summary>
 /// The KPI database, CMS_KPI. The report figures are read through the Rpt procedures, never through EF, so the
 /// model maps only what the site itself owns: sign-in (ASP.NET Identity, as DavidsonHR, in the Auth schema), the
-/// audit trail and the integrations. Everything else is created by the migrations as SQL.
+/// audit trail, the integrations and the published links. Everything else is created by the migrations as SQL.
 /// </summary>
 public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options) : IdentityDbContext<KpiUser>(options)
 {
@@ -20,6 +20,7 @@ public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options) : Ident
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<Integration> Integrations => Set<Integration>();
+    public DbSet<PublishedLink> PublishedLinks => Set<PublishedLink>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -72,6 +73,19 @@ public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options) : Ident
             e.Property(i => i.LastError).HasMaxLength(1000);
             e.Property(i => i.UpdatedByUserId).HasMaxLength(450);
             e.Property(i => i.RowVersion).IsRowVersion();
+        });
+
+        modelBuilder.Entity<PublishedLink>(e =>
+        {
+            e.ToTable("PublishedLink", "Cfg");
+            e.Property(l => l.Label).HasMaxLength(200);
+            e.Property(l => l.ReportSlug).HasMaxLength(60).IsUnicode(false);
+            e.Property(l => l.KeyHash).HasMaxLength(32).IsFixedLength();
+            e.HasIndex(l => l.KeyHash).IsUnique();
+            e.Property(l => l.KeyHint).HasMaxLength(8).IsUnicode(false);
+            e.Property(l => l.CreatedByUserId).HasMaxLength(450);
+            e.Property(l => l.RevokedByUserId).HasMaxLength(450);
+            e.Property(l => l.LastUsedAddress).HasMaxLength(45).IsUnicode(false);
         });
     }
 

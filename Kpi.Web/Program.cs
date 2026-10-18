@@ -97,7 +97,8 @@ builder.Services.AddHostedService<Kpi.Web.Data.KpiPull>();          // the KPI c
 
 // ---- integrations: Resend for email ----------------------------------------------------------------------------
 builder.Services.AddSingleton<IntegrationStore>();
-builder.Services.AddSingleton<CmsSource>();            // where the KPI copy reads from (Settings > Integrations)
+builder.Services.AddSingleton<CmsSource>();
+builder.Services.AddSingleton<Kpi.Web.Views.PublishedLinkStore>();   // Settings > Published links, and their door            // where the KPI copy reads from (Settings > Integrations)
 builder.Services.AddSingleton<Mailer>();
 builder.Services.AddSingleton<TwilioConnection>();
 builder.Services.AddSingleton<TextCodes>();
@@ -141,6 +142,8 @@ app.Use(async (context, next) =>
 
 app.UseStaticFiles();
 app.UseAuthentication();
+// a published link (/view/{key}): its key and address are checked here, before the sign-in gate
+Kpi.Web.Views.PublishedLinkDoor.UsePublishedLinks(app);
 // before authorization: a half-set-up account is sent to finish setting up, not told "no access"
 app.UseAccountGate();
 app.UseAuthorization();
@@ -164,6 +167,10 @@ app.MapGet("/health/db", (KpiSessionFactory sessions, ILogger<Program> log) =>
     catch (Exception ex) { log.LogError(ex, "Health check: CMS_KPI could not be reached"); }
     return Results.Text("unavailable", statusCode: StatusCodes.Status503ServiceUnavailable);
 });
+// Settings > Published links shows the address the System Admin reaches the site from, for the allowed list
+app.MapGet("/settings/my-address", (HttpContext http) =>
+        Results.Text(Kpi.Web.Views.PublishedLinkStore.Normalise(http.Connection.RemoteIpAddress) ?? ""))
+    .RequireAuthorization(KpiPolicies.Settings);
 app.MapAccountEndpoints();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 

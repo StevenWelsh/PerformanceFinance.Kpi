@@ -183,6 +183,18 @@ the tables in full (25k paid leads).
   Protection, never shown back, blank keeps it; a TEST ADDRESS catches every email, and outside Production nothing is
   sent without one), Data sync, Audit. When an email can't be sent the invitation / reset link is shown to the System
   Admin to pass on.
+- **Published links (18 Oct 2026, Steve - to replace the Klipfolio dashboards in CMS's KPI tabs):** Settings > Published
+  links makes a link to ONE report, opened at `/view/{key}` without signing in. The key is 32 random bytes; only its
+  SHA-256 is kept (`Cfg.PublishedLink`, migration `PublishedLinks`), so the full URL is shown ONCE - lost = revoke and
+  make another. `PublishedLinkDoor` (before AccountGate; `/view` is on the gate's open list) checks the key and the
+  ALLOWED ADDRESSES (a `Cfg.Integration` row, provider `PublishedLinks`; EMPTY = any address - CMS's users at home
+  come from their own address, the VPN carrying only office traffic), counts the open, sets no-store / no-referrer.
+  `PublishedView` renders the report page as a plain component (its route, layout and [Authorize] don't apply) inside
+  `.kpi-view`, which account.css uses to hide the sidebar, avatar menu and phone view and keep the full layout at any
+  width - the copied report pages are UNTOUCHED. The key is re-checked every minute (a revoked link stops an open
+  tab). Made / revoked / addresses changed and refused opens (at most hourly per address) are audited. CMS's tab
+  control (`ucKlipfolioDashboard`) still runs Klipfolio's sign-in script after every load: it must skip that for a
+  row without a password before a tab is switched over (a CMS change, not made yet).
 - **The Home Screen app (Oct 2026, Steve):** `manifest.webmanifest` + the head tags in App.razor make the site installable,
   opening full screen with no address bar under the "PF KPIs" icon (`img/apple-touch-icon.png`, `kpi-icon-*`: the PF
   dots with KPI in red - the KPI marks it as this site, the dots may serve another app). `js/appInstall.js` offers it

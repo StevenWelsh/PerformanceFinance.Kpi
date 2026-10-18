@@ -33,7 +33,8 @@
                 {
                     case "integrations": <SettingsIntegrations />; break;
                     case "sync": <SettingsSync />; break;
-                    case "audit": <SettingsAudit />; break;
+                    case "links": <SettingsPublishedLinks />; break;
+        case "audit": <SettingsAudit />; break;
                     default: <SettingsUsers />; break;
                 }
             </section>
@@ -51,6 +52,7 @@
         new("users", "Users", "bi-people"),
         new("integrations", "Integrations", "bi-plug"),
         new("sync", "Data sync", "bi-arrow-repeat"),
+        new("links", "Published links", "bi-link-45deg"),
         new("audit", "Audit", "bi-journal-text")
     };
 

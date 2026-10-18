@@ -1,0 +1,61 @@
+@page "/view/{Key}"
+@layout Kpi.Web.Components.Layout.EmptyLayout
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@implements IDisposable
+@using Kpi.Web.Views
+@inject PublishedLinkStore Links
+
+@* A published link (Settings > Published links): ONE report, nobody signed in, as CMS's KPI tabs show it. The door
+   (PublishedLinkDoor) has already checked the key and the address before this page loaded. The report page itself is
+   rendered as an ordinary component - its own [Authorize] and layout apply only when it is opened by its route - inside
+   .kpi-view, which account.css uses to hide the sidebar, the avatar menu and the phone view and to keep the full
+   (desktop) layout at any width. The copied report pages are untouched. The key is checked again every minute, so a
+   revoked link stops a tab left open. *@
+
+@if (!_checked)
+{
+}
+else if (_page is null)
+{
+    <PageTitle>Not available</PageTitle>
+    <div class="kpi-view-gone"><p>This link isn't available.</p></div>
+}
+else
+{
+    <div class="kpi-view">
+        <DynamicComponent Type="_page" />
+    </div>
+}
+
+@code {
+    [Parameter] public string Key { get; set; } = "";
+
+    private Type? _page;
+    private bool _checked;
+    private Timer? _recheck;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _page = await PageAsync();
+        _checked = true;
+        _recheck ??= new Timer(_ => _ = InvokeAsync(RecheckAsync), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+    }
+
+    private async Task<Type?> PageAsync()
+    {
+        var link = await Links.FindActiveAsync(Key);
+        return link is null ? null : PublishedReports.PageFor(link.ReportSlug);
+    }
+
+    private async Task RecheckAsync()
+    {
+        if (_page is null) return;
+        try
+        {
+            if (await PageAsync() is null) { _page = null; StateHasChanged(); }
+        }
+        catch { /* the database didn't answer this time: keep showing, try again in a minute */ }
+    }
+
+    public void Dispose() => _recheck?.Dispose();
+}

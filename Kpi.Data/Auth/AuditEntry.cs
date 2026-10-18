@@ -42,4 +42,8 @@ public static class AuditEvents
     public const string IntegrationChanged = "IntegrationChanged";
     /// <summary>A System Admin ran a test query against the data source (Settings > Integrations); the text is recorded.</summary>
     public const string SourceQueried = "SourceQueried";
+    /// <summary>Published links (Settings > Published links): made, revoked, the allowed addresses changed, and a refused
+    /// open (wrong address, or a revoked or unknown key) - recorded at most once an hour per address.</summary>
+    public const string PublishedLinkChanged = "PublishedLinkChanged";
+    public const string PublishedLinkRefused = "PublishedLinkRefused";
 }

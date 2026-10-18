@@ -409,3 +409,21 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .intg-steps li.done span { background: var(--success-bg); color: var(--success); }
 .intg-howto { margin: 0 0 12px; padding-left: 20px; font-size: 13.5px; line-height: 1.5; color: var(--text-2); }
 .intg-howto li { margin-bottom: 6px; }
+
+/* Published links (/view/{key}, Settings > Published links): ONE report as CMS's KPI tabs show it - no sidebar, no
+   avatar menu, never the phone view, whatever the width. The report page is CMS.Web's copy, untouched: this wraps it. */
+.kpi-view .kpi-sidebar, .kpi-view .um, .kpi-view .kpim { display: none !important; }
+.kpi-view .kpi-shell { display: flex !important; }
+.kpi-view-gone { display: flex; align-items: center; justify-content: center; height: 90vh; color: var(--text-2); }
+
+/* Settings > Published links */
+.pl-card { margin-bottom: 14px; }
+.pl-addresses { width: 100%; max-width: 360px; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+.pl-warn { color: var(--warning, #8a5a00); margin: 8px 0 0; }
+.pl-new { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+@media (max-width: 700px) { .pl-new { grid-template-columns: 1fr; } }
+.pl-made { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-alt); }
+.pl-made p { margin: 0 0 8px; }
+.pl-url { display: flex; gap: 8px; flex-wrap: wrap; }
+.pl-url input { flex: 1 1 320px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.pl-revoked td { color: var(--text-3); }
