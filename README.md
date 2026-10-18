@@ -10,7 +10,7 @@ CMS (the desktop / web / hub solution); CMS's own KPI pages stay as they are unt
 | `Kpi.Copy` | The copy, shared: reads KPI_Export's copy tables, bulk-loads `Stage.*` in `CMS_KPI`, then runs `Stage.spPublish` (one transaction, so reports never see half a load). In production the site runs it every two minutes, copying only when the office has refreshed. |
 | `Kpi.Push` | The same copy from a developer's machine: refreshes the local KPI_Export first. `Frequent`, or `Nightly` to prepare Bad Debt and Exposure too. |
 | `Kpi.Web` | The site: CMS.Web's KPI pages (shell, every report, phone views, the cache and 10-minute refresh), copied, reading `CMS_KPI` through the `Rpt` procedures; sign-in (ASP.NET Identity + a compulsory texted code, invitation only), My Account and Settings. |
-| `Kpi.Copy/Export/KPI_Export.sql` | The `KPI_Export` database beside CMS (CMS_Live in production, CMS_Dev locally): views reading CMS through synonyms, the copy tables the site reads, and the SQL Server Agent jobs that refresh them. CMS itself is not changed. Versioned with `ExportVersion.cs`; apply it with `Kpi.Tools export-apply`. |
+| `Kpi.Copy/Export/KPI_Export.sql` | The `KPI_Export` database beside CMS (CMS_Live in production, CMS_Dev locally): the copy tables the site reads, copied by SQL Server Agent from the CMS database's `KpiExport` views (defined in the CMS repo, migration `mgKpiExport`). Versioned with `ExportVersion.cs`; apply it with `Kpi.Tools export-apply`. |
 
 ## First run on a developer machine
 

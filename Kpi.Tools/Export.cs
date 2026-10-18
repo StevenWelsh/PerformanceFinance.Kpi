@@ -7,8 +7,9 @@ namespace Kpi.Tools;
 
 // The KPI_Export database beside CMS (docs/kpi-copy-plan.html): the script is Kpi.Copy's
 // (Kpi.Copy/Export/KPI_Export.sql, embedded here), so the tool and the copy always agree on its version.
-//   export-apply --cms <CMS database>   create or bring KPI_Export up to date, its synonyms pointing at that database
-//   export-check                        read only: the version, every synonym's target, every view still runs
+//   export-apply --cms <CMS database>   create or bring KPI_Export up to date, copying from that database's KpiExport
+//                                       schema (the CMS repo's migration mgKpiExport must be applied there first)
+//   export-check                        read only: both versions, and every CMS KpiExport view still runs
 // ConnectionStrings:Export names the SERVER (any database on it; KPI_Export is used by name).
 public static partial class Export
 {
@@ -27,6 +28,12 @@ public static partial class Export
         if (scriptVersion != ExportVersion.Current)
             throw new InvalidOperationException(
                 $"The script says version {scriptVersion} but ExportVersion.Current is {ExportVersion.Current}: raise both together.");
+
+        // what the script expects of the CMS side must be what this code expects
+        var cmsVersion = CmsVersionLine().Match(script) is { Success: true } c ? int.Parse(c.Groups[1].Value) : 0;
+        if (cmsVersion != ExportVersion.Cms)
+            throw new InvalidOperationException(
+                $"The script expects CMS's KpiExport version {cmsVersion} but ExportVersion.Cms is {ExportVersion.Cms}: raise both together.");
 
         // the one line that names the CMS database
         const string line = "DECLARE @CmsDb sysname = N'CMS_Dev';";
@@ -67,26 +74,38 @@ public static partial class Export
         var problems = new List<string>();
 
         var version = await Scalar<int>(conn,
-            "IF OBJECT_ID(N'KpiExport.Version') IS NULL SELECT 0 ELSE SELECT ISNULL(MAX(Version), 0) FROM KpiExport.Version");
+            "IF OBJECT_ID(N'KpiCopy.Version') IS NULL SELECT 0 ELSE SELECT ISNULL(MAX(Version), 0) FROM KpiCopy.Version");
         if (version != ExportVersion.Current)
-            problems.Add($"version {version}, but this code needs {ExportVersion.Current}: run export-apply");
+            problems.Add($"KPI_Export is version {version}, but this code needs {ExportVersion.Current}: run export-apply");
 
-        // every synonym must still point at something in CMS
-        var synonyms = await Rows(conn, "SELECT SCHEMA_NAME(schema_id) + N'.' + name, base_object_name, " +
-                                        "CASE WHEN OBJECT_ID(base_object_name) IS NULL THEN 0 ELSE 1 END FROM sys.synonyms ORDER BY 1");
-        var cmsDbs = synonyms.Select(s => s[1].Split('.')[0].Trim('[', ']')).Distinct().ToList();
-        problems.AddRange(synonyms.Where(s => s[2] == "0").Select(s => $"synonym {s[0]} points at {s[1]}, which doesn't exist"));
-
-        // every view must still run (a column renamed or dropped in CMS shows up here)
-        var views = await Rows(conn, "SELECT QUOTENAME(SCHEMA_NAME(schema_id)) + N'.' + QUOTENAME(name) FROM sys.views ORDER BY 1");
-        foreach (var v in views.Select(r => r[0]))
+        // the CMS side: which database, its KpiExport version, and every view still runs (a column renamed or dropped
+        // in CMS shows up here, naming the view)
+        var cmsDb = version == 0 ? null
+            : await Scalar<string?>(conn, "IF OBJECT_ID(N'KpiCopy.Source') IS NOT NULL SELECT TOP (1) CmsDatabase FROM KpiCopy.Source");
+        var views = new List<string[]>();
+        var cmsVersion = 0;
+        if (cmsDb is null) problems.Add("KPI_Export doesn't say which CMS database it copies from: run export-apply");
+        else
         {
-            try { await using var cmd = new SqlCommand($"SELECT TOP (0) * FROM {v}", conn) { CommandTimeout = 120 }; await cmd.ExecuteNonQueryAsync(); }
-            catch (SqlException ex) { problems.Add($"view {v}: {ex.Message}"); }
+            var cms = $"[{cmsDb.Replace("]", "]]")}]";
+            cmsVersion = await Scalar<int>(conn,
+                $"IF OBJECT_ID(N'{cms}.KpiExport.Version') IS NULL SELECT 0 ELSE SELECT ISNULL(MAX(Version), 0) FROM {cms}.KpiExport.Version");
+            if (cmsVersion != ExportVersion.Cms)
+                problems.Add(cmsVersion == 0
+                    ? $"{cmsDb} has no KpiExport schema: apply the CMS migration mgKpiExport"
+                    : $"{cmsDb}.KpiExport is version {cmsVersion}, but this code needs {ExportVersion.Cms}");
+
+            views = await Rows(conn, $"SELECT N'{cms}.KpiExport.' + QUOTENAME(V.name) FROM {cms}.sys.views V " +
+                                     $"JOIN {cms}.sys.schemas S ON S.schema_id = V.schema_id WHERE S.name = N'KpiExport' ORDER BY 1");
+            foreach (var v in views.Select(r => r[0]))
+            {
+                try { await using var cmd = new SqlCommand($"SELECT TOP (0) * FROM {v}", conn) { CommandTimeout = 120 }; await cmd.ExecuteNonQueryAsync(); }
+                catch (SqlException ex) { problems.Add($"view {v}: {ex.Message}"); }
+            }
         }
 
-        Console.WriteLine($"{conn.DataSource} / {Database}: version {version}, reading {string.Join(", ", cmsDbs)}; " +
-                          $"{synonyms.Count} synonyms, {views.Count} views.");
+        Console.WriteLine($"{conn.DataSource} / {Database}: version {version}, copying from {cmsDb ?? "?"} " +
+                          $"(KpiExport version {cmsVersion}, {views.Count} views).");
         if (problems.Count == 0) { Console.WriteLine("All good."); return 0; }
         problems.ForEach(p => Console.Error.WriteLine($"  {p}"));
         return 1;
@@ -121,6 +140,9 @@ public static partial class Export
     [GeneratedRegex(@"^\s*GO\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase)]
     private static partial Regex GoLine();
 
-    [GeneratedRegex(@"INSERT\s+KpiExport\.Version\s*\(Version,\s*AppliedUtc\)\s*VALUES\s*\((\d+)", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"INSERT\s+KpiCopy\.Version\s*\(Version,\s*AppliedUtc\)\s*VALUES\s*\((\d+)", RegexOptions.IgnoreCase)]
     private static partial Regex ScriptVersion();
+
+    [GeneratedRegex(@"DECLARE\s+@CmsVersion\s+int\s*=\s*(\d+)\s*;", RegexOptions.IgnoreCase)]
+    private static partial Regex CmsVersionLine();
 }

@@ -33,13 +33,10 @@ try
 
     if (!args.Contains("--no-refresh"))
     {
-        if (nightly)
-        {
-            Console.WriteLine("Preparing the Bad Debt and Exposure snapshots...");
-            await Exec(source, "EXEC KpiExport.spPrepareSnapshots", 3600);
-        }
-        Console.WriteLine("Refreshing KPI_Export's copies...");
-        await Exec(source, "EXEC KpiExport.spRefreshCopies", 600);
+        // as the office's Agent jobs do: nightly prepares Bad Debt and Exposure in CMS first (a few minutes)
+        Console.WriteLine(nightly ? "Preparing Bad Debt and Exposure in CMS, then refreshing KPI_Export's copies..."
+                                  : "Refreshing KPI_Export's copies...");
+        await Exec(source, nightly ? "EXEC KpiCopy.spNightly" : "EXEC KpiCopy.spRefresh", 3600);
     }
 
     var state = await KpiCopier.ReadStateAsync(source)

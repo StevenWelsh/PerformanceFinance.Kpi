@@ -8,7 +8,8 @@ site reads one row there saying when the copies were last refreshed, and copies 
 that time has moved. The site connects from its own static address, **20.90.27.132**, through a port-forward rule that
 admits only that address, using a login that can read the copies and nothing in CMS.
 
-**Nothing in CMS changes.** KPI_Export is its own database; it only reads CMS_Live.
+**What leaves CMS** is defined in CMS itself: the `KpiExport` schema in CMS_Live (the CMS repo's migration
+`mgKpiExport`, readable copies in `CMS.Models/Scripts/KpiExport/`). KPI_Export only copies it.
 
 **What you need before starting:**
 
@@ -17,6 +18,7 @@ admits only that address, using a login that can read the copies and nothing in 
 | The **outside port** PCS chose for the new rule | PCS's reply |
 | Remote Desktop access to **PF-APP1**, with a Windows account that is a **sysadmin** on its SQL Server (yours owns the databases there, so it should be) | — |
 | The KPI repo on your PC, up to date (`git pull`) | — |
+| **The CMS migration `mgKpiExport` applied to CMS_Live** - it comes with the CMS release that contains it. Check in SSMS: `SELECT * FROM CMS_Live.KpiExport.Version` returns one row, version 1 | CMS release |
 
 Do the parts in order. Part B's password is shown once and typed into the site in Part C, so do B and C in one sitting.
 
@@ -52,7 +54,7 @@ Do the parts in order. Part B's password is shown once and typed into the site i
    ```
    You should see:
    ```
-   .: applying KPI_Export version 2, reading CMS_Live (28 batches)...
+   .: applying KPI_Export version 3, reading CMS_Live (… batches)...
      Created the job KPI_Export - refresh.
      Created the job KPI_Export - nightly.
    Done. Check it with:  Kpi.Tools export-check
@@ -159,7 +161,9 @@ hourly; the site's own log has every attempt (category `KpiPull`).
 |---|---|---|
 | A network error / timeout connecting to 51.148.118.225 | The port-forward rule isn't in place, uses another port, or doesn't admit 20.90.27.132 | Check the port on the card; ask PCS to check the rule |
 | `Login failed for user 'kpi_site_azure'` | Wrong password | Run Part B step 7 again for a new password, then the card's **Change** with it |
-| `KPI_Export is at version 1; this copy needs version 2` (or any mismatch) | The script on PF-APP1 is older than the site | Part A (fresh build) and Part B steps 2–5 again |
+| `KPI_Export is at version 2; this copy needs version 3` (or any mismatch) | The script on PF-APP1 is older than the site | Part A (fresh build) and Part B steps 2–5 again |
+| `CMS_Live has no KpiExport schema yet` (from export-apply) | The CMS migration `mgKpiExport` isn't on CMS_Live | Wait for (or run) the CMS release that contains it, then Part B step 4 again |
+| `[CMS_Live].KpiExport is version N; KPI_Export expects M` (Agent job history) | A CMS release changed the views' version without the KPI side | Apply the KPI repo's matching script (Part A, Part B steps 2–5) |
 | Data sync shows nothing new, no errors | The jobs aren't refreshing | SSMS > SQL Server Agent > Jobs > right-click a job > **View History**; check the Agent service is running |
 | "Overdue" on the reports in office hours | No successful copy for 30 minutes | Both of the above |
 

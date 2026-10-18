@@ -5,8 +5,9 @@ for everyone on this repo; Claude loads it every session. Record durable, team-r
 user); ask when unsure whether something belongs. Personal notes go in `CLAUDE.local.md` or `~/.claude`.
 
 **"CMS" means the whole CMS solution** (`C:\GitRepo\performance-finance-cms`: desktop, CMS.Core, CMS.Models, CMS.Web,
-the hub). This repository is separate on purpose and must not change CMS. The one thing that will eventually go into
-CMS is the `KpiExport` schema (below), through a CMS.Models migration when the user decides.
+the hub). This repository is separate on purpose; the ONE part of the KPI site that lives in CMS is the **`KpiExport`
+schema** in the CMS database (below) - CMS repo migration `mgKpiExport`, readable copies in `CMS.Models/Scripts/KpiExport/`
+(Oct 2026, Steve: authored in CMS so a CMS change that would break it is seen there). Any other CMS change is the user's call.
 
 ## Why it exists (Oct 2026, Steve)
 
@@ -45,10 +46,10 @@ transaction that is always rolled back, 100 rows / 30 s, System Admin only, each
 
 ## The data flow
 
-**A PULL (16 Oct 2026, Steve; it replaced a planned push from the office):** `KpiExport` views in the `KPI_Export`
-database beside CMS (CMS_Live on PF-APP1; CMS_Dev locally) → SQL Server Agent on PF-APP1 copies them into `KpiCopy.*`
-every 10 minutes, 07:00-20:00 Mon-Sat (`spRefreshCopies`, one transaction, stamps `KpiCopy.Refresh`), and at 00:15 first
-prepares Bad Debt and Exposure → the SITE (`KpiPull`, every 2 minutes, through the CMS data source card) reads that one row and, when it is newer than
+**A PULL (16 Oct 2026, Steve; it replaced a planned push from the office):** the `KpiExport` views IN THE CMS DATABASE
+(CMS_Live on PF-APP1; CMS_Dev locally) → SQL Server Agent on PF-APP1 copies them into `KpiCopy.*` in the separate
+`KPI_Export` database every 10 minutes, 07:00-20:00 Mon-Sat (`KpiCopy.spRefresh`, one transaction, stamps
+`KpiCopy.Refresh`), and at 00:15 first prepares Bad Debt and Exposure in CMS (`KpiCopy.spNightly`) → the SITE (`KpiPull`, every 2 minutes, through the CMS data source card) reads that one row and, when it is newer than
 CMS_KPI's last publish (`Rpt.spDataStatus`), bulk-copies `KpiCopy.*` (+ the snapshots when prepared since the last
 nightly publish) into `Stage.*` in `CMS_KPI` → `Stage.spPublish` swaps everything into `Dim`/`Fact` in ONE transaction
 (read-committed snapshot, so a report never sees half a load; it refuses an empty `Stage.Lead`) → the site runs only
@@ -81,16 +82,24 @@ the tables in full (25k paid leads).
   cached a minute; full view and phone bar), so a reader sees how fresh the figures are; amber with a warning when the
   copy is overdue. A past year's figures (CMS's current year set back) show the date alone. "Refreshed" is only when
   that browser last fetched.
-- **KPI_Export** (Oct 2026): its own database beside CMS, so nothing KPI-specific is added to CMS - and NO migrations
-  (Steve): one rerunnable script, `Kpi.Copy/Export/KPI_Export.sql`, applied by `export-apply`. It reads CMS through
-  SYNONYMS (`Lead.vLead` there = `<CMS db>.Lead.vLead`); `@CmsDb` (set by `--cms`) picks the CMS database. Each run drops
-  and recreates its objects but keeps the `kpi_pull` role and its members, and creates the two Agent jobs ONLY IF MISSING
-  (a schedule changed in SSMS survives; not on SQL Express, which has no Agent). Simple recovery (all of it is rebuilt
-  from CMS). `KpiCopy.X` is `SELECT INTO` from `KpiExport.vX` on every refresh, so a new view gets a copy by itself - but
-  the site copies only the tables listed in `KpiCopier`. **Versioned:** raise `KpiExport.Version`'s number and
-  `Kpi.Copy/Export/ExportVersion.cs` TOGETHER whenever the script changes - the copy refuses any other version,
-  `export-apply` refuses a script that disagrees with the code, `export-check` (read only) reports the version, a synonym
-  whose CMS object is gone, or a view that no longer runs. Applied by the user, never by Claude.
+- **Two halves (18 Oct 2026, Steve - the views moved into CMS so a CMS change that breaks one is seen in the CMS repo):**
+  - **WHAT leaves CMS = the `KpiExport` schema in the CMS database**, authored in the CMS REPO (migration `mgKpiExport`,
+    readable copies + README in `CMS.Models/Scripts/KpiExport/`, a rule in CMS's CLAUDE.md): the 12 `v*` views (the
+    only place CMS's tables and columns are named), `fnReportDate`, `spPrepareSnapshots` + `BadDebtSnapshot` /
+    `ExposureSnapshot` / `SnapshotRun`, and `Version`. Changed only by a new CMS migration.
+  - **HOW it travels = the `KPI_Export` database**, NO migrations (Steve): one rerunnable script,
+    `Kpi.Copy/Export/KPI_Export.sql`, applied by `export-apply --cms <db>` (refuses to run until the CMS side is there at
+    the expected version). `KpiCopy.Source` names the CMS database; `KpiCopy.spRefresh` rebuilds `KpiCopy.X` from
+    `<CMS>.KpiExport.vX` for EVERY view there (+ the two snapshots) in one transaction by three-part name; `spNightly`
+    runs `<CMS>.KpiExport.spPrepareSnapshots` first. Names no CMS table or column. Each run drops and recreates its
+    objects (and v2's empty view/synonym schemas) but keeps the `kpi_pull` role and its members, and creates the two
+    Agent jobs ONLY IF MISSING (an existing job's step is repointed; its schedule survives; not on SQL Express). Simple
+    recovery. The Agent jobs run as sa and read CMS; the site's login (`kpi_pull`) reads `KpiCopy` only.
+  - **Versions (`Kpi.Copy/Export/ExportVersion.cs`):** `Current` = KPI_Export's `KpiCopy.Version` (3), checked by the copy;
+    `Cms` = the CMS side's `KpiExport.Version` (1), checked by the refresh (and the script's `@CmsVersion`). A view
+    whose COLUMNS change: a CMS migration raises `KpiExport.Version`, and this repo raises `Cms` + `@CmsVersion` (and
+    `KpiCopier`/Stage if a table's shape changes). `export-check` (read only) reports both versions and runs every CMS
+    `KpiExport` view. The site copies only the tables listed in `KpiCopier`. Applied by the user, never by Claude.
 - **Exposure has no fund filter on the KPI site (Oct 2026, Steve):** nightly runs = 3 groupings × (all lenders +
   each lender), a few minutes. Per fund would be ~300 more runs a night (830 funds in CMS_Dev, ~300 with book).
 
@@ -244,9 +253,10 @@ NAT gateway can't move and is recreated:
   `/health/db`; the metric alert "KPI site cannot reach its database" (HealthCheckStatus < 100 over 5 min) emails
   Steve through action group `ag-pf-kpi-alerts`.
 - **Still before go-live:** the Data Protection key ring is the App Service default (`/home`, survives restarts, not
-  encrypted at rest) - wrap it with Key Vault (the KpiExport connection's password belongs there too); the pull switched
-  on (PCS's port forward, KPI_Export + its jobs + `grant-pull` on PF-APP1, `grant-push` for the site's identity, the
-  `KpiExport` app setting) - until then the figures are a developer's hand copy from CMS_Dev.
+  encrypted at rest) - wrap it with Key Vault (the CMS data source card's saved password depends on it too); the pull
+  switched on (the CMS migration `mgKpiExport` on CMS_Live, PCS's port forward, KPI_Export + its jobs + `grant-pull` on
+  PF-APP1, `grant-push` for the site's identity, the CMS data source card) - see `docs/kpi-pull-runbook.md`. Until then
+  the figures are a developer's hand copy from CMS_Dev.
 - **The office SQL Server (PF-APP1, found 16 Oct 2026):** SQL Server 2017 Standard, security updates current (support
   ends 12 Oct 2027); ownership chaining off; KPI_Export / CMS_Live / Dashboard owned by Steve's Windows account.
   Klipfolio already reaches it through a port forward of 1433 (Klipfolio's shared addresses) as **`Fendra`, a sysadmin**,

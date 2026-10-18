@@ -38,8 +38,8 @@ public static class KpiCopier
     /// <summary>Added when Bad Debt and Exposure were prepared since the last copy (the nightly job).</summary>
     public static readonly IReadOnlyList<(string From, string To)> SnapshotTables =
     [
-        ("KpiExport.BadDebtSnapshot",  "Stage.BadDebtYear"),
-        ("KpiExport.ExposureSnapshot", "Stage.Exposure"),
+        ("KpiCopy.BadDebtSnapshot",  "Stage.BadDebtYear"),
+        ("KpiCopy.ExposureSnapshot", "Stage.Exposure"),
     ];
 
     /// <summary>
@@ -49,7 +49,7 @@ public static class KpiCopier
     public static async Task<ExportState?> ReadStateAsync(SqlConnection source, CancellationToken ct = default)
     {
         await using (var v = new SqlCommand(
-            "IF OBJECT_ID(N'KpiExport.Version') IS NULL SELECT 0 ELSE SELECT ISNULL(MAX(Version), 0) FROM KpiExport.Version", source))
+            "IF OBJECT_ID(N'KpiCopy.Version') IS NULL SELECT 0 ELSE SELECT ISNULL(MAX(Version), 0) FROM KpiCopy.Version", source))
         {
             var version = (int)(await v.ExecuteScalarAsync(ct))!;
             if (version != ExportVersion.Current)
@@ -58,10 +58,8 @@ public static class KpiCopier
                     "Apply the script that came with it:  Kpi.Tools export-apply --cms <CMS database>");
         }
 
-        // a row prepared by a brand-new database's first night but never refreshed has RefreshedUtc 2000-01-01: no copies yet
         await using var cmd = new SqlCommand(
-            "IF OBJECT_ID(N'KpiCopy.Refresh') IS NOT NULL " +
-            "SELECT TOP (1) RefreshedUtc, ReportDate, SnapshotsUtc FROM KpiCopy.Refresh WHERE RefreshedUtc > '2001-01-01'", source);
+            "IF OBJECT_ID(N'KpiCopy.Refresh') IS NOT NULL SELECT TOP (1) RefreshedUtc, ReportDate, SnapshotsUtc FROM KpiCopy.Refresh", source);
         await using var r = await cmd.ExecuteReaderAsync(ct);
         if (!await r.ReadAsync(ct)) return null;
         return new ExportState(r.GetDateTime(0), r.GetDateTime(1), r.IsDBNull(2) ? null : r.GetDateTime(2));
