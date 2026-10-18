@@ -44,7 +44,10 @@ public static partial class Export
         var batches = GoLine().Split(script).Where(b => !string.IsNullOrWhiteSpace(b)).ToList();
 
         await using var conn = new SqlConnection(cs);
-        conn.InfoMessage += (_, e) => Console.WriteLine($"  {e.Message}");   // the script's PRINTs: the Agent jobs made or kept
+        conn.InfoMessage += (_, e) =>                                        // the script's PRINTs: the Agent jobs made or kept
+        {
+            if (!e.Message.StartsWith("Changed database context", StringComparison.Ordinal)) Console.WriteLine($"  {e.Message}");
+        };
         await conn.OpenAsync();
         Console.WriteLine($"{conn.DataSource}: applying {Database} version {ExportVersion.Current}, reading {cmsDb} ({batches.Count} batches)...");
         for (var i = 0; i < batches.Count; i++)
