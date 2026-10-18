@@ -72,246 +72,119 @@ td { color: var(--text-2); }
 <main>
 
 <h1>KPI copy plan</h1>
-<p class="lead">How the KPI figures get from CMS_Live in the office to the KPI website in Azure: what exists, what gets added where, and how one copy runs. Nothing here is built yet; today the site holds a single copy pushed by hand from a developer's PC, out of a local stand-in that reads CMS_Dev.</p>
+<p class="lead">How the KPI figures get from CMS_Live in the office to the KPI website in Azure (kpi.performancefinance.co.uk): what lives where, how one copy runs, who can read what, and why it is built this way. This is the design as built on 18 October 2026 - a <b>pull</b>, which replaced the earlier plan of a push from the office. The step-by-step switch-on is <code>docs/kpi-pull-runbook.md</code>.</p>
 
-<h2>1. The overall flow</h2>
-<p>CMS_Live is read through a separate KPI_Export database of views. Kpi.Push, run by SQL Server Agent on the office server, copies those views one way into CMS_KPI in Azure, which the KPI site reads.</p>
+<h2>1. The flow</h2>
 <div class="figure">
-<svg viewBox="0 0 680 410" role="img"><title>KPI data flow from the office to Azure</title>
+<svg viewBox="0 0 680 430" role="img"><title>KPI data flow: SQL Server Agent copies in the office, the site collects from Azure</title>
 <defs><marker id="a1" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
-<g class="c-teal"><rect x="40" y="40" width="280" height="350" rx="20" stroke-width="0.5"/><text class="th" x="60" y="66">Office server</text></g>
-<g class="c-purple"><rect x="360" y="150" width="280" height="240" rx="20" stroke-width="0.5"/><text class="th" x="380" y="176">Azure, UK West</text></g>
-<rect class="box" x="70" y="90" width="220" height="56" rx="8" stroke-width="0.5"/><text class="th" x="180" y="113" text-anchor="middle">CMS_Live</text><text class="ts" x="180" y="133" text-anchor="middle">The live CMS database</text>
-<rect class="box" x="70" y="190" width="220" height="56" rx="8" stroke-width="0.5"/><text class="th" x="180" y="213" text-anchor="middle">KPI_Export</text><text class="ts" x="180" y="233" text-anchor="middle">Views of what may leave</text>
-<rect class="box" x="70" y="290" width="220" height="56" rx="8" stroke-width="0.5"/><text class="th" x="180" y="313" text-anchor="middle">Kpi.Push</text><text class="ts" x="180" y="333" text-anchor="middle">Copy, run by SQL Agent</text>
-<rect class="box" x="390" y="290" width="220" height="56" rx="8" stroke-width="0.5"/><text class="th" x="500" y="313" text-anchor="middle">CMS_KPI</text><text class="ts" x="500" y="333" text-anchor="middle">KPI figures only</text>
-<rect class="box" x="390" y="200" width="220" height="56" rx="8" stroke-width="0.5"/><text class="th" x="500" y="223" text-anchor="middle">Kpi.Web</text><text class="ts" x="500" y="243" text-anchor="middle">The KPI site</text>
-<g class="c-gray"><rect x="390" y="60" width="220" height="56" rx="8" stroke-width="0.5"/><text class="th" x="500" y="83" text-anchor="middle">Readers</text><text class="ts" x="500" y="103" text-anchor="middle">Phones and browsers</text></g>
-<line x1="180" y1="148" x2="180" y2="186" class="arr" marker-end="url(#a1)"/>
-<line x1="180" y1="248" x2="180" y2="286" class="arr" marker-end="url(#a1)"/>
-<line x1="292" y1="318" x2="386" y2="318" class="arr" marker-end="url(#a1)"/>
-<text class="ts" x="339" y="306" text-anchor="middle">one way</text>
-<line x1="500" y1="288" x2="500" y2="260" class="arr" marker-end="url(#a1)"/>
-<line x1="500" y1="198" x2="500" y2="120" class="arr" marker-end="url(#a1)"/>
+<g class="c-teal"><rect x="20" y="20" width="300" height="390" rx="20" stroke-width="0.5"/><text class="th" x="40" y="46">Office: PF-APP1 (SQL Server)</text></g>
+<g class="c-purple"><rect x="380" y="20" width="280" height="390" rx="20" stroke-width="0.5"/><text class="th" x="400" y="46">Azure, UK West</text></g>
+<rect class="box" x="45" y="70" width="250" height="62" rx="8" stroke-width="0.5"/><text class="th" x="170" y="95" text-anchor="middle">CMS_Live: KpiExport schema</text><text class="ts" x="170" y="116" text-anchor="middle">12 views: what may leave (CMS repo)</text>
+<rect class="box" x="45" y="190" width="250" height="62" rx="8" stroke-width="0.5"/><text class="th" x="170" y="215" text-anchor="middle">KPI_Export: KpiCopy</text><text class="ts" x="170" y="236" text-anchor="middle">Copies + refresh time (KPI repo)</text>
+<rect class="box" x="45" y="310" width="250" height="62" rx="8" stroke-width="0.5"/><text class="th" x="170" y="335" text-anchor="middle">SQL Server Agent</text><text class="ts" x="170" y="356" text-anchor="middle">Every 10 min + 00:15 nightly</text>
+<line class="arr" x1="170" y1="132" x2="170" y2="188" marker-end="url(#a1)"/><text class="ts" x="160" y="158" text-anchor="end">copied, in</text><text class="ts" x="160" y="174" text-anchor="end">one transaction</text>
+<line class="arr" x1="170" y1="310" x2="170" y2="254" marker-end="url(#a1)"/><text class="ts" x="180" y="287">runs spRefresh / spNightly</text>
+<rect class="box" x="405" y="190" width="230" height="62" rx="8" stroke-width="0.5"/><text class="th" x="520" y="215" text-anchor="middle">Kpi.Web (the site)</text><text class="ts" x="520" y="236" text-anchor="middle">KpiPull: checks every 2 min</text>
+<rect class="box" x="405" y="310" width="230" height="62" rx="8" stroke-width="0.5"/><text class="th" x="520" y="335" text-anchor="middle">CMS_KPI</text><text class="ts" x="520" y="356" text-anchor="middle">Stage, then publish in one go</text>
+<line class="arr" x1="297" y1="221" x2="403" y2="221" marker-end="url(#a1)"/><text class="ts" x="350" y="164" text-anchor="middle">site reads the copies,</text><text class="ts" x="350" y="180" text-anchor="middle">only from 20.90.27.132</text>
+
+<line class="arr" x1="520" y1="252" x2="520" y2="308" marker-end="url(#a1)"/><text class="ts" x="530" y="285">bulk copy</text>
 </svg>
+</div>
+<p>The office does the work on its own schedule; the site only follows. Nothing in the office connects out, and no program of ours runs there: the jobs are plain SQL. The only thing crossing the internet is the site reading finished copies, with a login that can do nothing else.</p>
+
+<h2>2. What lives where</h2>
+<div class="grid">
+  <div class="card"><h3>CMS_Live - the KpiExport schema</h3><p class="where">CMS repo: migration <code>mgKpiExport</code>, readable copies in <code>CMS.Models/Scripts/KpiExport/</code></p>
+    <div class="it"><span class="n">KpiExport.v* (12 views)</span><span class="tag">what leaves</span></div>
+    <div class="it"><span class="n">fnReportDate</span><span class="tag">as-at date</span></div>
+    <div class="it"><span class="n">spPrepareSnapshots + 3 tables</span><span class="tag">nightly</span></div>
+    <div class="it"><span class="n">Version</span><span class="tag">contract</span></div>
+    <p class="sec">The only place CMS's tables and columns are named. Changed only by a CMS migration.</p></div>
+  <div class="card"><h3>KPI_Export - the copy side</h3><p class="where">KPI repo: <code>Kpi.Copy/Export/KPI_Export.sql</code>, one rerunnable script, no migrations</p>
+    <div class="it"><span class="n">KpiCopy.* tables</span><span class="tag">copies</span></div>
+    <div class="it"><span class="n">KpiCopy.Refresh</span><span class="tag">refreshed when</span></div>
+    <div class="it"><span class="n">KpiCopy.spRefresh / spNightly</span><span class="tag">the copy</span></div>
+    <div class="it"><span class="n">kpi_pull role</span><span class="tag">site login</span></div>
+    <div class="it"><span class="n">2 Agent jobs (msdb)</span><span class="tag">schedule</span></div>
+    <p class="sec">Names no CMS table or column. Simple recovery: all rebuilt from CMS.</p></div>
+  <div class="card"><h3>Office network (PCS)</h3><p class="where">PF's firewall</p>
+    <div class="it"><span class="n">Port forward → PF-APP1:1433</span><span class="tag">site only</span></div>
+    <p class="sec">Admits 20.90.27.132 alone - an address that belongs only to PF's Azure subscription.</p></div>
+  <div class="card"><h3>Azure</h3><p class="where"><code>rg-pf-apps</code> (network) and <code>attachment-prod</code> (site, database)</p>
+    <div class="it"><span class="n">pip-pf-apps-out = 20.90.27.132</span><span class="tag">static IP</span></div>
+    <div class="it"><span class="n">nat-pf-apps, vnet-pf-apps</span><span class="tag">route out</span></div>
+    <div class="it"><span class="n">pf-kpi (Kpi.Web) + KpiPull</span><span class="tag">collects</span></div>
+    <div class="it"><span class="n">pf-sql-uk / CMS_KPI</span><span class="tag">figures</span></div>
+    <p class="sec">Where to copy from is set in the site: Settings &gt; Integrations &gt; CMS data source.</p></div>
 </div>
 
-<h2>2. What gets added where</h2>
-<p>Grey exists today; teal is to be added. CMS_Live itself does not change: no new schema, views or migrations inside it.</p>
-<div class="figure">
-<svg viewBox="0 0 680 470" role="img"><title>What gets added where</title>
-<defs><marker id="a2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
-<rect class="box" x="40" y="40" width="290" height="370" rx="20" stroke-width="0.5"/><text class="th" x="60" y="66">Office SQL Server (PF-APP1)</text>
-<rect class="box" x="370" y="140" width="270" height="270" rx="20" stroke-width="0.5"/><text class="th" x="390" y="166">Azure, UK West</text>
-<g class="c-gray"><rect x="60" y="90" width="250" height="56" rx="8" stroke-width="0.5"/><text class="th" x="185" y="113" text-anchor="middle">CMS_Live</text><text class="ts" x="185" y="133" text-anchor="middle">Unchanged</text></g>
-<g class="c-teal"><rect x="60" y="170" width="250" height="56" rx="8" stroke-width="0.5"/><text class="th" x="185" y="193" text-anchor="middle">KPI_Export database</text><text class="ts" x="185" y="213" text-anchor="middle">New, beside CMS_Live</text></g>
-<g class="c-teal"><rect x="60" y="250" width="250" height="56" rx="8" stroke-width="0.5"/><text class="th" x="185" y="273" text-anchor="middle">Kpi.Push program</text><text class="ts" x="185" y="293" text-anchor="middle">New folder on the server</text></g>
-<g class="c-teal"><rect x="60" y="330" width="250" height="56" rx="8" stroke-width="0.5"/><text class="th" x="185" y="353" text-anchor="middle">SQL Agent jobs</text><text class="ts" x="185" y="373" text-anchor="middle">New: Frequent and Nightly</text></g>
-<g class="c-gray"><rect x="390" y="180" width="230" height="56" rx="8" stroke-width="0.5"/><text class="th" x="505" y="203" text-anchor="middle">Kpi.Web site</text><text class="ts" x="505" y="223" text-anchor="middle">Exists</text></g>
-<g class="c-gray"><rect x="390" y="260" width="230" height="56" rx="8" stroke-width="0.5"/><text class="th" x="505" y="283" text-anchor="middle">CMS_KPI database</text><text class="ts" x="505" y="303" text-anchor="middle">Exists</text></g>
-<g class="c-teal"><rect x="390" y="340" width="230" height="56" rx="8" stroke-width="0.5"/><text class="th" x="505" y="363" text-anchor="middle">Push sign-in identity</text><text class="ts" x="505" y="383" text-anchor="middle">New, plus firewall rule</text></g>
-<line x1="185" y1="148" x2="185" y2="166" class="arr" marker-end="url(#a2)"/>
-<line x1="185" y1="228" x2="185" y2="246" class="arr" marker-end="url(#a2)"/>
-<line x1="185" y1="328" x2="185" y2="310" class="arr" marker-end="url(#a2)"/>
-<line x1="312" y1="283" x2="386" y2="283" class="arr" marker-end="url(#a2)"/>
-<line x1="505" y1="258" x2="505" y2="240" class="arr" marker-end="url(#a2)"/>
-<rect class="c-gray" x="40" y="432" width="14" height="14" rx="3" stroke-width="0.5"/><text class="ts" x="62" y="444">Exists today</text>
-<rect class="c-teal" x="170" y="432" width="14" height="14" rx="3" stroke-width="0.5"/><text class="ts" x="192" y="444">To be added</text>
-</svg>
-</div>
+<h2>3. One copy, step by step</h2>
+<ol>
+  <li><b>In the office, every 10 minutes (07:00-20:00, Mon-Sat):</b> the Agent job runs <code>KpiCopy.spRefresh</code>. It checks CMS_Live's <code>KpiExport.Version</code>, then in one transaction rebuilds every <code>KpiCopy.X</code> from <code>CMS_Live.KpiExport.vX</code> (and the two snapshot tables) and stamps <code>KpiCopy.Refresh</code>. A second refresh started meanwhile gives up at once.</li>
+  <li><b>At 00:15:</b> the nightly job runs <code>KpiCopy.spNightly</code>: CMS_Live's <code>KpiExport.spPrepareSnapshots</code> (the desktop's Bad Debt and Exposure, a few minutes), then the same refresh.</li>
+  <li><b>In Azure, every 2 minutes:</b> the site reads the one-row <code>KpiCopy.Refresh</code>. If it is newer than CMS_KPI's last publish (<code>Rpt.spDataStatus</code>), it bulk-copies the tables into <code>Stage</code> - with Bad Debt and Exposure if they were prepared since the last nightly publish.</li>
+  <li><b>Before publishing</b> it reads the refresh row again: if the office refreshed meanwhile, the tables might come from two refreshes, so nothing is published and the next check copies again.</li>
+  <li><b><code>Stage.spPublish</code></b> swaps everything into the report tables in one transaction. Figures are at most about 12 minutes behind CMS.</li>
+</ol>
+<p><b>When something fails:</b> nothing is published and the site keeps the last good figures. The card shows Last problem; Settings &gt; Data sync logs the failure once when it starts and then hourly; after 30 minutes in office hours every report says its figures are overdue; in the office, the Agent job history has the error.</p>
 
-<h2>3. One copy run, step by step</h2>
-<p>Office steps on the left, Azure on the right, in the order they happen.</p>
-<div class="figure">
-<svg viewBox="0 0 680 650" role="img"><title>One run of the KPI copy</title>
-<defs><marker id="a3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>
-<rect class="lane" x="40" y="40" width="280" height="586" rx="16" stroke-width="0.5"/><text class="th" x="60" y="64">Office server</text>
-<rect class="lane" x="360" y="40" width="280" height="586" rx="16" stroke-width="0.5"/><text class="th" x="380" y="64">Azure</text>
-<g class="c-teal"><rect x="60" y="80" width="240" height="50" rx="8" stroke-width="0.5"/><text class="th" x="180" y="100" text-anchor="middle">Agent starts Kpi.Push</text><text class="ts" x="180" y="119" text-anchor="middle">Every 10 min, and nightly</text></g>
-<g class="c-purple"><rect x="380" y="148" width="240" height="50" rx="8" stroke-width="0.5"/><text class="th" x="500" y="168" text-anchor="middle">Entra ID issues a token</text><text class="ts" x="500" y="187" text-anchor="middle">Push identity's certificate</text></g>
-<g class="c-purple"><rect x="380" y="216" width="240" height="50" rx="8" stroke-width="0.5"/><text class="th" x="500" y="236" text-anchor="middle">Firewall admits the office</text><text class="ts" x="500" y="255" text-anchor="middle">Port 1433, encrypted</text></g>
-<g class="c-teal"><rect x="60" y="284" width="240" height="50" rx="8" stroke-width="0.5"/><text class="th" x="180" y="304" text-anchor="middle">Nightly: prepare snapshots</text><text class="ts" x="180" y="323" text-anchor="middle">Runs CMS's own procs</text></g>
-<g class="c-teal"><rect x="60" y="352" width="240" height="50" rx="8" stroke-width="0.5"/><text class="th" x="180" y="372" text-anchor="middle">Read every KPI_Export view</text><text class="ts" x="180" y="391" text-anchor="middle">All at one moment</text></g>
-<g class="c-purple"><rect x="380" y="420" width="240" height="50" rx="8" stroke-width="0.5"/><text class="th" x="500" y="440" text-anchor="middle">Bulk copy into Stage</text><text class="ts" x="500" y="459" text-anchor="middle">Table by table</text></g>
-<g class="c-purple"><rect x="380" y="488" width="240" height="50" rx="8" stroke-width="0.5"/><text class="th" x="500" y="508" text-anchor="middle">Stage.spPublish swaps it in</text><text class="ts" x="500" y="527" text-anchor="middle">One transaction</text></g>
-<g class="c-purple"><rect x="380" y="556" width="240" height="50" rx="8" stroke-width="0.5"/><text class="th" x="500" y="576" text-anchor="middle">Site shows the new figures</text><text class="ts" x="500" y="595" text-anchor="middle">As at time updates</text></g>
-<path d="M180 132 L180 139 L500 139 L500 146" class="arr" marker-end="url(#a3)"/>
-<line x1="500" y1="200" x2="500" y2="214" class="arr" marker-end="url(#a3)"/>
-<path d="M500 268 L500 275 L180 275 L180 282" class="arr" marker-end="url(#a3)"/>
-<line x1="180" y1="336" x2="180" y2="350" class="arr" marker-end="url(#a3)"/>
-<path d="M180 404 L180 411 L500 411 L500 418" class="arr" marker-end="url(#a3)"/>
-<line x1="500" y1="472" x2="500" y2="486" class="arr" marker-end="url(#a3)"/>
-<line x1="500" y1="540" x2="500" y2="554" class="arr" marker-end="url(#a3)"/>
-</svg>
-</div>
+<h2>4. Who can read what</h2>
+<table>
+  <tr><th>Who</th><th>Can</th><th>Cannot</th></tr>
+  <tr><td>The Agent jobs (job owner sa)</td><td>Read CMS_Live's KpiExport views and procedures; rebuild KPI_Export's copies</td><td>- (inside the server; never leaves it)</td></tr>
+  <tr><td>The site's login <code>kpi_site_azure</code> (SQL login, role <code>kpi_pull</code>)</td><td>Connect; read <code>KPI_Export.KpiCopy.*</code></td><td>Anything in CMS_Live (no user there), run procedures, change anything, see the server's database list</td></tr>
+  <tr><td>The site's identity in Azure (<code>kpi_site</code> + <code>kpi_push</code>)</td><td>Run the reports; fill <code>Stage</code> and publish</td><td>Read anything in the office</td></tr>
+  <tr><td>The card's Try a query</td><td>Whatever <code>kpi_site_azure</code> can, read only (always rolled back), 100 rows, audited</td><td>CMS_Live</td></tr>
+</table>
+<p>The login's password was made by SQL Server and is kept only in the System Admin's password manager and, encrypted, in the site. A stolen password reaches KPI figures - which the site shows anyway - and only from 20.90.27.132.</p>
+
+<h2>5. Versions, and changing CMS</h2>
 <ul>
-  <li><b>One at a time:</b> Kpi.Push takes a lock first; a run that starts while another is still going simply skips.</li>
-  <li><b>Nightly only:</b> <code>KpiExport.spPrepareSnapshots</code> calls CMS's own Bad Debt and Exposure procedures and stores the results in KPI_Export.</li>
-  <li><b>Reading:</b> every KPI_Export view is read as at the same moment, so the figures agree with each other.</li>
-  <li><b>Copying:</b> each <code>Stage</code> table in Azure is emptied and refilled by bulk copy. The site never reads <code>Stage</code>, so a copy that stops halfway changes nothing on screen.</li>
-  <li><b>Publishing:</b> <code>Stage.spPublish</code> moves everything into the report tables in one transaction: readers see the old figures until the new ones are complete, never a mix.</li>
-  <li><b>On failure:</b> nothing is published and the site keeps the last good figures. The failure is logged in Azure (Settings › Data sync) and in the office server's event log; after 30 minutes without a good copy, "As at" turns amber.</li>
+  <li><b><code>CMS_Live.KpiExport.Version</code></b> (1): the shape of what CMS hands over. <code>spRefresh</code> copies nothing from another version.</li>
+  <li><b><code>KPI_Export.KpiCopy.Version</code></b> (3): the copy side's script. The site copies nothing from another version.</li>
+  <li>Both expected values live in <code>Kpi.Copy/Export/ExportVersion.cs</code> (<code>Cms</code>, <code>Current</code>).</li>
+  <li><b>Before renaming or dropping anything in CMS,</b> search <code>CMS.Models/Scripts/KpiExport/</code> (its README has the query listing every CMS column used). SQL Server won't stop the change - the view breaks quietly and the refresh fails. Fix the view in the same CMS migration; if its columns change, raise both versions together.</li>
 </ul>
 
-<h2>4. How it connects to Azure</h2>
-<p>Everything goes outwards from the office; nothing in Azure can connect in.</p>
+<h2>6. Decisions behind it</h2>
 <table>
-  <tr><th>Step</th><th>What happens</th></tr>
-  <tr><td>Sign in to Microsoft</td><td>Kpi.Push asks Microsoft Entra ID (PF's Microsoft directory) for a sign-in token, proving who it is with a certificate installed on PF-APP1 that belongs to the push identity. No password in any file.</td></tr>
-  <tr><td>Connect</td><td>An encrypted connection to <code>pf-sql-uk.database.windows.net</code> on port 1433, presenting the token.</td></tr>
-  <tr><td>Firewall</td><td>The Azure SQL firewall checks the office's public address and lets it through.</td></tr>
-  <tr><td>Rights</td><td>In CMS_KPI the push identity has the <code>kpi_push</code> role only: fill <code>Stage</code> and run the publish. It can't read reports, users or settings.</td></tr>
+  <tr><th>Decision</th><th>Why</th></tr>
+  <tr><td>A pull, not a push (16 Oct)</td><td>Steve wants a SQL Server data source in his reporting product, as Klipfolio has; nothing in the office needs a password for Azure. The office still never connects out.</td></tr>
+  <tr><td>Copies in KPI_Export, not the views read directly</td><td>Ownership chaining is off on PF-APP1, so reading the views would need rights on CMS_Live's tables (as Klipfolio's <code>Fendra</code> login has). The copies also make each refresh one consistent moment and keep the long read over the internet off CMS_Live.</td></tr>
+  <tr><td>The views in CMS, the copies outside it (18 Oct)</td><td>The views name CMS's columns, so they live where a CMS change would break them. The copies (65,000 rows every 10 minutes) stay out of CMS_Live and its transaction log.</td></tr>
+  <tr><td>SQL Server Agent, not CMS.Scheduler or a program</td><td>The work is one stored procedure. Agent runs it inside the server with no exe, no credentials and no CMS release to change it - and it is what starts CMS.Scheduler anyway.</td></tr>
+  <tr><td>A dedicated static IP</td><td>App Service's own outbound addresses (31 of them) are shared with other Azure customers; the office rule should admit PF alone.</td></tr>
+  <tr><td>No certificate on PF-APP1's SQL Server (for now)</td><td>The connection is encrypted; without a certificate it can't also verify the server. The address is locked both ways, so Steve chose not to ask PCS for one.</td></tr>
 </table>
 
-<h2>5. What is in each database</h2>
-<div class="grid">
-<div class="card">
-<h3>KPI_Export</h3>
-<p class="where">Office SQL Server, beside CMS_Live. Built from one script, kept in the KPI repo.</p>
-<div class="sec">Synonyms (pointers, no data)</div>
-<div class="it"><span class="n">Lead.vLead, OB.*, CON.*, Reports.*</span><span>to CMS_Live</span><span class="tag">in script</span></div>
-<div class="sec">Views (read CMS_Live live at copy time)</div>
-<div class="it"><span class="n">KpiExport.vSalesOffice, vSalesperson</span><span class="tag">in script</span></div>
-<div class="it"><span class="n">vPeriod, vWorkingDay, vSalesTarget</span><span class="tag">in script</span></div>
-<div class="it"><span class="n">vFund, vFundLender, vFundingLine</span><span class="tag">in script</span></div>
-<div class="it"><span class="n">vLead, vLeadPipeline</span><span class="tag">in script</span></div>
-<div class="it"><span class="n">vSupplierYear, vBookPosition</span><span class="tag">in script</span></div>
-<div class="sec">Nightly snapshots (stored, refilled each night)</div>
-<div class="it"><span class="n">BadDebtSnapshot, ExposureSnapshot</span><span>tables</span><span class="tag">in script</span></div>
-<div class="it"><span class="n">spPrepareSnapshots</span><span>calls CMS's procs</span><span class="tag">in script</span></div>
-<div class="it"><span class="n">fnReportDate</span><span>the business date</span><span class="tag">in script</span></div>
-<div class="sec">Additions</div>
-<div class="it"><span class="n">KpiExport.Version</span><span>one row: version N</span><span class="tag new">new</span></div>
-<div class="it"><span class="n">SQL Agent's login</span><span>read CMS_Live, run 2 procs</span><span class="tag new">new</span></div>
-</div>
-<div class="card">
-<h3>CMS_KPI</h3>
-<p class="where">Azure SQL, pf-sql-uk. Built by migrations in Kpi.Data.</p>
-<div class="sec">Stage (landing area)</div>
-<div class="it"><span class="n">14 Stage.* tables</span><span>one per view</span><span class="tag">exists</span></div>
-<div class="it"><span class="n">spPublish, spRecordFailure</span><span>swap in, log</span><span class="tag">exists</span></div>
-<div class="sec">Dim and Fact (what reports read)</div>
-<div class="it"><span class="n">Dim.* 6 tables, Fact.* 7 tables</span><span class="tag">exists</span></div>
-<div class="sec">Rpt (all the site may run)</div>
-<div class="it"><span class="n">20 report procedures</span><span>ports of WebKPI</span><span class="tag">exists</span></div>
-<div class="it"><span class="n">spDataStatus, spLoadHistory</span><span>As at, Data sync</span><span class="tag">exists</span></div>
-<div class="sec">Ref, Cfg, Auth (the site's own)</div>
-<div class="it"><span class="n">Ref.Setting, Ref.LoadRun</span><span>dates, copy log</span><span class="tag">exists</span></div>
-<div class="it"><span class="n">Cfg.SalespersonScope, PostcodeArea</span><span class="tag">exists</span></div>
-<div class="it"><span class="n">Cfg.Integration</span><span>Resend, Twilio</span><span class="tag">exists</span></div>
-<div class="it"><span class="n">Auth.Users, Roles, AuditEntry</span><span>sign-in</span><span class="tag">exists</span></div>
-<div class="sec">Additions</div>
-<div class="it"><span class="n">Push identity user</span><span>role kpi_push only</span><span class="tag new">new</span></div>
-</div>
-</div>
-
-<h2>6. What changes in the code</h2>
-<div class="grid">
-<div class="card">
-<h3>PerformanceFinance.Kpi</h3>
-<p class="where">GitHub, develop branch. Every change lands here.</p>
-<div class="p">Kpi.Push</div>
-<div class="it">The copy program, run by the Agent jobs<span class="tag">exists</span></div>
-<div class="it">Export/KPI_Export.sql, from Local/<span class="tag moved">moved</span></div>
-<div class="it">Refuses an older KPI_Export version<span class="tag new">new</span></div>
-<div class="it">Signs in to Azure as the push identity<span class="tag new">new</span></div>
-<div class="p">Kpi.Tools</div>
-<div class="it">migrate, seed, grant-site, reset-sign-in, compare<span class="tag">exists</span></div>
-<div class="it">export-apply --cms CMS_Live<span class="tag new">new</span></div>
-<div class="it">export-check (every view still valid?)<span class="tag new">new</span></div>
-<div class="it">grant-push (push identity into kpi_push)<span class="tag new">new</span></div>
-<div class="p">Kpi.Data</div>
-<div class="it">CMS_KPI migrations, unchanged<span class="tag">exists</span></div>
-<div class="p">Kpi.Web</div>
-<div class="it">The site, unchanged<span class="tag">exists</span></div>
-</div>
-<div class="card">
-<h3>performance-finance-cms</h3>
-<p class="where">The CMS solution. Nothing in it changes.</p>
-<div class="p">CMS.Models / CMS_Live</div>
-<div class="it">No new schema, views or migrations<span class="tag">unchanged</span></div>
-<div class="p">CMS.Scheduler</div>
-<div class="it">Its jobs carry on; Kpi.Push runs beside it<span class="tag">unchanged</span></div>
-<div class="p">OB.AnnualBadDebtList, Reports.Exposure</div>
-<div class="it">Called by the nightly snapshot, not copied<span class="tag">unchanged</span></div>
-<div class="p">CMS.Web /kpis</div>
-<div class="it">Office KPIs, as now<span class="tag">unchanged</span></div>
-<div class="p">Later, optional</div>
-<div class="it">A KPI_Export check on its release list<span class="tag new">new</span></div>
-</div>
-</div>
-
-<h2>7. Decisions behind it</h2>
+<h2>7. Status (18 October 2026)</h2>
 <table>
-  <tr><th>Question</th><th>Decision</th></tr>
-  <tr><td>Views inside CMS_Live, or a separate database?</td><td>A separate <b>KPI_Export</b> database beside CMS_Live. CMS stays untouched, nothing KPI-specific clutters it, and KPI changes don't need a CMS release.</td></tr>
-  <tr><td>Migrations for KPI_Export?</td><td>Not yet. It holds no data that must survive a change (views and procedures are replaced wholesale; snapshots refill nightly), so one rerunnable script in git does the job. Migrations can be added later with no real downtime: pause the two Agent jobs, add a baseline migration equal to the script, resume.</td></tr>
-  <tr><td>Catching CMS changes that break a view</td><td><code>Kpi.Tools export-check</code> after every CMS release, plus the nightly copy failing loudly as the backstop.</td></tr>
-  <tr><td>Wrong script version on the server</td><td>A version stamp in KPI_Export; Kpi.Push refuses to copy from an older one.</td></tr>
-  <tr><td>Who runs the copy?</td><td>SQL Server Agent, beside CMS.Scheduler's jobs: <b>KPI copy – frequent</b> (every 10 minutes, 07:00–20:00, Mon–Sat) and <b>KPI copy – nightly</b>. Kpi.Push stays a separate program: modern .NET for the Azure sign-in, versioned with the KPI repo.</td></tr>
-  <tr><td>How does the copy sign in to Azure?</td><td>An app registration ("PF KPI Push") with a certificate kept on PF-APP1. Fallback if that drags on: switch on ordinary SQL logins for the server and give the copy a username and password.</td></tr>
+  <tr><th>Step</th><th>Status</th></tr>
+  <tr><td>CMS migration <code>mgKpiExport</code> on CMS_Live; CMS 1.0.1.1426 published</td><td>Done</td></tr>
+  <tr><td>KPI_Export v3 and its two Agent jobs on PF-APP1; first nightly run by hand (25,002 leads)</td><td>Done</td></tr>
+  <tr><td>The site's login <code>kpi_site_azure</code>, its limits proved</td><td>Done</td></tr>
+  <tr><td>Static IP 20.90.27.132, proven as the site's only way out</td><td>Done</td></tr>
+  <tr><td>The site redeployed on the matching code; the CMS data source card</td><td>Done</td></tr>
+  <tr><td><code>grant-push</code> for the site's identity</td><td>To do (Steve, any time)</td></tr>
+  <tr><td>PCS's port forward</td><td>Requested 16 Oct</td></tr>
+  <tr><td>Connect the card; first live copy; 241-report comparison against CMS_Live</td><td>After PCS</td></tr>
+  <tr><td>Tidy Azure: drop <code>kpi-push-office</code>, password sign-in off, remove <code>pf-office</code> rule</td><td>To do (runbook Part D)</td></tr>
 </table>
 
-<h2>8. The request to PF's IT</h2>
-<div class="request">
-<p>For the new KPI website, a program on PF-APP1 will copy KPI figures every 10 minutes to our Azure database (outbound only; nothing in Azure connects in). Could you please:</p>
-<ol>
-  <li><b>Tell us the public IP address PF-APP1 uses for outgoing internet traffic</b>, and whether it's fixed. We'll add it to the Azure database firewall.</li>
-  <li><b>If outgoing traffic from servers is restricted</b>, allow PF-APP1 out to:
-    <ul>
-      <li><code>pf-sql-uk.database.windows.net</code>, TCP port <b>1433</b> (Azure SQL, encrypted)</li>
-      <li><code>login.microsoftonline.com</code>, TCP port <b>443</b> (Microsoft sign-in)</li>
-    </ul></li>
-  <li><b>Create an app registration in the Performance Finance Entra ID</b> called <b>"PF KPI Push"</b>: single tenant, no redirect URI, no API permissions needed. We'll send you a certificate (.cer, public part only) to upload to it. Please send back its <b>Application (client) ID</b> and the <b>Directory (tenant) ID</b>.</li>
-</ol>
-</div>
-
-<h2>9. Order of work</h2>
-<ol>
-  <li>Send the IT request (above). The app registration is the step most likely to take time.</li>
-  <li>Move the script into Kpi.Push, add the version stamp, and the Kpi.Tools commands <code>export-apply</code>, <code>export-check</code> and <code>grant-push</code>.</li>
-  <li>Run <code>export-apply --cms CMS_Live</code> on the office server, then <code>export-check</code>.</li>
-  <li>When IT reply: add the office address to the Azure firewall, the certificate to PF-APP1, and <code>grant-push</code> for the new identity.</li>
-  <li>Publish Kpi.Push to PF-APP1 and create the two SQL Agent jobs.</li>
-  <li>One manual run, the 241-report comparison against live CMS, and the site's "As at" showing today's real figures.</li>
-</ol>
-
-<h2>10. Retiring the CMS copy of the KPIs</h2>
-<p>CMS.Web isn't live, so nobody relies on its <code>/kpis</code> pages. Proposed: remove the KPI area from CMS before CMS.Web goes live, so the KPI site is the only KPI front end, for the office as well, and replaces Klipfolio. That ends the "change both copies" rule for every KPI change. <b>To be decided.</b> If agreed, both CLAUDE.md files change from "inside the office KPIs stay on CMS.Web /kpis" to "the KPI site is the only KPI front end".</p>
-
+<h2>8. Retiring the CMS copy of the KPIs</h2>
+<p>CMS.Web isn't live, so nobody relies on its <code>/kpis</code> pages. Proposed: once the KPI site is live, remove the KPI area from CMS so the KPI site is the only KPI front end, for the office as well, and replaces Klipfolio. That ends the "change both copies" rule. <b>To be decided</b> - and not before the site has run on live figures for a while.</p>
 <table>
   <tr><th>Where</th><th>What goes</th><th>Notes</th></tr>
   <tr><td>CMS.Web</td><td>All the KPI pages and their parts (68 files), KPI styles, heat-map files, the <code>/kpis</code> link</td><td>If CMS.Web wants a KPIs menu item, it links to the KPI site.</td></tr>
   <tr><td>CMS.Core</td><td>The whole <code>Kpis</code> folder: services, DTOs, embedded SQL</td><td>Only CMS.Web uses it (checked).</td></tr>
-  <tr><td>CMS_Live</td><td>The <code>WebKPI</code> report procedures</td><td>Dropped by a CMS migration, last of all.</td></tr>
+  <tr><td>CMS_Live</td><td>The <code>WebKPI</code> report procedures</td><td>Dropped by a CMS migration, last of all - after <code>WebKPI.ConisterRCF_IWFA</code>, which <code>KpiExport.vFundingLine</code> reads, has moved into <code>KpiExport</code>.</td></tr>
   <tr><td>CMS_Live</td><td>Klipfolio's <code>KPI.*</code> objects</td><td>Separately, when Klipfolio is switched off.</td></tr>
 </table>
+<p><b>What stays in CMS:</b> the <code>KpiExport</code> schema, and the desktop's own Bad Debt and Exposure procedures (<code>OB.AnnualBadDebtList</code>, <code>Reports.Exposure</code>), which the desktop uses and the nightly snapshot calls. Each report's calculation already lives in the KPI repo (<code>Rpt.sp*</code> in CMS_KPI, matched 241 of 241 against CMS). Once WebKPI goes there is nothing left to compare with, so the last step before removing it is one final full comparison.</p>
 
-<p><b>What stays in CMS:</b> the desktop's own Bad Debt and Exposure procedures (<code>OB.AnnualBadDebtList</code>, <code>Reports.Exposure</code>) - the desktop uses them, and the nightly snapshot calls them.</p>
-
-<h3 style="font-size:16px;font-weight:600;margin:24px 0 8px">Where the data queries live afterwards</h3>
-<p>Every query moves into the KPI repo; none is lost, and each has exactly one home.</p>
-<table>
-  <tr><th>Logic</th><th>Today</th><th>After</th></tr>
-  <tr><td>What leaves CMS, and its shape (leads, salespeople, targets, book position...)</td><td><code>Local/KPI_Export.sql</code> (KPI repo), reading CMS_Live</td><td><code>Kpi.Push/Export/KPI_Export.sql</code> - the <code>KpiExport</code> views in the KPI_Export database (migrations later, if wanted)</td></tr>
-  <tr><td>Lead detail, equipment attribution, Conister RCF/IWFA, heat map source</td><td><code>WebKPI.fnLeadDetail</code>, <code>fnEquipmentAttribution</code>, <code>ConisterRCF_IWFA</code>, <code>spHeatMap</code> in CMS_Live</td><td>Copied into KPI_Export (<code>KpiExport</code> schema) by the same script, so KPI_Export no longer needs WebKPI at all</td></tr>
-  <tr><td>Each report's calculation (Sales Summary, Year on Year, Margin, Min IRR, Records...)</td><td><code>WebKPI.sp*</code> in CMS_Live, plus the SQL files embedded in CMS.Core (<code>Kpis/Sql</code>)</td><td>The <code>Rpt.sp*</code> procedures in CMS_KPI, defined by migrations in <code>Kpi.Data</code> - already built and matched 241 of 241 against CMS</td></tr>
-  <tr><td>Supplier reports</td><td><code>CMS.Core/Kpis/Sql/SupplierFigures.sql</code></td><td><code>Rpt.spSupplierFigures</code> (already ported)</td></tr>
-  <tr><td>Bad Debt and Exposure figures</td><td>CMS's own procedures, called live by CMS.Web</td><td>Still CMS's own procedures, called once a night by <code>KpiExport.spPrepareSnapshots</code>; stored results reach the site through <code>Rpt.spBadDebt</code> / <code>Rpt.spExposure</code></td></tr>
-  <tr><td>The code that calls the reports and shapes rows for pages</td><td><code>CMS.Core/Kpis/*Service.vb</code> + DTOs</td><td><code>Kpi.Web/Reports</code> (C#, same names and signatures) - already built</td></tr>
-  <tr><td>The pages</td><td><code>CMS.Web</code> KPI pages</td><td><code>Kpi.Web</code> - the only copy</td></tr>
-</table>
-
-<h3 style="font-size:16px;font-weight:600;margin:24px 0 8px">Order</h3>
-<ol>
-  <li>Copy the four WebKPI objects into KPI_Export (script change, version bumped).</li>
-  <li><b>One last full 241-report comparison.</b> <code>Kpi.Tools compare</code> checks the site against the WebKPI procedures and CMS.Core's SQL; once those go there is nothing to compare with, and the KPI repo's versions become the definition.</li>
-  <li>Remove the KPI area from CMS.Web and the <code>Kpis</code> folder from CMS.Core - a normal change to the shared CMS repo. Retire <code>compare</code> with it.</li>
-  <li>A CMS migration drops the <code>WebKPI</code> report procedures.</li>
-  <li>Update both CLAUDE.md files.</li>
-</ol>
-
-<p class="footer">PerformanceFinance.Kpi · docs/kpi-copy-plan.html · plan, October 2026</p>
+<p class="footer">PerformanceFinance.Kpi · docs/kpi-copy-plan.html · the design as built, 18 October 2026 · switch-on steps: docs/kpi-pull-runbook.md</p>
 </main>
 </body>
 </html>

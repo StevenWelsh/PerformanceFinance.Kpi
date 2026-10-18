@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The KPI copy from a developer's machine: refreshes the local KPI_Export as the office's Agent jobs would, then runs
-       the same copy as the site (Kpi.Copy) into your local CMS_KPI, or the Azure one with -azure. In production the site
+       the same copy as the site (Kpi.Copy) into your local CMS_KPI (only a local one). In production the site
        itself copies, from KPI_Export on the office server. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>

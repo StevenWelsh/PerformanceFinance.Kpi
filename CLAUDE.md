@@ -24,7 +24,7 @@ Plan, object by object: `docs/analytics/kpi-database-plan.html` in the CMS repo
 | `Kpi.Data` | EF Core 10 migrations for `CMS_KPI` (history table `Ref.MigrationsHistory`). The schema is SQL in `migrationBuilder.Sql(...)`, not an EF model: there are no entity classes for the report tables. |
 | `Kpi.Tools` | Run by a person: `migrate`, `seed --email --name` (the first System Admin), `grant-site --app --app-id` (a web app's managed identity into `kpi_site`), `grant-push --app --app-id` (an Entra identity - the site's, which copies - into `kpi_push`), each with `--azure` for the Azure database (`CmsKpiAzure`; a non-local server is refused without it); `export-apply --cms <db>` / `export-check` / `grant-pull --user <name>` (KPI_Export: server = `ConnectionStrings:Export`, `--remote` to change another server; grant-pull makes the site's SQL login there with a NEW password shown once); `compare [report]`. |
 | `Kpi.Copy` | The copy itself, shared by the site and Kpi.Push: `KpiCopier` (read `KpiCopy.Refresh`, copy `KpiCopy.*` into `Stage`, publish) and `Export/` - the KPI_Export script and `ExportVersion`. |
-| `Kpi.Push` | The copy from a DEVELOPER'S machine: refreshes the local KPI_Export as the office's Agent jobs would (`Nightly` prepares Bad Debt and Exposure first; `--no-refresh` skips), then runs Kpi.Copy into local CMS_KPI, or `--azure` into `CmsKpiAzure`. Not used in production. |
+| `Kpi.Push` | The copy from a DEVELOPER'S machine: refreshes the local KPI_Export as the office's Agent jobs would (`Nightly` prepares Bad Debt and Exposure first; `--no-refresh` skips), then runs Kpi.Copy into the LOCAL CMS_KPI - it refuses any other server (its `--azure` went 18 Oct 2026: a CMS_Dev copy must never overwrite the live site's figures). Not used in production. |
 | `Kpi.Web` | The site: Blazor Server, CMS.Web's KPI pages copied, reading `CMS_KPI`; `Data/KpiPull` is the production copy. |
 
 **.NET 10 (Oct 2026):** every project targets .NET 10 (LTS to Nov 2028; .NET 8 support ends 10 Nov 2026). EF Core and
@@ -225,7 +225,7 @@ NAT gateway can't move and is recreated:
   the pull works. Firewall: `pf-apps-nat` (20.90.27.132, the site), `steve-current`, and `pf-office` (51.148.118.225,
   also from the push - remove). The site's 31 shared-address rules were deleted 16 Oct; with only these, the site
   restarted and `/health/db` said ok - the proof that it goes out through 20.90.27.132. **`CMS_KPI`**: Standard S0, CMS_Live's collation. Migrated, seeded and
-  filled with `Kpi.Tools ... --azure` / `Kpi.Push ... --azure` (secrets `ConnectionStrings:CmsKpiAzure`,
+  first filled by hand from CMS_Dev with Kpi.Push's old `--azure`; since 18 Oct only the site's own copy fills it. `Kpi.Tools ... --azure` (secret `ConnectionStrings:CmsKpiAzure`,
   `Authentication=Active Directory Interactive`).
 - **App Service plan `plan-pf-apps`** (B1 Linux) + **web app `pf-kpi`**: .NET 10, Always On, WebSockets, HTTPS only, system
   managed identity (app id `61d59e76-...`, a user in `kpi_site` by `grant-site`). App settings: `ASPNETCORE_ENVIRONMENT`
@@ -254,9 +254,13 @@ NAT gateway can't move and is recreated:
   Steve through action group `ag-pf-kpi-alerts`.
 - **Still before go-live:** the Data Protection key ring is the App Service default (`/home`, survives restarts, not
   encrypted at rest) - wrap it with Key Vault (the CMS data source card's saved password depends on it too); the pull
-  switched on (the CMS migration `mgKpiExport` on CMS_Live, PCS's port forward, KPI_Export + its jobs + `grant-pull` on
-  PF-APP1, `grant-push` for the site's identity, the CMS data source card) - see `docs/kpi-pull-runbook.md`. Until then
-  the figures are a developer's hand copy from CMS_Dev.
+  switched on - see `docs/kpi-pull-runbook.md`. **Done 18 Oct 2026:** `mgKpiExport` on CMS_Live (with CMS publish 1426);
+  KPI_Export v3 + its two Agent jobs on PF-APP1 (Steve ran the script in SSMS with `@CmsDb = CMS_Live` rather than
+  Kpi.Tools - equivalent); first `spNightly` by hand: 25,002 leads; the site's login `kpi_site_azure` made by an SSMS
+  script equivalent to `grant-pull` (password made by SQL Server, kept only in Steve's password manager; also DENY VIEW
+  ANY DATABASE) and its limits proved. **Left:** `grant-push` for the site's identity, PCS's port forward, then the CMS
+  data source card. Until then the figures are a developer's hand
+  copy from CMS_Dev.
 - **The office SQL Server (PF-APP1, found 16 Oct 2026):** SQL Server 2017 Standard, security updates current (support
   ends 12 Oct 2027); ownership chaining off; KPI_Export / CMS_Live / Dashboard owned by Steve's Windows account.
   Klipfolio already reaches it through a port forward of 1433 (Klipfolio's shared addresses) as **`Fendra`, a sysadmin**,
