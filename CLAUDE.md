@@ -220,11 +220,11 @@ NAT gateway can't move and is recreated:
   16 Oct: outside port of their choice -> PF-APP1 192.168.1.9:1433). About GBP 30 a month. `Microsoft.Network` had to be
   registered on the subscription first.
 
-- **SQL server `pf-sql-uk`**: admin = group **PF Database Admins** (Steve, Andy). Entra-only until 16 Oct, when password
-  sign-in was switched on for the abandoned push's `kpi-push-office` user - switch it back off and drop that user once
-  the pull works. Firewall: `pf-apps-nat` (20.90.27.132, the site), `steve-current`, and `pf-office` (51.148.118.225,
-  also from the push - remove). The site's 31 shared-address rules were deleted 16 Oct; with only these, the site
-  restarted and `/health/db` said ok - the proof that it goes out through 20.90.27.132. **`CMS_KPI`**: Standard S0, CMS_Live's collation. Migrated, seeded and
+- **SQL server `pf-sql-uk`**: admin = group **PF Database Admins** (Steve, Andy). **Entra-only** (password sign-in was
+  on 16-18 Oct for the abandoned push's `kpi-push-office` user; that user was dropped and Entra-only restored 18 Oct).
+  Firewall: `pf-apps-nat` (20.90.27.132, the site) and `steve-current` only - the site's 31 shared-address rules were
+  deleted 16 Oct, and with only these the site restarted and `/health/db` said ok: the proof that it goes out through
+  20.90.27.132. **`CMS_KPI`**: Standard S0, CMS_Live's collation. Migrated, seeded and
   first filled by hand from CMS_Dev with Kpi.Push's old `--azure`; since 18 Oct only the site's own copy fills it. `Kpi.Tools ... --azure` (secret `ConnectionStrings:CmsKpiAzure`,
   `Authentication=Active Directory Interactive`).
 - **App Service plan `plan-pf-apps`** (B1 Linux) + **web app `pf-kpi`**: .NET 10, Always On, WebSockets, HTTPS only, system
@@ -258,8 +258,8 @@ NAT gateway can't move and is recreated:
   KPI_Export v3 + its two Agent jobs on PF-APP1 (Steve ran the script in SSMS with `@CmsDb = CMS_Live` rather than
   Kpi.Tools - equivalent); first `spNightly` by hand: 25,002 leads; the site's login `kpi_site_azure` made by an SSMS
   script equivalent to `grant-pull` (password made by SQL Server, kept only in Steve's password manager; also DENY VIEW
-  ANY DATABASE) and its limits proved. **Left:** `grant-push` for the site's identity, PCS's port forward, then the CMS
-  data source card. Until then the figures are a developer's hand
+  ANY DATABASE) and its limits proved; the push's Azure leftovers removed. **Left:** `grant-push` for the site's identity,
+  PCS's port forward, then the CMS data source card. Until then the figures are a developer's hand
   copy from CMS_Dev.
 - **The office SQL Server (PF-APP1, found 16 Oct 2026):** SQL Server 2017 Standard, security updates current (support
   ends 12 Oct 2027); ownership chaining off; KPI_Export / CMS_Live / Dashboard owned by Steve's Windows account.
