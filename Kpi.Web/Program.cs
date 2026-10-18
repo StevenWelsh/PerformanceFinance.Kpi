@@ -15,6 +15,12 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// The copied report pages call the database synchronously (KpiDb.Report waits on the thread pool), and on this one-core
+// plan .NET adds pool threads slowly - so a page starting many loads queued behind its own waits (18 Oct 2026). Start
+// with enough threads that blocked waits don't hold everything else up.
+ThreadPool.GetMinThreads(out var minWorkers, out var minIo);
+ThreadPool.SetMinThreads(Math.Max(minWorkers, 64), Math.Max(minIo, 64));
+
 var uk = new CultureInfo("en-GB");
 CultureInfo.DefaultThreadCurrentCulture = uk;
 CultureInfo.DefaultThreadCurrentUICulture = uk;

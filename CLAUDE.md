@@ -239,7 +239,7 @@ NAT gateway can't move and is recreated:
   on 16-18 Oct for the abandoned push's `kpi-push-office` user; that user was dropped and Entra-only restored 18 Oct).
   Firewall: `pf-apps-nat` (20.90.27.132, the site) and `steve-current` only - the site's 31 shared-address rules were
   deleted 16 Oct, and with only these the site restarted and `/health/db` said ok: the proof that it goes out through
-  20.90.27.132. **`CMS_KPI`**: Standard S0, CMS_Live's collation. Migrated, seeded and
+  20.90.27.132. **`CMS_KPI`**: Standard **S1** (S0 until 18 Oct 2026), CMS_Live's collation. Migrated, seeded and
   first filled by hand from CMS_Dev with Kpi.Push's old `--azure`; since 18 Oct only the site's own copy fills it. `Kpi.Tools ... --azure` (secret `ConnectionStrings:CmsKpiAzure`,
   `Authentication=Active Directory Interactive`).
 - **App Service plan `plan-pf-apps`** (B1 Linux) + **web app `pf-kpi`**: .NET 10, Always On, WebSockets, HTTPS only, system
@@ -320,6 +320,15 @@ NAT gateway can't move and is recreated:
   the next viewer loads normally once the database answers. Inside the container .NET 10 DID connect (first token
   13 s, first connection ~10 s, then fast), and the site connected after a restart - what stuck that first start is
   not known, which is why the limits matter more than the cause.
+- **"Timeout expired ... obtaining a connection from the pool ... max pool size was reached" (18 Oct 2026) did NOT mean
+  the pool was full.** One phone view of Salesperson Summary started ~15 report loads at once (4 salespeople x Year /
+  Quarter / Month, plus the phone cards - the hidden desktop view loads all of them), each wanting a NEW connection;
+  new connections from App Service are slow (8-32 s) and made largely one after another, so the later ones waited past
+  the 15 s Connect Timeout. Idle pooled connections close after a few minutes, so it came back "after time away"; each
+  deploy also empties the report cache. Fixed four ways: `Min Pool Size=5;Connect Timeout=60` on the site's
+  `ConnectionStrings__CmsKpi` (connections kept ready), `ThreadPool.SetMinThreads(64)` (the copied pages' synchronous
+  waits no longer starve the one-core plan), at most 6 report queries at once (`KpiDb`'s semaphore; the rest queue on
+  open connections, within the same minute), and CMS_KPI S0 -> **S1**.
 - **Windows PowerShell 5.1's `ConvertFrom-Json` passes a JSON ARRAY down the pipe as ONE object**: `... | ConvertFrom-Json |
   Where-Object { $_.name -like "x*" } | ForEach-Object { az ... delete --ids $_.id }` matched the whole list and deleted
   ALL 34 SQL firewall rules (16 Oct; the 3 keepers restored from a saved copy within minutes - firewall changes take a

@@ -41,14 +41,33 @@ public sealed class KpiDb : IDisposable
     public static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(50);
 
     /// <summary>
+    /// At most this many report queries at once, site-wide (18 Oct 2026). One phone view of Salesperson Summary started
+    /// ~15 at the same moment, each wanting its own NEW connection - slow to make from App Service (8-32 s: TLS + the
+    /// managed identity) and made largely one after another, so the last ones gave up ("Timeout expired ... obtaining a
+    /// connection from the pool"). Queued here instead, they reuse the few connections already open, and the waiting
+    /// counts towards <see cref="QueryTimeout"/>.
+    /// </summary>
+    private static readonly SemaphoreSlim Concurrent = new(6, 6);
+
+    /// <summary>
     /// Runs a report procedure; its columns fill <typeparamref name="T"/> by name. Synchronous for the copied pages, but
     /// the work runs on the thread pool and is time-limited: a call that hangs reaching the database (16 Oct 2026: the
     /// whole site, for hours) fails with a message instead of freezing the page that made it.
     /// </summary>
     public List<T> Report<T>(string procedure, object? args = null)
     {
-        var run = Task.Run(() =>
-            Open().Query<T>(procedure, args, commandType: CommandType.StoredProcedure, commandTimeout: 45).ToList());
+        var started = DateTime.UtcNow;
+        var run = Task.Run(async () =>
+        {
+            if (!await Concurrent.WaitAsync(QueryTimeout)) throw new TimeoutException(Kpis.KpiCache.TimeoutMessage);
+            try
+            {
+                // what is left of the minute for the query itself, at least 10 s
+                var left = Math.Max(10, (int)(QueryTimeout - (DateTime.UtcNow - started)).TotalSeconds - 5);
+                return Open().Query<T>(procedure, args, commandType: CommandType.StoredProcedure, commandTimeout: left).ToList();
+            }
+            finally { Concurrent.Release(); }
+        });
         try { return run.WaitAsync(QueryTimeout).GetAwaiter().GetResult(); }
         catch (TimeoutException) { throw new TimeoutException(Kpis.KpiCache.TimeoutMessage); }
     }
