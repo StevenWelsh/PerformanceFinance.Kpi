@@ -18,7 +18,8 @@ namespace Kpi.Web.Data;
 /// change on the card takes effect within two minutes. Writes through the site's usual CmsKpi connection, whose identity
 /// is also in kpi_push (Kpi.Tools grant-push). Off while there is no data source, or it is switched off.
 /// </summary>
-public sealed class KpiPull(IConfiguration config, CmsSource cmsSource, IntegrationStore store, ILogger<KpiPull> log) : BackgroundService
+public sealed class KpiPull(IConfiguration config, CmsSource cmsSource, IntegrationStore store, Kpis.KpiWarmer warmer, ILogger<KpiPull> log)
+    : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(2);
 
@@ -90,6 +91,7 @@ public sealed class KpiPull(IConfiguration config, CmsSource cmsSource, Integrat
         if (outcome.Published)
         {
             await store.RecordCallAsync(IntegrationProviders.CmsSource, null);   // the card's "Last worked"
+            warmer.AfterCopy();   // re-run the cached reports now, before anyone asks for the new figures
             log.LogInformation("KPI copy ({Scope}) published {Tables} tables, {Rows:N0} rows, as at {Date:dd/MM/yyyy}, in {Seconds:0.0} s",
                 outcome.Scope, outcome.Tables, outcome.Rows, outcome.ReportDate, outcome.Elapsed.TotalSeconds);
         }

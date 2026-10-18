@@ -60,7 +60,6 @@
     // A period the proc returns no row for shows as nothing done.
     private static readonly SalesSummaryRow Zero = new() { AnalysisPeriodName = "" };
 
-    private sealed record Rows(SalesSummaryRow? Now, SalesSummaryRow? Prev);
 
     private string Heading => Title + ": " + Period switch
     {
@@ -97,9 +96,11 @@
         StateHasChanged();
         try
         {
+            // the SAME cache entry as the desktop panel (SalesSummaryCells, KPI site 18 Oct 2026) - before, a phone
+            // fetched every figure twice under two names
             var entry = await KpiCache.GetOrLoad(
-                KpiCache.Key("SalesSummaryMobileCard", period, divisionId, salespersonId),
-                () => LoadRows(period, divisionId, salespersonId));
+                Kpi.Web.Data.Kpis.SalesSummaryCells.Key(KpiCache, period, divisionId, salespersonId),
+                Kpi.Web.Data.Kpis.SalesSummaryCells.Loader(SessionFactory, period, divisionId, salespersonId));
             if (version != _version) return;
             _now = entry.Data.Now;
             _prev = entry.Data.Prev;
@@ -119,14 +120,7 @@
     }
 
     // Pure loader: the same proc call SalesSummaryPanel makes, plus the report date.
-    private async Task<(Rows, DateTime)> LoadRows(string period, int divisionId, int salespersonId)
-    {
-        using var cms = await SessionFactory.BeginAsync();
-        var asAt = cms.Db.ReportDate();
-        var rows = new SalesSummaryService(cms.Db).GetSummary(period, divisionId: divisionId, salespersonId: salespersonId);
-        return (new Rows(rows.FirstOrDefault(r => r.PeriodId == 1),
-                         rows.FirstOrDefault(r => r.PeriodId == 2)), asAt);
-    }
+    // (the loader is SalesSummaryCells.Loader - shared with the desktop panel)
 
     private static string Cur(decimal v) => "£" + v.ToString("N0");
 

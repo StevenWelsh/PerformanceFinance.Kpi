@@ -104,7 +104,7 @@
         // the current reportable salespeople. HARDCODED for now (Klipfolio uses a
         // manual tick-list): Susan Marshall, Pete George, Ryan O'Dwyer, Stuart Burn.
         // Ordered by this-year TFI (the league table's figure: the same sum), highest first.
-        int[] team = { 74, 68, 73, 82 };
+        int[] team = Kpi.Web.Data.Kpis.SalesSummaryCells.SalespersonSummaryTeam;   // KPI site: one list, also pre-loaded
         var tfi = new SalesLeagueTableService(cms.Db).GetLeague(asAt.Year, "TFI")
             .GroupBy(r => r.SalesId)
             .ToDictionary(g => g.Key, g => g.Sum(r => r.MeasureValue));

@@ -98,7 +98,9 @@ builder.Services.AddScoped<AuthenticationStateProvider, KpiAuthStateProvider>();
 builder.Services.AddSingleton<AccountLinks>();
 builder.Services.AddSingleton<UserAdmin>();
 builder.Services.AddHostedService<ExpireSetupsTask>();
-builder.Services.AddHostedService<Kpi.Web.Data.Kpis.KpiWarmer>();   // the morning pre-load of the reports people use
+// the pre-load: one instance, also told by the copy (KpiPull) when a new dataset is published
+builder.Services.AddSingleton<Kpi.Web.Data.Kpis.KpiWarmer>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Kpi.Web.Data.Kpis.KpiWarmer>());
 builder.Services.AddHostedService<Kpi.Web.Data.KpiPull>();          // the KPI copy from the office (KPI_Export), every two minutes
 
 // ---- integrations: Resend for email ----------------------------------------------------------------------------

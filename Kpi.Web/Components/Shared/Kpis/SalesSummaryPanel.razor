@@ -53,18 +53,8 @@
     private SalesSummaryRow? _now;
     private SalesSummaryRow? _prev;
 
-    // Cached payload for this cell: this-period vs prior-period rows.
-    private sealed record Rows(SalesSummaryRow? Now, SalesSummaryRow? Prev);
-
-    // Pure loader — runs the proc, returns the two rows + the report date. No field mutation.
-    private async Task<(Rows, DateTime)> LoadRows()
-    {
-        using var cms = await SessionFactory.BeginAsync();
-        var asAt = cms.Db.ReportDate();
-        var rows = new SalesSummaryService(cms.Db).GetSummary(Period, divisionId: DivisionId, salespersonId: SalespersonId);
-        return (new Rows(rows.FirstOrDefault(r => r.PeriodId == 1),
-                         rows.FirstOrDefault(r => r.PeriodId == 2)), asAt);
-    }
+    // The cell's key and loader are SalesSummaryCells' (KPI site, 18 Oct 2026): the phone card shares the entry, and
+    // KpiWarmer fills it before anyone asks.
 
     private string PeriodLabel => Period switch
     {
@@ -86,8 +76,8 @@
             // re-running every cell's proc. GetOrLoad is single-flight, so the grid's cells that share
             // a key (they don't here — each cell is a distinct combination) would load once.
             var entry = await KpiCache.GetOrLoad(
-                KpiCache.Key("SalesSummaryPanel", Period, DivisionId, SalespersonId),
-                LoadRows);
+                Kpi.Web.Data.Kpis.SalesSummaryCells.Key(KpiCache, Period, DivisionId, SalespersonId),
+                Kpi.Web.Data.Kpis.SalesSummaryCells.Loader(SessionFactory, Period, DivisionId, SalespersonId));
             _now = entry.Data.Now;
             _prev = entry.Data.Prev;
         }

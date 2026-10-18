@@ -68,7 +68,7 @@ public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, 
     /// </summary>
     public Task<KpiCacheEntry<T>> GetOrLoad<T>(string key, Func<Task<(T Data, DateTime AsAt)>> load)
     {
-        Remember(key, k => Load(k, load));
+        Remember(key, k => Load(k, load), k => RefreshAsync(k, load));
         return Load(key, load);
     }
 
@@ -79,14 +79,32 @@ public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, 
     // reloads them under the new date in the background, one at a time. A loader is the page's "pure" one (no
     // component state written - the same contract the 10-minute background refresh already relies on). Views
     // nobody has opened for three days are forgotten. Empty after a restart: the first viewers then fill it.
-    private readonly ConcurrentDictionary<string, (Func<string, Task> Load, DateTime LastUsedUtc)> _views = new();
+    private readonly ConcurrentDictionary<string, (Func<string, Task> Load, Func<string, Task> Refresh, DateTime LastUsedUtc)> _views = new();
     private static readonly TimeSpan ForgetAfter = TimeSpan.FromDays(3);
     private const string DateSlot = "{date}";
 
-    private void Remember(string key, Func<string, Task> load)
+    private void Remember(string key, Func<string, Task> load, Func<string, Task> refresh)
     {
         var parts = key.Split(':', 4);   // kpi:{name}:{yyyyMMdd}:{params}
-        if (parts.Length == 4) _views[$"{parts[0]}:{parts[1]}:{DateSlot}:{parts[3]}"] = (load, DateTime.UtcNow);
+        if (parts.Length == 4) _views[$"{parts[0]}:{parts[1]}:{DateSlot}:{parts[3]}"] = (load, refresh, DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// Re-runs every remembered view for <paramref name="reportDate"/>, one at a time, replacing what is cached - after a
+    /// new dataset is published (same date, same keys, new figures). Returns how many.
+    /// </summary>
+    public async Task<int> RefreshViewsAsync(DateTime reportDate, CancellationToken ct)
+    {
+        var date = reportDate.ToString("yyyyMMdd");
+        var done = 0;
+        foreach (var (view, v) in _views.ToArray())
+        {
+            if (ct.IsCancellationRequested) break;
+            if (DateTime.UtcNow - v.LastUsedUtc > ForgetAfter) { _views.TryRemove(view, out _); continue; }
+            try { await v.Refresh(view.Replace(DateSlot, date)); done++; }
+            catch (Exception ex) { _logger.LogWarning(ex, "KPI refresh after a new dataset failed for {View}", view); }
+        }
+        return done;
     }
 
     /// <summary>Loads every remembered view under <paramref name="reportDate"/>, one at a time; returns how many.</summary>

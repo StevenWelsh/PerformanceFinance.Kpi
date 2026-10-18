@@ -216,6 +216,14 @@ the tables in full (25k paid leads).
   remembers each view actually opened (key minus its date + its loader, forgotten after 3 days unused) and `KpiWarmer`
   reloads them, one at a time, when the date moves (checked every 2 min). Empty after a restart. If it is still slow,
   the next step is the database S0 -> S1 (one setting, reversible) - measure first.
+- **The pre-load, widened (18 Oct 2026, Steve: Sales Summary / Salesperson Summary "always slow" - 9-15 Rpt.spSalesSummary
+  calls a view, ~0.2-0.7 s each on Azure, and the shared cache was empty after every restart).** `KpiWarmer` (one
+  singleton, also a hosted service) fills the cache at START-UP, on a NEW BUSINESS DATE, and after every NEW DATASET the
+  site's copy publishes (`KpiPull` calls `AfterCopy()` - Steve: "from the sync"): it re-runs every remembered view
+  (`KpiCache.RefreshViewsAsync`; same keys, new figures) and makes sure every cell of both pages is cached
+  (`SalesSummaryCells` - also the ONE key and loader the desktop panel and the phone card now share; before, a phone
+  fetched each figure twice). One run and one query at a time. Bigger fix if first views still bother: one Rpt
+  procedure returning a whole page's grid. Caching to be discussed further (Steve).
 - **Data Protection key ring** encrypts cookies, emailed links and the Resend key: locally the user profile; **in Azure it
   must be a shared persisted ring (storage + Key Vault)** or every restart signs everyone out and the Resend key becomes
   unreadable. Pin `AllowedHosts` in Azure: emailed links are built from the request's host.
