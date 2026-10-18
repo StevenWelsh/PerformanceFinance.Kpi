@@ -332,6 +332,9 @@ namespace Kpi.Data.Migrations
                     b.Property<DateTime?>("RevokedUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("ShowHeader")
+                        .HasColumnType("bit");
+
                     b.Property<int>("UseCount")
                         .HasColumnType("int");
 

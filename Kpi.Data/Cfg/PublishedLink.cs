@@ -16,6 +16,9 @@ public class PublishedLink
     public byte[] KeyHash { get; set; } = Array.Empty<byte>();
     /// <summary>The key, encrypted with the site's Data Protection key ring - so its URL can be shown again.</summary>
     public string? KeyCipher { get; set; }
+    /// <summary>Show the report's header - its title and the "As at / Refreshed" lines (Steve). Changeable at any time;
+    /// an open tab follows within a minute.</summary>
+    public bool ShowHeader { get; set; } = true;
     /// <summary>The key's first few characters, to tell links apart (not enough to use one).</summary>
     public string KeyHint { get; set; } = "";
     public DateTime CreatedUtc { get; set; }

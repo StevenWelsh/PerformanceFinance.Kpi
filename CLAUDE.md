@@ -187,7 +187,9 @@ the tables in full (25k paid leads).
   links makes a link to ONE report, opened at `/view/{key}` without signing in. The key is 32 random bytes; a link is
   found by its SHA-256 (`Cfg.PublishedLink`, migrations `PublishedLinks`, `PublishedLinkUrls`) and the key is kept
   ENCRYPTED (Data Protection), so Settings shows Copy link / Open on every active link (Steve: not sensitive, and locked
-  to the allowed addresses; a key ring change makes old URLs unshowable - they still open; remake them). `PublishedLinkDoor` (before AccountGate; `/view` is on the gate's open list) checks the key and the
+  to the allowed addresses; a key ring change makes old URLs unshowable - they still open; remake them). Each link has
+  SHOW HEADER (the report's title and As at / Refreshed lines; `.kpi-view-noheader` hides `.kpi-topbar`), changeable
+  any time without changing the URL - an open tab follows at its next minute check. `PublishedLinkDoor` (before AccountGate; `/view` is on the gate's open list) checks the key and the
   ALLOWED ADDRESSES (a `Cfg.Integration` row, provider `PublishedLinks`; EMPTY = any address - CMS's users at home
   come from their own address, the VPN carrying only office traffic), counts the open, sets no-store / no-referrer.
   `PublishedView` renders the report page as a plain component (its route, layout and [Authorize] don't apply) inside

@@ -61,7 +61,7 @@ public sealed class PublishedLinkStore(IDbContextFactory<KpiDbContext> dbs, IDat
     }
 
     /// <summary>Makes a link and returns its key.</summary>
-    public async Task<string> CreateAsync(KpiUser actor, string label, string reportSlug)
+    public async Task<string> CreateAsync(KpiUser actor, string label, string reportSlug, bool showHeader = true)
     {
         label = label.Trim();
         if (label.Length == 0) throw new InvalidOperationException("Give the link a label, e.g. \"CMS desktop: Business Analysis tab\".");
@@ -74,7 +74,7 @@ public sealed class PublishedLinkStore(IDbContextFactory<KpiDbContext> dbs, IDat
         await using var db = await dbs.CreateDbContextAsync();
         db.PublishedLinks.Add(new PublishedLink
         {
-            Label = label, ReportSlug = report.Slug, KeyHash = Hash(key), KeyCipher = _keys.Protect(key), KeyHint = key[..6],
+            Label = label, ReportSlug = report.Slug, KeyHash = Hash(key), KeyCipher = _keys.Protect(key), KeyHint = key[..6], ShowHeader = showHeader,
             CreatedUtc = DateTime.UtcNow, CreatedByUserId = actor.Id
         });
         AuditLog.Add(db, AuditEvents.PublishedLinkChanged, actor, null, $"Published link made: \"{label}\" ({report.Label}), key {key[..6]}…");
@@ -88,6 +88,19 @@ public sealed class PublishedLinkStore(IDbContextFactory<KpiDbContext> dbs, IDat
         if (string.IsNullOrEmpty(link.KeyCipher)) return null;
         try { return _keys.Unprotect(link.KeyCipher); }
         catch (CryptographicException) { return null; }
+    }
+
+    /// <summary>Header on or off; an open tab follows within a minute.</summary>
+    public async Task SetHeaderAsync(KpiUser actor, int id, bool showHeader)
+    {
+        await using var db = await dbs.CreateDbContextAsync();
+        var link = await db.PublishedLinks.SingleOrDefaultAsync(l => l.Id == id)
+                   ?? throw new InvalidOperationException("That link no longer exists.");
+        if (link.ShowHeader == showHeader) return;
+        link.ShowHeader = showHeader;
+        AuditLog.Add(db, AuditEvents.PublishedLinkChanged, actor, null,
+            $"Published link \"{link.Label}\": header {(showHeader ? "shown" : "hidden")}");
+        await db.SaveChangesAsync();
     }
 
     public async Task RevokeAsync(KpiUser actor, int id)

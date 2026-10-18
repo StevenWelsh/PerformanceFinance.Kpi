@@ -414,6 +414,8 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
    avatar menu, never the phone view, whatever the width. The report page is CMS.Web's copy, untouched: this wraps it. */
 .kpi-view .kpi-sidebar, .kpi-view .um, .kpi-view .kpim { display: none !important; }
 .kpi-view .kpi-shell { display: flex !important; }
+.kpi-view-noheader .kpi-topbar { display: none !important; }   /* the link's header off (Settings) */
+.pl-header { margin: 0; white-space: nowrap; }
 .kpi-view-gone { display: flex; align-items: center; justify-content: center; height: 90vh; color: var(--text-2); }
 
 /* Settings > Published links */
