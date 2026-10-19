@@ -131,6 +131,9 @@
 .set-bad { color: var(--error); }
 
 .set-pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--panel-head); color: var(--text-2); white-space: nowrap; }
+/* Settings > Users: "Online now" (19 Oct 2026) */
+.set-pill-online { background: var(--success-bg); color: var(--success); display: inline-flex; align-items: center; gap: 6px; }
+.set-online-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .set-pill-active, .set-pill-connected { background: var(--success-bg); color: var(--success); }
 .set-pill-disabled, .set-pill-needsattention, .set-pill-inviteexpired { background: var(--error-bg); color: var(--error); }
 .set-pill-invited, .set-pill-settingup, .set-pill-mobilereset, .set-pill-switchedoff { background: var(--warning-bg); color: var(--warning); }

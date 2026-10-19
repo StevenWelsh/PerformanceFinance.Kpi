@@ -8,7 +8,7 @@ namespace Kpi.Web.Data;
 
 /// <summary>
 /// The KPI copy, run by the site (Oct 2026, Steve: a pull, not a push). Every two minutes it reads ONE row from KPI_Export
-/// on the office server (KpiCopy.Refresh, refreshed there every 30 minutes by SQL Server Agent) and copies only when the
+/// on the office server (KpiCopy.Refresh, refreshed there every 10 minutes by SQL Server Agent) and copies only when the
 /// office has refreshed since CMS_KPI last published - Bad Debt and Exposure too when they were prepared since the last
 /// nightly publish. So the figures follow the office's schedule; nothing here has one of its own.
 ///
@@ -80,7 +80,9 @@ public sealed class KpiPull(IConfiguration config, CmsSource cmsSource, Integrat
         var state = await KpiCopier.ReadStateAsync(source, ct);
         if (state is null) return null;                                    // KPI_Export never refreshed yet
 
-        await using var kpi = new SqlConnection(kpiConnection);
+        // its OWN connection, outside the site's pool (19 Oct 2026): the copy's lock lives on this connection's session,
+        // so it must really close afterwards, never sit in the pool (KpiCopier releases the lock too)
+        await using var kpi = new SqlConnection(new SqlConnectionStringBuilder(kpiConnection) { Pooling = false }.ConnectionString);
         await kpi.OpenAsync(ct);
         var (lastLoadUtc, lastNightlyUtc) = await LastLoadsAsync(kpi, ct);
 

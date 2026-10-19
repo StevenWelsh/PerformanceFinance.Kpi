@@ -48,12 +48,12 @@ transaction that is always rolled back, 100 rows / 30 s, System Admin only, each
 
 **A PULL (16 Oct 2026, Steve; it replaced a planned push from the office):** the `KpiExport` views IN THE CMS DATABASE
 (CMS_Live on PF-APP1; CMS_Dev locally) → SQL Server Agent on PF-APP1 copies them into `KpiCopy.*` in the separate
-`KPI_Export` database every 30 minutes on PF-APP1 (the script creates the job at 10; Steve set 30 in SSMS, Oct 2026), 07:00-20:00 Mon-Sat (`KpiCopy.spRefresh`, one transaction, stamps
+`KPI_Export` database every 10 minutes, 07:00-20:00 Mon-Sat (`KpiCopy.spRefresh`, one transaction, stamps
 `KpiCopy.Refresh`), and at 00:15 first prepares Bad Debt and Exposure in CMS (`KpiCopy.spNightly`) → the SITE (`KpiPull`, every 2 minutes, through the CMS data source card) reads that one row and, when it is newer than
 CMS_KPI's last publish (`Rpt.spDataStatus`), bulk-copies `KpiCopy.*` (+ the snapshots when prepared since the last
 nightly publish) into `Stage.*` in `CMS_KPI` → `Stage.spPublish` swaps everything into `Dim`/`Fact` in ONE transaction
 (read-committed snapshot, so a report never sees half a load; it refuses an empty `Stage.Lead`) → the site runs only
-`Rpt.*`. Figures are at most ~32 minutes behind CMS, and count as OVERDUE after 45 minutes in office hours (migration `OverdueAfter45Minutes`; was 30, which tripped on nearly every 30-minute cycle); the timings can't drift, because only the office has a schedule. A
+`Rpt.*`. Figures are at most ~12 minutes behind CMS, and count as OVERDUE after 45 minutes in office hours (migration `OverdueAfter45Minutes`; was 30 - raised 19 Oct 2026 on a wrong guess that the office had gone to 30 minutes, kept as slack: the real cause was the copy-lock bug in Gotchas); the timings can't drift, because only the office has a schedule. A
 refresh during a copy is noticed (the row is re-read) and nothing is published until the next try. Every load replaces
 the tables in full (25k paid leads).
 
@@ -351,6 +351,14 @@ NAT gateway can't move and is recreated:
   few minutes to apply, so the site never noticed). Wrap it: `(... | ConvertFrom-Json) | Where-Object ...`, and list
   what a delete will hit before running it. JMESPath queries with quotes (`[?starts_with(name,'x')]`) don't survive
   PowerShell -> az.cmd either.
+- **A session app lock on a POOLED connection outlives the "close" (19 Oct 2026).** The copy's `sp_getapplock ... @LockOwner =
+  'Session'` was meant to end with its connection, but closing a pooled connection only returns it to the pool, still
+  holding the lock; with `Min Pool Size=5` it could sit there for hours, and every copy said "another copy was still
+  running" (no figures 14:51-17:45, and 11:41-12:15). Now `KpiCopier` releases the lock in a `finally` and `KpiPull`'s
+  copy connection is `Pooling=false`. Any session-scoped lock or setting: release it explicitly, or don't pool.
+- **Who is online** (Settings > Users, 19 Oct 2026, Steve): `OnlineUsers` / `OnlineTracker`, a `CircuitHandler` noting
+  each interactive page's connection up and down per signed-in person; in memory on the one server ("last seen" only
+  since the last start; a sleeping phone shows as last seen). Published views aren't counted.
 - **The App Service clock is UTC: never `ToLocalTime()` / `DateTime.Now` for a time someone reads** - "Refreshed on" did,
   and showed an hour behind "As at" in summer (19 Oct 2026). Show times through `Data/UkTime`.
 - **Ctrl+C on `dotnet run` can leave the program running** (a seed waiting at `Password:`): its exe then locks

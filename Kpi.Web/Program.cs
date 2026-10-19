@@ -97,6 +97,9 @@ builder.Services.AddScoped<AuthenticationStateProvider, KpiAuthStateProvider>();
 
 builder.Services.AddSingleton<AccountLinks>();
 builder.Services.AddSingleton<UserAdmin>();
+// who has the site open, for Settings > Users (each page's live connection, noted as it comes and goes)
+builder.Services.AddSingleton<OnlineUsers>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, OnlineTracker>();
 builder.Services.AddHostedService<ExpireSetupsTask>();
 // the pre-load: one instance, also told by the copy (KpiPull) when a new dataset is published
 builder.Services.AddSingleton<Kpi.Web.Data.Kpis.KpiWarmer>();

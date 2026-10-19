@@ -76,7 +76,10 @@ public static class KpiCopier
         var clock = Stopwatch.StartNew();
         var scope = withSnapshots ? "Nightly" : "Frequent";
 
-        // one copy at a time into CMS_KPI (the site, or a developer's Kpi.Push): held until this connection closes
+        // one copy at a time into CMS_KPI (the site, or a developer's Kpi.Push). RELEASED EXPLICITLY when the copy ends,
+        // however it ends (19 Oct 2026): "until the connection closes" was not enough - a pooled connection is only put
+        // back in the pool, still holding the lock, and with Min Pool Size it could sit there for hours, every later copy
+        // then refused as "another copy was still running" (14:51-17:45 that day, and 11:41-12:15).
         await using (var lockCmd = new SqlCommand(
             "DECLARE @r int; EXEC @r = sp_getapplock @Resource = 'KpiPush', @LockMode = 'Exclusive', " +
             "@LockOwner = 'Session', @LockTimeout = 0; SELECT @r;", kpi))
@@ -84,7 +87,28 @@ public static class KpiCopier
             if ((int)(await lockCmd.ExecuteScalarAsync(ct))! < 0)
                 return new CopyOutcome(false, scope, 0, 0, state.ReportDate, clock.Elapsed, "another copy was still running");
         }
+        try
+        {
+            return await CopyLockedAsync(source, kpi, state, withSnapshots, scope, clock, progress, ct);
+        }
+        finally
+        {
+            try
+            {
+                if (kpi.State == ConnectionState.Open)
+                {
+                    await using var release = new SqlCommand(
+                        "IF APPLOCK_MODE('public', 'KpiPush', 'Session') <> 'NoLock' EXEC sp_releaseapplock @Resource = 'KpiPush', @LockOwner = 'Session';", kpi);
+                    await release.ExecuteNonQueryAsync(CancellationToken.None);
+                }
+            }
+            catch { /* the connection broke: closing it ends the session, and the lock with it */ }
+        }
+    }
 
+    private static async Task<CopyOutcome> CopyLockedAsync(SqlConnection source, SqlConnection kpi, ExportState state, bool withSnapshots,
+                                                           string scope, Stopwatch clock, Action<string>? progress, CancellationToken ct)
+    {
         var copies = withSnapshots ? Tables.Concat(SnapshotTables).ToList() : Tables.ToList();
         long rows = 0;
         foreach (var (from, to) in copies)
