@@ -3,7 +3,7 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Kpi.Web.Data.Kpis;
 
 /// <summary>
-/// When the figures were last copied from CMS, and whether that copy is overdue (Rpt.spDataStatus: over 30 minutes in
+/// When the figures were last copied from CMS, and whether that copy is overdue (Rpt.spDataStatus: over 45 minutes in
 /// office hours). The "As at" line shows the copy time beside the date, and turns into a warning when the copy has
 /// stopped. Company-wide and cheap, so one shared answer, a minute old at most.
 /// </summary>

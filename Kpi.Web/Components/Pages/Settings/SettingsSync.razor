@@ -10,7 +10,7 @@
 <div class="set-head">
     <div>
         <h2>Data sync</h2>
-        <p class="acc-hint">The office refreshes the figures every 10 minutes (7am-8pm, Monday to Saturday) and the site collects each refresh within two minutes; Bad Debt and Exposure are prepared once a night.</p>
+        <p class="acc-hint">The office refreshes the figures every 30 minutes (7am-8pm, Monday to Saturday) and the site collects each refresh within two minutes; Bad Debt and Exposure are prepared once a night.</p>
     </div>
     <button type="button" class="acc-btn-secondary" disabled="@_loading" @onclick="Load"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh</button>
 </div>
@@ -25,7 +25,7 @@
         <div class="set-tile @(_status.FiguresStale ? "set-tile-bad" : "")">
             <span class="set-tile-label">Last copy</span>
             <span class="set-tile-value">@UkTime.Show(_status.LastFrequentLoadUtc)</span>
-            <span class="set-tile-note">@(_status.FiguresStale ? "Overdue: more than 30 minutes ago, in office hours" : "Every 10 minutes in office hours")</span>
+            <span class="set-tile-note">@(_status.FiguresStale ? "Overdue: more than 45 minutes ago, in office hours" : "Every 30 minutes in office hours")</span>
         </div>
         <div class="set-tile @(_status.NightlyStale ? "set-tile-bad" : "")">
             <span class="set-tile-label">Last Bad Debt &amp; Exposure</span>
@@ -96,7 +96,7 @@
     }
 
     private const string DayHelp = "Day's figures: every table the reports use except Bad Debt and Exposure - leads, salespeople, targets, "
-        + "funds, book position and the rest. In every copy: the office refreshes them every 10 minutes (7am-8pm, Monday to Saturday).";
+        + "funds, book position and the rest. In every copy: the office refreshes them every 30 minutes (7am-8pm, Monday to Saturday).";
     private const string NightHelp = "Bad Debt & Exposure: last night's results of the desktop's own Bad Debt and Exposure reports, prepared in "
         + "the office at 00:15. Included in the first copy after they are prepared - so about once a night (a \"Nightly\" copy, which also "
         + "brings the day's figures).";

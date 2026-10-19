@@ -48,12 +48,12 @@ transaction that is always rolled back, 100 rows / 30 s, System Admin only, each
 
 **A PULL (16 Oct 2026, Steve; it replaced a planned push from the office):** the `KpiExport` views IN THE CMS DATABASE
 (CMS_Live on PF-APP1; CMS_Dev locally) → SQL Server Agent on PF-APP1 copies them into `KpiCopy.*` in the separate
-`KPI_Export` database every 10 minutes, 07:00-20:00 Mon-Sat (`KpiCopy.spRefresh`, one transaction, stamps
+`KPI_Export` database every 30 minutes on PF-APP1 (the script creates the job at 10; Steve set 30 in SSMS, Oct 2026), 07:00-20:00 Mon-Sat (`KpiCopy.spRefresh`, one transaction, stamps
 `KpiCopy.Refresh`), and at 00:15 first prepares Bad Debt and Exposure in CMS (`KpiCopy.spNightly`) → the SITE (`KpiPull`, every 2 minutes, through the CMS data source card) reads that one row and, when it is newer than
 CMS_KPI's last publish (`Rpt.spDataStatus`), bulk-copies `KpiCopy.*` (+ the snapshots when prepared since the last
 nightly publish) into `Stage.*` in `CMS_KPI` → `Stage.spPublish` swaps everything into `Dim`/`Fact` in ONE transaction
 (read-committed snapshot, so a report never sees half a load; it refuses an empty `Stage.Lead`) → the site runs only
-`Rpt.*`. Figures are at most ~12 minutes behind CMS; the timings can't drift, because only the office has a schedule. A
+`Rpt.*`. Figures are at most ~32 minutes behind CMS, and count as OVERDUE after 45 minutes in office hours (migration `OverdueAfter45Minutes`; was 30, which tripped on nearly every 30-minute cycle); the timings can't drift, because only the office has a schedule. A
 refresh during a copy is noticed (the row is re-read) and nothing is published until the next try. Every load replaces
 the tables in full (25k paid leads).
 

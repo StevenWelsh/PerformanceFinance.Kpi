@@ -8,7 +8,7 @@ namespace Kpi.Web.Data;
 
 /// <summary>
 /// The KPI copy, run by the site (Oct 2026, Steve: a pull, not a push). Every two minutes it reads ONE row from KPI_Export
-/// on the office server (KpiCopy.Refresh, refreshed there every 10 minutes by SQL Server Agent) and copies only when the
+/// on the office server (KpiCopy.Refresh, refreshed there every 30 minutes by SQL Server Agent) and copies only when the
 /// office has refreshed since CMS_KPI last published - Bad Debt and Exposure too when they were prepared since the last
 /// nightly publish. So the figures follow the office's schedule; nothing here has one of its own.
 ///
