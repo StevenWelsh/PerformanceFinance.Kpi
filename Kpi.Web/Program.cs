@@ -102,8 +102,12 @@ builder.Services.AddSingleton<OnlineUsers>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, OnlineTracker>();
 builder.Services.AddHostedService<ExpireSetupsTask>();
 // the pre-load: one instance, also told by the copy (KpiPull) when a new dataset is published
+builder.Services.AddSingleton<KpiFiguresSignal>();   // new figures landed: open pages update (KpiPanel, Data sync)
+builder.Services.AddSingleton<KpiPullHealth>();      // how the copy is doing, for the alerts
 builder.Services.AddSingleton<Kpi.Web.Data.Kpis.KpiWarmer>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Kpi.Web.Data.Kpis.KpiWarmer>());
+builder.Services.AddSingleton<SyncAlerts>();         // emails the chosen people when the figures stop arriving
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SyncAlerts>());
 builder.Services.AddHostedService<Kpi.Web.Data.KpiPull>();          // the KPI copy from the office (KPI_Export), every two minutes
 
 // ---- integrations: Resend for email ----------------------------------------------------------------------------

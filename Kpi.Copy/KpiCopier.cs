@@ -74,6 +74,7 @@ public static class KpiCopier
                                                    Action<string>? progress = null, CancellationToken ct = default)
     {
         var clock = Stopwatch.StartNew();
+        var startedUtc = DateTime.UtcNow;   // Data sync's "Started" / "Took" cover the whole copy, not just the publish
         var scope = withSnapshots ? "Nightly" : "Frequent";
 
         // one copy at a time into CMS_KPI (the site, or a developer's Kpi.Push). RELEASED EXPLICITLY when the copy ends,
@@ -89,7 +90,7 @@ public static class KpiCopier
         }
         try
         {
-            return await CopyLockedAsync(source, kpi, state, withSnapshots, scope, clock, progress, ct);
+            return await CopyLockedAsync(source, kpi, state, withSnapshots, scope, startedUtc, clock, progress, ct);
         }
         finally
         {
@@ -107,7 +108,7 @@ public static class KpiCopier
     }
 
     private static async Task<CopyOutcome> CopyLockedAsync(SqlConnection source, SqlConnection kpi, ExportState state, bool withSnapshots,
-                                                           string scope, Stopwatch clock, Action<string>? progress, CancellationToken ct)
+                                                           string scope, DateTime startedUtc, Stopwatch clock, Action<string>? progress, CancellationToken ct)
     {
         var copies = withSnapshots ? Tables.Concat(SnapshotTables).ToList() : Tables.ToList();
         long rows = 0;
@@ -136,6 +137,8 @@ public static class KpiCopier
         await using var publish = new SqlCommand("Stage.spPublish", kpi) { CommandType = CommandType.StoredProcedure, CommandTimeout = 600 };
         publish.Parameters.Add("@Scope", SqlDbType.VarChar, 10).Value = scope;
         publish.Parameters.Add("@ReportDate", SqlDbType.Date).Value = state.ReportDate.Date;
+        publish.Parameters.Add("@StartedUtc", SqlDbType.DateTime2).Value = startedUtc;
+        publish.Parameters.Add("@SourceRefreshedUtc", SqlDbType.DateTime2).Value = state.RefreshedUtc;   // when the office made it
         try { await publish.ExecuteNonQueryAsync(ct); }
         catch (SqlException ex) { throw new PublishFailedException(ex); }
 
@@ -143,7 +146,8 @@ public static class KpiCopier
     }
 
     /// <summary>A copy that failed before publishing, in CMS_KPI's load log (Settings > Data sync). Never throws.</summary>
-    public static async Task RecordFailureAsync(string kpiConnection, string scope, DateTime startedUtc, string error)
+    public static async Task RecordFailureAsync(string kpiConnection, string scope, DateTime startedUtc, string error,
+                                                DateTime? sourceRefreshedUtc = null)
     {
         try
         {
@@ -153,10 +157,20 @@ public static class KpiCopier
             cmd.Parameters.Add("@Scope", SqlDbType.VarChar, 10).Value = scope;
             cmd.Parameters.Add("@StartedUtc", SqlDbType.DateTime2).Value = startedUtc;
             cmd.Parameters.Add("@Error", SqlDbType.NVarChar, 2000).Value = error.Length > 2000 ? error[..2000] : error;
+            cmd.Parameters.Add("@SourceRefreshedUtc", SqlDbType.DateTime2).Value = (object?)sourceRefreshedUtc ?? DBNull.Value;
             await cmd.ExecuteNonQueryAsync();
         }
         catch { /* CMS_KPI could not be reached either: the overdue check covers that */ }
     }
+}
+
+/// <summary>
+/// A copy that could not go ahead although the office had new data (19 Oct 2026: another copy held the lock) - counted as
+/// a failure, so Settings > Data sync shows a cross with the reason instead of nothing at all.
+/// </summary>
+public sealed class CopyBlockedException(string reason, DateTime sourceRefreshedUtc) : Exception($"Not copied: {reason}")
+{
+    public DateTime SourceRefreshedUtc { get; } = sourceRefreshedUtc;
 }
 
 /// <summary>Stage.spPublish refused or failed. It has logged that itself (Ref.LoadRun), so the caller doesn't again.</summary>

@@ -1,18 +1,27 @@
 @using Kpi.Web.Data
+@using Kpi.Web.Account
 @inject KpiSessionFactory Sessions
+@inject KpiFiguresSignal Figures
+@inject SyncAlerts Alerts
+@inject UserAdmin Admin
+@inject IServiceScopeFactory Scopes
+@implements IDisposable
 
 @* Settings > Data sync: when the figures were last copied from CMS, whether a copy is overdue, and the recent copies
    with any errors (Ref.LoadRun, through Rpt.spDataStatus / Rpt.spLoadHistory). The site's own copy (KpiPull) collects
    KPI_Export's copies from the office after each refresh there; a failure is logged here once when it starts and then
    hourly (Settings > Integrations > CMS data source shows the latest problem). Each copy's two parts are shown as
-   ticks (Steve, 19 Oct 2026): Day's figures in every copy, Bad Debt & Exposure only in a "Nightly" one. *@
+   ticks (Steve, 19 Oct 2026): Day's figures in every copy, Bad Debt & Exposure only in a "Nightly" one. "Office refresh"
+   is when the office made the data that copy carried, so a fresh refresh can be seen being picked up; a copy that
+   couldn't go ahead (another copy holding the lock) is a cross with its reason, and one cut off part-way (a restart)
+   is closed as failed rather than shown running for ever (migration LoadRunDetail). *@
 
 <div class="set-head">
     <div>
         <h2>Data sync</h2>
         <p class="acc-hint">The office refreshes the figures every 10 minutes (7am-8pm, Monday to Saturday) and the site collects each refresh within two minutes; Bad Debt and Exposure are prepared once a night.</p>
     </div>
-    <button type="button" class="acc-btn-secondary" disabled="@_loading" @onclick="Load"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh</button>
+    <button type="button" class="acc-btn-secondary" disabled="@_loading" @onclick="RefreshAll"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh</button>
 </div>
 
 @if (_error is not null)
@@ -41,6 +50,57 @@
     </div>
 }
 
+@* Alerts (19 Oct 2026, Steve): who is emailed when the figures stop arriving, and what is wrong now (SyncAlerts) *@
+<div class="set-alerts">
+    <div class="set-alerts-head">
+        <h3>Alerts</h3>
+        @if (_problems is { Count: > 0 })
+        {
+            <span class="set-pill set-pill-needsattention"><i class="bi bi-exclamation-triangle-fill"></i> Problem</span>
+        }
+        else if (_problems is not null)
+        {
+            <span class="set-pill set-pill-active"><i class="bi bi-check-lg"></i> All clear</span>
+        }
+    </div>
+    <p class="acc-hint">Emailed when the copy keeps failing (10 minutes or more), can't run, no new figures arrive for 45 minutes in
+       office hours, or Bad Debt &amp; Exposure miss their nightly run - once when it starts, every 4 hours in office hours while it
+       lasts, and once when it's over.</p>
+    @if (_problems is { Count: > 0 })
+    {
+        <ul class="set-alerts-problems">
+            @foreach (var p in _problems) { <li>@p</li> }
+        </ul>
+        @if (_alertSettings?.Open is { } open)
+        {
+            <p class="set-sub">Alerted since @UkTime.Show(open.SinceUtc, "HH:mm 'on' dd MMM"); last email @UkTime.Show(open.LastSentUtc, "HH:mm 'on' dd MMM").</p>
+        }
+        else
+        {
+            <p class="set-sub">Not emailed yet: a copy failure is emailed once it has lasted 10 minutes.</p>
+        }
+    }
+    @if (_people is not null)
+    {
+        <div class="set-reports set-alerts-people">
+            @if (_people.Count == 0) { <span class="set-sub">Nobody has an active account yet.</span> }
+            @foreach (var u in _people)
+            {
+                <label class="acc-check">
+                    <input type="checkbox" checked="@_recipients.Contains(u.Id)" @onchange="e => TickRecipient(u.Id, e)" />
+                    @u.Name <span class="set-sub">@u.Email</span>
+                    @if (_alertSettings is not null && _alertSettings.LastSentUtc.TryGetValue(u.Id, out var sent))
+                    {
+                        <span class="set-sub"> · last alert @UkTime.Show(sent, "dd MMM HH:mm")</span>
+                    }
+                </label>
+            }
+        </div>
+        <button type="button" class="acc-btn" disabled="@(!_recipientsDirty || _savingRecipients)" @onclick="SaveRecipients">Save who gets alerts</button>
+        @if (_recipientsSaved) { <span class="set-sub set-saved"> Saved.</span> }
+    }
+</div>
+
 @if (_runs is not null)
 {
     <div class="set-table-wrap">
@@ -48,6 +108,7 @@
             <thead>
                 <tr>
                     <th>Started</th>
+                    <th>Office refresh <i class="bi bi-info-circle set-info" tabindex="0" title="@OfficeHelp" aria-label="@OfficeHelp"></i></th>
                     <th class="set-part">Day's figures <i class="bi bi-info-circle set-info" tabindex="0" title="@DayHelp" aria-label="@DayHelp"></i></th>
                     <th class="set-part">Bad Debt &amp; Exposure <i class="bi bi-info-circle set-info" tabindex="0" title="@NightHelp" aria-label="@NightHelp"></i></th>
                     <th>Took</th>
@@ -57,12 +118,13 @@
             <tbody>
                 @if (_runs.Count == 0)
                 {
-                    <tr><td colspan="5" class="set-sub">No copies yet.</td></tr>
+                    <tr><td colspan="6" class="set-sub">No copies yet.</td></tr>
                 }
                 @foreach (var r in _runs)
                 {
                     <tr>
                         <td>@UkTime.Show(r.StartedUtc, "dd MMM HH:mm:ss")</td>
+                        <td>@UkTime.Show(r.SourceRefreshedUtc, "dd MMM HH:mm:ss")</td>
                         <td class="set-part">@Part(r, included: true)</td>
                         <td class="set-part">@Part(r, included: r.Scope == "Nightly")</td>
                         <td>@(r.Seconds is null ? "-" : $"{r.Seconds} s")</td>
@@ -90,6 +152,7 @@
         public string Scope { get; set; } = "";
         public DateTime StartedUtc { get; set; }
         public DateTime? FinishedUtc { get; set; }
+        public DateTime? SourceRefreshedUtc { get; set; }
         public bool? Succeeded { get; set; }
         public string? Error { get; set; }
         public int? Seconds { get; set; }
@@ -97,6 +160,8 @@
 
     private const string DayHelp = "Day's figures: every table the reports use except Bad Debt and Exposure - leads, salespeople, targets, "
         + "funds, book position and the rest. In every copy: the office refreshes them every 10 minutes (7am-8pm, Monday to Saturday).";
+    private const string OfficeHelp = "When the office made the data this copy carried (its refresh of KPI_Export). Each new refresh "
+        + "should appear here within a couple of minutes; the same time on two rows means a copy of the same refresh was tried again.";
     private const string NightHelp = "Bad Debt & Exposure: last night's results of the desktop's own Bad Debt and Exposure reports, prepared in "
         + "the office at 00:15. Included in the first copy after they are prepared - so about once a night (a \"Nightly\" copy, which also "
         + "brings the day's figures).";
@@ -107,7 +172,7 @@
         if (!included) { <span class="set-part-none" title="Not part of this copy">–</span> }
         else if (r.Succeeded == true) { <i class="bi bi-check-lg set-part-ok" title="Copied" aria-label="Copied"></i> }
         else if (r.Succeeded == false) { <i class="bi bi-x-lg set-part-bad" title="Failed - see Error" aria-label="Failed"></i> }
-        else { <span class="set-part-run" title="Running">…</span> }
+        else { <span class="set-running" title="Copying now"><span class="set-pulse" aria-hidden="true"></span>Running</span> }
     };
 
     private StatusRow? _status;
@@ -125,7 +190,63 @@
         }
     }
 
-    protected override Task OnInitializedAsync() => Load();
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<UserAdmin.UserRow>? _people;
+    private HashSet<string> _recipients = new();
+    private SyncAlertSettings? _alertSettings;
+    private List<string>? _problems;
+    private bool _recipientsDirty, _savingRecipients, _recipientsSaved;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Figures.Landed += OnChanged;    // a new copy landed: show it without pressing Refresh
+        Alerts.Changed += OnChanged;    // an alert opened or closed
+        await Load();
+        await LoadAlerts(resetTicks: true);
+    }
+
+    private void OnChanged() => _ = InvokeAsync(async () => { await Load(); await LoadAlerts(resetTicks: false); StateHasChanged(); });
+
+    public void Dispose()
+    {
+        Figures.Landed -= OnChanged;
+        Alerts.Changed -= OnChanged;
+    }
+
+    private async Task RefreshAll() { await Load(); await LoadAlerts(resetTicks: false); }
+
+    private async Task LoadAlerts(bool resetTicks)
+    {
+        try
+        {
+            _alertSettings = await Alerts.GetAsync();
+            _problems = await Alerts.ProblemsAsync();
+            if (AuthState is not null)
+                _people = (await Admin.ListAsync((await AuthState).User)).Where(u => u.Status == "Active").ToList();
+            if (resetTicks) { _recipients = _alertSettings.RecipientIds.ToHashSet(); _recipientsDirty = false; }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private void TickRecipient(string id, ChangeEventArgs e)
+    {
+        if (e.Value is true) _recipients.Add(id); else _recipients.Remove(id);
+        _recipientsDirty = true; _recipientsSaved = false;
+    }
+
+    private async Task SaveRecipients()
+    {
+        _savingRecipients = true;
+        try
+        {
+            var names = _people!.Where(u => _recipients.Contains(u.Id)).Select(u => u.Name).ToList();
+            await Alerts.SaveRecipientsAsync(await SettingsActor.GetAsync(AuthState, Scopes), _recipients.ToList(), names);
+            _recipientsDirty = false; _recipientsSaved = true;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _savingRecipients = false; }
+    }
 
     private async Task Load()
     {

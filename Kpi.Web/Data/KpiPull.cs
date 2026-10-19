@@ -18,7 +18,8 @@ namespace Kpi.Web.Data;
 /// change on the card takes effect within two minutes. Writes through the site's usual CmsKpi connection, whose identity
 /// is also in kpi_push (Kpi.Tools grant-push). Off while there is no data source, or it is switched off.
 /// </summary>
-public sealed class KpiPull(IConfiguration config, CmsSource cmsSource, IntegrationStore store, Kpis.KpiWarmer warmer, ILogger<KpiPull> log)
+public sealed class KpiPull(IConfiguration config, CmsSource cmsSource, IntegrationStore store, Kpis.KpiWarmer warmer,
+                            KpiPullHealth health, ILogger<KpiPull> log)
     : BackgroundService
 {
     public static readonly TimeSpan Interval = TimeSpan.FromMinutes(2);
@@ -46,7 +47,8 @@ public sealed class KpiPull(IConfiguration config, CmsSource cmsSource, Integrat
                     log.LogInformation(source is null ? "KPI copy is off: no data source connected, or it is switched off"
                                                       : "KPI copy is on");
                 wasOn = source is not null;
-                if (source is null) continue;
+                health.On(wasOn.Value);   // for the alerts (SyncAlerts)
+                if (source is null) { health.Worked(); continue; }
 
                 scope = await CopyIfRefreshedAsync(source, kpi, stoppingToken) ?? scope;
                 if (_failingSinceUtc is not null)
@@ -55,15 +57,17 @@ public sealed class KpiPull(IConfiguration config, CmsSource cmsSource, Integrat
                     await store.RecordCallAsync(IntegrationProviders.CmsSource, null);
                 }
                 _failingSinceUtc = _lastRecordedUtc = null;
+                health.Worked();
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 _failingSinceUtc ??= startedUtc;
+                health.Failed(_failingSinceUtc.Value, ex.Message);
                 log.LogWarning(ex, "KPI copy failed; trying again in two minutes");
                 // Stage.spPublish logs its own failure; anything before it (the office, KPI_Export, the bulk copy) is logged here
                 if (ex is not PublishFailedException && (_lastRecordedUtc is null || DateTime.UtcNow - _lastRecordedUtc > RecordFailureEvery))
                 {
-                    await KpiCopier.RecordFailureAsync(kpi, scope, startedUtc, ex.Message);
+                    await KpiCopier.RecordFailureAsync(kpi, scope, startedUtc, ex.Message, (ex as CopyBlockedException)?.SourceRefreshedUtc);
                     try { await store.RecordCallAsync(IntegrationProviders.CmsSource, ex.Message); }   // the card's "Last problem"
                     catch { /* CMS_KPI unreachable too: the load log and overdue flag cover it */ }
                     _lastRecordedUtc = DateTime.UtcNow;
@@ -97,7 +101,11 @@ public sealed class KpiPull(IConfiguration config, CmsSource cmsSource, Integrat
             log.LogInformation("KPI copy ({Scope}) published {Tables} tables, {Rows:N0} rows, as at {Date:dd/MM/yyyy}, in {Seconds:0.0} s",
                 outcome.Scope, outcome.Tables, outcome.Rows, outcome.ReportDate, outcome.Elapsed.TotalSeconds);
         }
+        else if (outcome.Tables == 0)
+            // refused before copying anything (another copy holds the lock): a failure, recorded on Data sync (19 Oct 2026)
+            throw new CopyBlockedException(outcome.Reason ?? "the copy could not start", state.RefreshedUtc);
         else
+            // the office refreshed mid-copy: harmless, the next try (two minutes) copies the newer data
             log.LogInformation("KPI copy ({Scope}) not published: {Reason}", outcome.Scope, outcome.Reason);
         return outcome.Scope;
     }

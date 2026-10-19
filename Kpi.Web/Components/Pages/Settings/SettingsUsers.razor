@@ -6,6 +6,7 @@
 @inject NavigationManager Nav
 @inject IJSRuntime JS
 @inject OnlineUsers Online
+@inject Kpi.Web.Data.SyncAlerts Alerts
 @implements IDisposable
 
 @* Settings > Users: everyone who can sign in, and the System Admin's tools - invite, change role and reports,
@@ -56,7 +57,7 @@ else
                 {
                     @* data-label: on a phone each row is a card, labelled by these *@
                     <tr>
-                        <td data-label="Name"><div class="set-strong">@u.Name@(u.IsMe ? " (you)" : "")</div><div class="set-sub">@u.Email</div></td>
+                        <td data-label="Name"><div class="set-strong">@u.Name@(u.IsMe ? " (you)" : "")@AlertIcon(u.Id)</div><div class="set-sub">@u.Email</div></td>
                         <td data-label="Role">@KpiRoles.Label(u.Role)</td>
                         <td data-label="Reports" title="@ReportsTitle(u)">@ReportsText(u)</td>
                         <td data-label="Status"><span class="set-pill set-pill-@(u.Status.Replace(" ", "").ToLowerInvariant())">@u.Status</span></td>
@@ -192,12 +193,37 @@ else
     {
         if (AuthState is not null) User = (await AuthState).User;
         Online.Changed += OnOnlineChanged;
+        Alerts.Changed += OnAlertsChanged;
         await Load();
+        await LoadAlertSettings();
     }
 
     private void OnOnlineChanged() => _ = InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Online.Changed -= OnOnlineChanged;
+    public void Dispose()
+    {
+        Online.Changed -= OnOnlineChanged;
+        Alerts.Changed -= OnAlertsChanged;
+    }
+
+    // the envelope: this person gets data sync alerts (chosen in Settings > Data sync), and when one was last sent to them
+    private Kpi.Web.Data.SyncAlertSettings? _alertSettings;
+
+    private async Task LoadAlertSettings()
+    {
+        try { _alertSettings = await Alerts.GetAsync(); } catch { /* only an icon */ }
+    }
+
+    private void OnAlertsChanged() => _ = InvokeAsync(async () => { await LoadAlertSettings(); StateHasChanged(); });
+
+    private RenderFragment AlertIcon(string userId) => __builder =>
+    {
+        if (_alertSettings is null || !_alertSettings.RecipientIds.Contains(userId)) return;
+        var title = _alertSettings.LastSentUtc.TryGetValue(userId, out var sent)
+            ? $"Gets data sync alerts - last sent {Kpi.Web.Data.UkTime.Show(sent, "HH:mm 'on' dd MMM")}"
+            : "Gets data sync alerts (none sent yet)";
+        <i class="bi bi-envelope set-alert-icon" title="@title" aria-label="@title"></i>
+    };
 
     // "Online now", with how many pages when more than one (a laptop and a phone, say); else when they were last seen
     // since the site last started

@@ -131,9 +131,27 @@
 .set-bad { color: var(--error); }
 
 .set-pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--panel-head); color: var(--text-2); white-space: nowrap; }
+/* Settings > Data sync: Alerts (19 Oct 2026) */
+.set-alerts { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
+.set-alerts-head { display: flex; align-items: center; gap: 10px; }
+.set-alerts-head h3 { margin: 0; font-size: 15px; }
+.set-alerts-problems { margin: 6px 0 8px 18px; padding: 0; color: var(--error); }
+.set-alerts-people { max-height: 220px; margin-bottom: 10px; }
+.set-saved { margin-left: 8px; }
+/* Settings > Users: the envelope for people who get data sync alerts */
+.set-alert-icon { margin-left: 6px; color: var(--text-3); cursor: help; }
+
 /* Settings > Users: "Online now" (19 Oct 2026) */
 .set-pill-online { background: var(--success-bg); color: var(--success); display: inline-flex; align-items: center; gap: 6px; }
-.set-online-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.set-online-dot, .set-pulse { position: relative; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+/* a soft ring growing out of the dot: "live" (Steve, 19 Oct 2026) - Online now in green, a running copy in blue */
+.set-online-dot::after, .set-pulse::after {
+    content: ""; position: absolute; inset: 0; border-radius: 50%; background: currentColor;
+    animation: set-pulse 1.6s ease-out infinite;
+}
+@keyframes set-pulse { from { transform: scale(1); opacity: .6; } to { transform: scale(2.8); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .set-online-dot::after, .set-pulse::after { animation: none; } }
+.set-running { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; color: var(--info, #1d6fb8); font-size: 13px; }
 .set-pill-active, .set-pill-connected { background: var(--success-bg); color: var(--success); }
 .set-pill-disabled, .set-pill-needsattention, .set-pill-inviteexpired { background: var(--error-bg); color: var(--error); }
 .set-pill-invited, .set-pill-settingup, .set-pill-mobilereset, .set-pill-switchedoff { background: var(--warning-bg); color: var(--warning); }
@@ -443,7 +461,7 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .kpi-shell .bal-dash { cursor: help; }
 
 /* Settings > Data sync: each copy's two parts - tick, cross or dash - with an info mark explaining each */
-.set-part { text-align: center; white-space: nowrap; }
+.set-part { text-align: left; white-space: nowrap; }   /* under its heading (Steve, 19 Oct 2026) */
 .set-part-ok { color: var(--success, #2e7d32); font-size: 18px; }
 .set-part-bad { color: var(--error); font-size: 16px; }
 .set-part-none, .set-part-run { color: var(--text-3); }

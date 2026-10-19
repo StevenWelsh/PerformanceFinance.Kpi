@@ -13,7 +13,8 @@ namespace Kpi.Web.Data.Kpis;
 ///     RE-RUNS everything, as the keys are the same and only the figures changed.
 /// One run at a time, one query at a time, so viewers keep their share of the database.
 /// </summary>
-public sealed class KpiWarmer(KpiCache cache, ReportDateProvider reportDate, KpiSessionFactory sessions, ILogger<KpiWarmer> log)
+public sealed class KpiWarmer(KpiCache cache, ReportDateProvider reportDate, KpiSessionFactory sessions, KpiFiguresSignal figures,
+                              ILogger<KpiWarmer> log)
     : BackgroundService
 {
     private readonly SemaphoreSlim _running = new(1, 1);
@@ -43,11 +44,13 @@ public sealed class KpiWarmer(KpiCache cache, ReportDateProvider reportDate, Kpi
         } while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
-    /// <summary>A new dataset was just published: refresh everything in the background (returns at once).</summary>
+    /// <summary>A new dataset was just published: refresh everything in the background (returns at once), then tell every
+    /// open page (KpiFiguresSignal) so they show the new figures within seconds.</summary>
     public void AfterCopy() => _ = Task.Run(async () =>
     {
         try { await RunAsync("new dataset", refresh: true, await Task.Run(reportDate.Get)); }
         catch (Exception ex) { log.LogWarning(ex, "KPI refresh after a new dataset failed"); }
+        figures.Raise();   // even if the pre-load failed: each page re-runs its own load
     });
 
     private async Task RunAsync(string why, bool refresh, DateTime date)

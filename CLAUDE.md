@@ -232,6 +232,21 @@ the tables in full (25k paid leads).
   (`SalesSummaryCells` - also the ONE key and loader the desktop panel and the phone card now share; before, a phone
   fetched each figure twice). One run and one query at a time. Bigger fix if first views still bother: one Rpt
   procedure returning a whole page's grid. Caching to be discussed further (Steve).
+- **Data sync, fuller (19 Oct 2026, Steve; migration `LoadRunDetail`):** each run's "Started"/"Took" cover the WHOLE copy
+  (the site passes `@StartedUtc`), "Office refresh" (`Ref.LoadRun.SourceRefreshedUtc`) is when the office made the data it
+  carried, a run left open 15 minutes (a restart mid-publish) is closed as failed by the next publish and shown so by
+  `Rpt.spLoadHistory`, and a copy refused before starting (the lock held) is a FAILURE (`CopyBlockedException`) - recorded
+  once when it starts and hourly, like the rest. A copy refused because the office refreshed mid-copy stays info-only.
+- **New figures are PUSHED (19 Oct 2026, Steve):** after a copy, `KpiWarmer` re-runs the cache and raises `KpiFiguresSignal`;
+  every open `KpiPanel` (reports, published/embedded views) refreshes within ~5 s (spread), a hidden one on return to
+  view; Settings > Data sync reloads itself. The 10-minute timer stays as the fallback.
+- **Data sync alerts (19 Oct 2026, Steve):** `SyncAlerts` (hosted, every 2 min) emails the people ticked in Settings > Data
+  sync (a `Cfg.Integration` row, provider `SyncAlerts`: recipients, last sent per person, the open alert - so a restart
+  doesn't re-send) when: the copy has failed for 10+ minutes (`KpiPullHealth`), the copy is switched off (Production
+  only), the figures are overdue (`Rpt.spDataStatus`), or Bad Debt & Exposure are 26+ hours old. Once on a new or worse
+  problem, every 4 hours in office hours while it lasts, once when it's over. Settings > Users shows an envelope for
+  recipients (hover: last sent). Links use `Kpi:SiteUrl` (default the live site). It can't report the site being DOWN -
+  Azure's health alert does.
 - **Data Protection key ring** encrypts cookies, emailed links and the Resend key: locally the user profile; **in Azure it
   must be a shared persisted ring (storage + Key Vault)** or every restart signs everyone out and the Resend key becomes
   unreadable. Pin `AllowedHosts` in Azure: emailed links are built from the request's host.

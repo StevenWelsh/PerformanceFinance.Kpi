@@ -78,8 +78,23 @@
     [Inject] private IConfiguration Config { get; set; } = default!;
     private int _intervalSeconds;
 
+    // KPI site (19 Oct 2026, Steve): new figures are PUSHED - when a copy lands and the cache holds it, every open report
+    // refreshes within seconds (a little spread so they don't all ask at once), instead of at its next 10-minute tick. A
+    // hidden page refreshes the moment it is looked at again.
+    [Inject] private Kpi.Web.Data.KpiFiguresSignal Figures { get; set; } = default!;
+
     protected override void OnInitialized()
-        => _intervalSeconds = Config.GetValue("Kpi:RefreshSeconds", 600);
+    {
+        _intervalSeconds = Config.GetValue("Kpi:RefreshSeconds", 600);
+        Figures.Landed += OnFiguresLanded;
+    }
+
+    private void OnFiguresLanded() => _ = InvokeAsync(async () =>
+    {
+        if (!_visible) { _lastCheckedUtc = DateTime.MinValue; return; }   // catch up on return to view
+        await Task.Delay(Random.Shared.Next(0, 5000));
+        await DoRefresh();
+    });
 
     // The phone bar shows the same as the date line (KpiRefreshStatus).
     protected override void OnParametersSet() => RefreshStatus.Report(RefreshedOn, _refreshing);
@@ -184,6 +199,7 @@
 
     public async ValueTask DisposeAsync()
     {
+        Figures.Landed -= OnFiguresLanded;
         StopTimer();
         try
         {
