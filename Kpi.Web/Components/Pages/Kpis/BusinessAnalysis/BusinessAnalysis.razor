@@ -540,28 +540,32 @@
     // PrevValue), so its header reads "vs 2025 YTD".
     private int? ReportYear => _asOf?.Year;
 
-    // "vs previous year": no row the year before (a new lender) gets a star; rows but nothing by
-    // this date last year (or nothing at all) a dash; otherwise the same up/down % treatment as the
-    // dimension table's Delta.
+    // "vs previous year" (KPI site, 19 Oct 2026, Steve): a GOLD STAR for a lender with no business at all the year
+    // before (new); a DASH for one that had business the year before but none by this date (the report year compares
+    // to the same date) - each with hover text saying so. Otherwise the same up/down % treatment as the dimension
+    // table's Delta.
     private RenderFragment LenderDelta(BusinessAnalysisLenderRow row) => builder =>
     {
         if (row.PrevValue is null)
         {
-            // new entrant this year — no comparable prior-year figure
+            var title = $"New lender: no business with them in {row.Yr - 1}, so there's nothing to compare with.";
             builder.OpenElement(0, "i");
-            builder.AddAttribute(1, "class", "bi bi-star-fill bal-star");
-            builder.AddAttribute(2, "title", "New this year — no prior-year comparison");
+            builder.AddAttribute(1, "class", "bi bi-star-fill bal-star bal-new");
+            builder.AddAttribute(2, "title", title);
+            builder.AddAttribute(3, "aria-label", title);
             builder.CloseElement();
             return;
         }
         if (row.PrevValue == 0m)
         {
-            builder.OpenElement(3, "span");
-            builder.AddAttribute(4, "class", "ba-muted");
-            builder.AddAttribute(5, "title", row.Yr == ReportYear
-                ? $"Nothing by this date in {row.Yr - 1}"
-                : $"Nothing in {row.Yr - 1}");
-            builder.AddContent(6, "–");
+            var title = row.Yr == ReportYear
+                ? $"Nothing to compare with yet: this lender's {row.Yr - 1} business all came after {_asOf:d MMMM}, so there was none by this date last year."
+                : $"Nothing to compare with: no business with this lender in {row.Yr - 1}.";
+            builder.OpenElement(4, "span");
+            builder.AddAttribute(5, "class", "ba-muted bal-dash");
+            builder.AddAttribute(6, "title", title);
+            builder.AddAttribute(7, "aria-label", title);
+            builder.AddContent(8, "–");
             builder.CloseElement();
             return;
         }

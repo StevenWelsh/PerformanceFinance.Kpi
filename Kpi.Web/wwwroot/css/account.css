@@ -410,6 +410,43 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .intg-howto { margin: 0 0 12px; padding-left: 20px; font-size: 13.5px; line-height: 1.5; color: var(--text-2); }
 .intg-howto li { margin-bottom: 6px; }
 
+/* The sidebar's shrink button at its FOOT (KPI site, 19 Oct 2026, Steve - as Standpoint): a strip below the menu,
+   kept in view at the bottom while a long menu scrolls; collapsed, the logo strip shows the small KPI icon. */
+.kpi-sidebar .app-nav { flex: 1 0 auto; }
+.kpi-sidebar-foot {
+    position: sticky; bottom: 0; flex: 0 0 auto;
+    display: flex; justify-content: center; padding: 10px 0 12px;
+    background: var(--sidebar-bg); border-top: 1px solid rgba(255, 255, 255, 0.22);
+}
+.kpi-sidebar-foot .kpi-collapse-btn {
+    width: 36px; height: 36px; padding: 0; border-radius: 8px;
+    background: rgba(255, 255, 255, 0.14); color: var(--sidebar-fg); font-size: 17px;
+}
+.kpi-sidebar-foot .kpi-collapse-btn:hover { background: rgba(255, 255, 255, 0.26); color: var(--sidebar-fg); }
+.kpi-sidebar-foot .kpi-collapse-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.kpi-logo-mini { display: none; width: 34px; height: 34px; }
+.kpi-sidebar-collapsed .kpi-logo-mini { display: block; }
+
+/* Margin Analysis, full view (KPI site, 19 Oct 2026, Steve): the two columns end together at the height of the
+   TALLER one rather than at the window's bottom - so no empty band under the Annual to Date graph - and the shorter
+   column's last card (usually 12 Month Analysis) grows to meet it. Over kpi.css / app.css, which stay CMS.Web's. */
+.kpi-shell .kpi-ma .ma-fill { flex: 0 0 auto; }
+.kpi-shell .kpi-ma .ma-fill .ma-monthcard { flex: 1 0 auto; }
+.kpi-shell .kpi-ma .ma-fill .ma-graphcard { flex: 1 0 auto; }
+
+/* Business Analysis by Lender: the "new" star in gold (KPI site, 19 Oct 2026 - over kpi.css's grey); it and the
+   "none by this date last year" dash carry hover text */
+.kpi-shell .bal-star.bal-new { color: var(--kpim-star); cursor: help; }
+.kpi-shell .bal-dash { cursor: help; }
+
+/* Settings > Data sync: each copy's two parts - tick, cross or dash - with an info mark explaining each */
+.set-part { text-align: center; white-space: nowrap; }
+.set-part-ok { color: var(--success, #2e7d32); font-size: 18px; }
+.set-part-bad { color: var(--error); font-size: 16px; }
+.set-part-none, .set-part-run { color: var(--text-3); }
+.set-info { margin-left: 4px; color: var(--text-3); cursor: help; font-size: 13px; }
+.set-info:hover, .set-info:focus { color: var(--text); outline: none; }
+
 /* The phone home page (KpiHome): the logo and "Choose a report from the menu." beneath the menu, which opens at once */
 .kpim-home { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
              padding: 48px 24px; text-align: center; color: var(--text-2); }

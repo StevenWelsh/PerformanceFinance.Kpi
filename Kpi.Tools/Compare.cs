@@ -199,6 +199,10 @@ public static class Compare
     // ---------------------------------------------------------------------------------------------------------------
     // comparing two results
     // ---------------------------------------------------------------------------------------------------------------
+    // columns the KPI site adds on purpose: Rpt.spYearOnYear's TotalToDate (the current month / year against the same
+    // DATE last year, as Klipfolio - CMS.Web's WebKPI version compares whole months)
+    static readonly HashSet<string> KpiOnlyColumns = new(StringComparer.OrdinalIgnoreCase) { "TotalToDate" };
+
     static (bool Same, int CloseCells, string Detail) Diff(DataTable cms, DataTable kpi, int? cmsTop)
     {
         var lines = new List<string>();
@@ -207,7 +211,9 @@ public static class Compare
         var common = cmsNames.Where(kpi.Columns.Contains).ToList();
         var onlyCms = cmsNames.Except(common, StringComparer.OrdinalIgnoreCase).ToList();
         var onlyKpi = kpiNames.Except(common, StringComparer.OrdinalIgnoreCase).ToList();
-        // the KPI side may leave a column out on purpose (Exposure's LeadList); a column it adds is a mistake
+        // the KPI side may leave a column out on purpose (Exposure's LeadList); a column it adds is a mistake - except
+        // those added on purpose, which CMS doesn't have to compare with (Year on Year's TotalToDate, 19 Oct 2026)
+        onlyKpi.RemoveAll(n => KpiOnlyColumns.Contains(n));
         if (onlyKpi.Count > 0) lines.Add($"      columns only in KPI: {string.Join(", ", onlyKpi)}");
 
         var cmsRows = cms.Rows.Cast<DataRow>().Take(cmsTop ?? int.MaxValue).Select(r => common.Select(n => r[n]).ToArray()).ToList();

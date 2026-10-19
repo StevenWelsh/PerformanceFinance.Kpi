@@ -121,6 +121,14 @@ the tables in full (25k paid leads).
   `Rpt.*`), and filter lists come from `Rpt.spFilterOptions` (`cms.Db.Options("Divisions")`). A change to a KPI page
   belongs in BOTH copies until one replaces the other. The pages keep CMS.Web's policy names
   (`Dashboard.View`, `OBEnquiryBadDebt.View`, `OBEnquiryExposure.View`).
+- **Year on Year compares TO THE SAME DATE (19 Oct 2026, Steve - as Klipfolio, unlike CMS.Web's copy):** the current
+  month's row, the YTD total and the current year's bottom-line % use the prior year's `TotalToDate` (a column
+  `Rpt.spYearOnYear` gained in migration `YearOnYearToDate`: each period up to the report date's day of the year), not
+  its whole month / year. Desktop page and phone view both; `compare` ignores that one KPI-only column. CMS.Web's
+  Year on Year was deliberately NOT changed (its KPI pages are expected to be retired).
+- **Business Analysis by Lender, "vs previous year" (19 Oct 2026, Steve):** a GOLD STAR (`--kpim-star`) = a new lender,
+  no business at all the year before; a DASH = business the year before but none by this date (the report year compares
+  to the same date - Klipfolio shows a star for both). Each has hover text saying which; the phone view says "New" / "–".
 - **The site reads REPORT data only through `Rpt` procedures** (Dapper, `KpiDb`) — never a copied table directly; a new
   list or figure is a new `Rpt` procedure (a migration). The site's OWN tables (`Auth.*`, `Cfg.Integration`) go
   through EF Core (`KpiDbContext`).
@@ -343,6 +351,8 @@ NAT gateway can't move and is recreated:
   few minutes to apply, so the site never noticed). Wrap it: `(... | ConvertFrom-Json) | Where-Object ...`, and list
   what a delete will hit before running it. JMESPath queries with quotes (`[?starts_with(name,'x')]`) don't survive
   PowerShell -> az.cmd either.
+- **The App Service clock is UTC: never `ToLocalTime()` / `DateTime.Now` for a time someone reads** - "Refreshed on" did,
+  and showed an hour behind "As at" in summer (19 Oct 2026). Show times through `Data/UkTime`.
 - **Ctrl+C on `dotnet run` can leave the program running** (a seed waiting at `Password:`): its exe then locks
   `bin/` and every build fails with MSB3027 until it is stopped. Answer the seed's prompts promptly - its Azure sign-in
   expires.

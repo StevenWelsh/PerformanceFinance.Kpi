@@ -311,4 +311,7 @@ public class YearOnYearRow
     public decimal Total { get; set; }
     public decimal TotalOB { get; set; }
     public decimal TotalBrokered { get; set; }
+    /// <summary>The period's figure up to the report date's day of the year (KPI site, 19 Oct 2026): what the current
+    /// month and year are compared with, as Klipfolio did - not the prior year's whole month or year.</summary>
+    public decimal TotalToDate { get; set; }
 }

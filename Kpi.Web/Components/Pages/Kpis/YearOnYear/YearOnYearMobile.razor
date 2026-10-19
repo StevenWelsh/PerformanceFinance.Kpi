@@ -79,7 +79,7 @@
                                 <th scope="row"></th>
                                 @foreach (var y in _shown)
                                 {
-                                    @ChangeCell(YearTotal(y - 1), YearTotal(y), CurCss(y))
+                                    @ChangeCell(y == _cur ? _priorMatched : YearTotal(y - 1), YearTotal(y), CurCss(y))
                                 }
                                 <td></td>
                             </tr>
@@ -218,11 +218,10 @@ else
         _shown = Years.Skip(Math.Max(0, Years.Count - 4)).ToList();
         _cur = Years.Count > 0 ? Years.Max() : 0;
 
-        // as the full view's GrandYtdDelta
-        var curPeriods = Rows.Where(r => r.Year == _cur && r.Total != 0m).Select(r => r.Period).ToHashSet();
+        // as the full view's GrandYtdDelta: the prior year TO THE SAME DATE (KPI site, 19 Oct 2026)
         _curTotal = Rows.Where(r => r.Year == _cur).Sum(r => r.Total);
-        _priorMatched = Rows.Where(r => r.Year == _cur - 1 && curPeriods.Contains(r.Period)).Sum(r => r.Total);
-        _hasCurPeriods = curPeriods.Count > 0;
+        _priorMatched = Rows.Where(r => r.Year == _cur - 1).Sum(r => r.TotalToDate);
+        _hasCurPeriods = Rows.Any(r => r.Year == _cur && r.Total != 0m);
     }
 
     private decimal Cell(int year, int period)
@@ -288,7 +287,7 @@ else
                 {
                     <td class="@CurCss(y)">@Cur(Cell(y, p))</td>
                 }
-                @ChangeCell(Cell(_cur - 1, p), Cell(_cur, p), "")
+                @ChangeCell(Rows.Where(r => r.Year == _cur - 1 && r.Period == p).Sum(r => r.TotalToDate), Cell(_cur, p), "")   @* to the same date *@
             </tr>
         }
     };

@@ -170,11 +170,12 @@
 
     private void OnRefreshStatus() => _ = InvokeAsync(StateHasChanged);
 
-    // "20:39" today, else "12 Oct 20:39" - local time, as the full view's "Refreshed on".
+    // "20:39" today, else "12 Oct 20:39" - UK time, as the full view's "Refreshed on" (not the server's: Azure's
+    // clock is UTC, an hour behind in summer - KPI site, 19 Oct 2026).
     private static string RefreshedText(DateTime fetchedUtc)
     {
-        var local = fetchedUtc.ToLocalTime();
-        return local.Date == DateTime.Now.Date ? local.ToString("HH:mm") : local.ToString("dd MMM HH:mm");
+        var local = Kpi.Web.Data.UkTime.FromUtc(fetchedUtc.ToUniversalTime());
+        return local.Date == Kpi.Web.Data.UkTime.FromUtc(DateTime.UtcNow).Date ? local.ToString("HH:mm") : local.ToString("dd MMM HH:mm");
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

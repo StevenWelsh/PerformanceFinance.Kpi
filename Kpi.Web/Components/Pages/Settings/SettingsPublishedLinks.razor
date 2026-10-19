@@ -104,7 +104,7 @@ else
 {
     <div class="set-table-wrap">
         <table class="set-table">
-            <thead><tr><th>Label</th><th>Report</th><th>Header</th><th>Key</th><th>Made</th><th>Last opened</th><th>Opens</th><th></th></tr></thead>
+            <thead><tr><th>Label</th><th>Report</th><th>Header</th><th>Made</th><th>Last opened</th><th>Opens</th><th></th></tr></thead>
             <tbody>
                 @foreach (var row in _rows)
                 {
@@ -121,7 +121,6 @@ else
                             }
                             else { <span class="set-sub">@(l.ShowHeader ? "Shown" : "Hidden")</span> }
                         </td>
-                        <td class="set-sub">@l.KeyHint…</td>
                         <td class="set-nowrap">@UkTime.Show(l.CreatedUtc, "dd MMM yyyy")<div class="set-sub">@row.CreatedBy</div></td>
                         <td class="set-nowrap">@(l.LastUsedUtc is null ? "Never" : UkTime.Show(l.LastUsedUtc, "dd MMM HH:mm"))<div class="set-sub">@l.LastUsedAddress</div></td>
                         <td>@l.UseCount</td>

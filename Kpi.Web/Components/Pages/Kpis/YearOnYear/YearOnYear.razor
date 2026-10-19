@@ -113,7 +113,7 @@
                                     <td class="yoy-rowlabel"></td>
                                     @foreach (var y in _shown)
                                     {
-                                        <td class="@(y == curYear ? "yoy-cur" : "")">@YearDelta(y)</td>
+                                        <td class="@(y == curYear ? "yoy-cur" : "")">@YearDelta(y, curYear)</td>
                                     }
                                     <td></td>
                                 </tr>
@@ -320,22 +320,21 @@
     private decimal YearTotal(int year)
         => _rows.Where(r => r.Year == year).Sum(r => r.Total);
 
+    // TO THE SAME DATE (KPI site, 19 Oct 2026, Steve - as Klipfolio): the current year is compared with the prior year's
+    // TotalToDate - a past month in full, the current month up to the same day (1-19 Oct against 1-19 Oct), later
+    // months nothing. CMS.Web's copy compares with the prior year's whole month / year.
+    private decimal PriorToDate(int curYear, int? period = null) =>
+        _rows.Where(r => r.Year == curYear - 1 && (period is null || r.Period == period)).Sum(r => r.TotalToDate);
+
     // per-period current-vs-prior-year %, only where both have data
-    private RenderFragment YtdDelta(int period, int curYear) => DeltaCell(
-        _rows.FirstOrDefault(r => r.Year == curYear - 1 && r.Period == period)?.Total ?? 0m,
-        Cell(curYear, period));
+    private RenderFragment YtdDelta(int period, int curYear) => DeltaCell(PriorToDate(curYear, period), Cell(curYear, period));
 
-    private RenderFragment GrandYtdDelta(int curYear)
-    {
-        // grand total row's right cell: current year vs prior year, matched to the
-        // periods the current year actually has data for (YTD comparison).
-        var curPeriods = _rows.Where(r => r.Year == curYear && r.Total != 0m).Select(r => r.Period).ToHashSet();
-        var cur = _rows.Where(r => r.Year == curYear).Sum(r => r.Total);
-        var prior = _rows.Where(r => r.Year == curYear - 1 && curPeriods.Contains(r.Period)).Sum(r => r.Total);
-        return DeltaCell(prior, cur);
-    }
+    // grand total row's right cell: the current year to date against the prior year to the same date
+    private RenderFragment GrandYtdDelta(int curYear) => DeltaCell(PriorToDate(curYear), YearTotal(curYear));
 
-    private RenderFragment YearDelta(int year) => DeltaCell(YearTotal(year - 1), YearTotal(year));
+    // each year against the one before; the current year against the prior year to the same date
+    private RenderFragment YearDelta(int year, int curYear) =>
+        year == curYear ? DeltaCell(PriorToDate(curYear), YearTotal(year)) : DeltaCell(YearTotal(year - 1), YearTotal(year));
 
     private RenderFragment TotalRow(string label, Func<YearOnYearRow, decimal> pick, int curYear) => builder =>
     {
