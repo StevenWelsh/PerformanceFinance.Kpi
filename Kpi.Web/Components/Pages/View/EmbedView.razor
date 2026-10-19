@@ -1,0 +1,69 @@
+@page "/embed/{Report}"
+@layout Kpi.Web.Components.Layout.EmptyLayout
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@implements IDisposable
+@using Kpi.Web.Views
+@inject CmsDesktopStore Desktop
+
+@* A CMS desktop tab (Settings > Integrations > CMS desktop, 19 Oct 2026): ONE report, nobody signed in here - CMS has
+   already decided who may see it and signed a ticket, which the door (CmsDesktopDoor) checked before this page loaded,
+   then gave this tab a session cookie for this report alone. Shown as published links were: the report page rendered as
+   a plain component inside .kpi-view (no sidebar, avatar menu or phone view; always the full layout), its header hidden
+   when the integration says so. Checked again every minute: switching the integration off, unticking the report or
+   replacing the secret stops a tab left open; a header change reaches it. *@
+
+@if (!_checked)
+{
+}
+else if (_page is null)
+{
+    <PageTitle>Not available</PageTitle>
+    <div class="kpi-view-gone"><p>This report isn't available here. Open it from CMS again.</p></div>
+}
+else
+{
+    <div class="kpi-view @(_showHeader ? "" : "kpi-view-noheader")">
+        <DynamicComponent Type="_page" />
+    </div>
+}
+
+@code {
+    [Parameter] public string Report { get; set; } = "";
+
+    private Type? _page;
+    private bool _showHeader = true;
+    private bool _checked;
+    private int? _generation;
+    private Timer? _recheck;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _page = await PageAsync();
+        _checked = true;
+        _recheck ??= new Timer(_ => _ = InvokeAsync(RecheckAsync), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+    }
+
+    private async Task<Type?> PageAsync()
+    {
+        var (on, settings, secret) = await Desktop.CurrentAsync();
+        _generation ??= settings.Generation;   // the generation the door let this tab in under
+        var entry = settings.Reports.FirstOrDefault(r => r.Slug.Equals(Report, StringComparison.OrdinalIgnoreCase));
+        if (!on || secret is null || entry is null || settings.Generation != _generation) return null;
+        _showHeader = entry.ShowHeader;
+        return PublishedReports.PageFor(entry.Slug);
+    }
+
+    private async Task RecheckAsync()
+    {
+        if (_page is null) return;
+        try
+        {
+            var header = _showHeader;
+            if (await PageAsync() is null) _page = null;
+            if (_page is null || header != _showHeader) StateHasChanged();
+        }
+        catch { /* the database didn't answer this time: keep showing, try again in a minute */ }
+    }
+
+    public void Dispose() => _recheck?.Dispose();
+}

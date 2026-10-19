@@ -46,4 +46,8 @@ public static class AuditEvents
     /// open (wrong address, or a revoked or unknown key) - recorded at most once an hour per address.</summary>
     public const string PublishedLinkChanged = "PublishedLinkChanged";
     public const string PublishedLinkRefused = "PublishedLinkRefused";
+    /// <summary>A CMS desktop tab opened a report with a signed ticket (Views/CmsDesktop; at most hourly per user + report).</summary>
+    public const string CmsDesktopOpened = "CmsDesktopOpened";
+    /// <summary>/embed refused: a bad or old ticket, or no session (at most hourly per address).</summary>
+    public const string CmsDesktopRefused = "CmsDesktopRefused";
 }

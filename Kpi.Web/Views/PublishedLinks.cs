@@ -30,6 +30,9 @@ public static class PublishedLinkDoor
         <p>This link isn't available.</p></body></html>
         """;
 
+    /// <summary>Off since 19 Oct 2026 - see UsePublishedLinks.</summary>
+    public static readonly bool PublishedLinksOn = false;
+
     public static IApplicationBuilder UsePublishedLinks(this IApplicationBuilder app) =>
         app.Use(async (context, next) =>
         {
@@ -37,6 +40,17 @@ public static class PublishedLinkDoor
                 || !(HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)))
             {
                 await next();
+                return;
+            }
+
+            // SWITCHED OFF (19 Oct 2026, Steve): CMS's KPI tabs use the CMS desktop integration (/embed, signed tickets);
+            // Settings > Published links only explains what links could be for. Every /view is refused; the code and the
+            // table stay, so links can come back if a use appears (a wall screen, someone outside PF).
+            if (!PublishedLinksOn)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                context.Response.ContentType = "text/html; charset=utf-8";
+                await context.Response.WriteAsync(Unavailable);
                 return;
             }
 

@@ -131,6 +131,17 @@
 .set-bad { color: var(--error); }
 
 .set-pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--panel-head); color: var(--text-2); white-space: nowrap; }
+/* Settings > Integrations > CMS desktop (19 Oct 2026) */
+.cd-secret code, .cd-reports code { font-size: 12.5px; word-break: break-all; }
+.cd-warn { margin-top: 4px; color: var(--warning); }
+.cd-reports { max-height: 300px; overflow-y: auto; margin-bottom: 10px; }
+.cd-reports td { vertical-align: middle; }
+.cd-how { margin: 10px 0 4px; font-size: 13px; }
+.cd-how summary { cursor: pointer; color: var(--text-2); }
+/* Settings > Published links, switched off: an explanation only */
+.pl-off { max-width: 720px; }
+.pl-off p { margin: 0 0 10px; line-height: 1.5; }
+
 /* Settings > Data sync: Alerts (19 Oct 2026) */
 .set-alerts { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 16px; }
 .set-alerts-head { display: flex; align-items: center; gap: 10px; }
@@ -461,7 +472,10 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .kpi-shell .bal-dash { cursor: help; }
 
 /* Settings > Data sync: each copy's two parts - tick, cross or dash - with an info mark explaining each */
-.set-part { text-align: left; white-space: nowrap; }   /* under its heading (Steve, 19 Oct 2026) */
+.set-part { text-align: left; white-space: nowrap; }
+.set-datafrom { font-size: 13px; }
+.set-datafrom .set-error-cell { margin-top: 2px; white-space: normal; }
+.set-datafrom div + div { margin-top: 2px; }   /* under its heading (Steve, 19 Oct 2026) */
 .set-part-ok { color: var(--success, #2e7d32); font-size: 18px; }
 .set-part-bad { color: var(--error); font-size: 16px; }
 .set-part-none, .set-part-run { color: var(--text-3); }

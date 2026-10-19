@@ -7,7 +7,13 @@ using Microsoft.Data.SqlClient;
 namespace Kpi.Web.Integrations;
 
 /// <summary>The data source's plain settings: where KPI_Export is and who signs in (never the password).</summary>
-public sealed record CmsSourceSettings(string Host, int Port, string Database, string UserName, bool Encrypt, bool TrustServerCertificate);
+public sealed record CmsSourceSettings(string Host, int Port, string Database, string UserName, bool Encrypt, bool TrustServerCertificate,
+                                       string? Name = null)   // what the card calls it: "SQL data source (CMS)" (19 Oct 2026, Steve)
+{
+    /// <summary>The card's title: "SQL data source", with its name in brackets when it has one.</summary>
+    public static string Title(CmsSourceSettings? s) =>
+        string.IsNullOrWhiteSpace(s?.Name) ? "SQL data source" : $"SQL data source ({s!.Name!.Trim()})";
+}
 
 /// <summary>The data source's secret: the SQL login's password. Encrypted at rest; read only to connect.</summary>
 public sealed record CmsSourceSecrets(string Password);

@@ -1,0 +1,186 @@
+@using Kpi.Data.Cfg
+@using Kpi.Web.Data.Kpis
+@using Kpi.Web.Integrations
+@using Kpi.Web.Views
+@implements IAsyncDisposable
+@inject CmsDesktopStore Desktop
+@inject IServiceScopeFactory Scopes
+@inject IConfiguration Config
+@inject IJSRuntime JS
+@inject KpiScripts Scripts
+
+@* The CMS desktop card (Settings > Integrations, 19 Oct 2026, Steve - replaces published links for CMS's KPI tabs). An
+   OUTBOUND integration in effect: CMS opens reports here. It holds the secret CMS signs its tickets with (generated here,
+   shown ONCE to copy into CMS's CMS.IntegrationConfig row, encrypted there by CMS's own Crypto.Encrypt), the site's
+   address for CMS's BaseURL, and the reports CMS may open - each with its /embed/{report} address for CMS's Dashboards
+   row and a Show header choice. How a ticket is signed: Views/CmsDesktop.cs. *@
+
+<div class="intg-card">
+    <div class="intg-head">
+        <span class="intg-name"><i class="bi bi-window-desktop intg-db" aria-hidden="true"></i>CMS desktop</span>
+        <IntegrationPlug Row="_row" />
+    </div>
+    <p class="intg-desc">Lets CMS's KPI tabs open reports here without a separate sign-in: CMS decides who may see them and signs each request.</p>
+    <IntegrationButton Row="_row" ConnectText="Set up CMS desktop" OnClick="Open" />
+</div>
+
+@if (_open && _row is not null)
+{
+    <div class="set-backdrop" @onclick="() => _open = false"></div>
+    <div class="set-dialog set-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="desktop-title">
+        <h3 id="desktop-title">CMS desktop</h3>
+        @if (_message is not null)
+        {
+            <div class="@(_messageOk ? "login-notice" : "login-error")" role="status">
+                <i class="bi @(_messageOk ? "bi-check-circle" : "bi-exclamation-triangle-fill")"></i> @_message
+            </div>
+        }
+
+        <dl class="acc-facts">
+            <dt>Site address</dt>
+            <dd><code>@SiteUrl</code> <button type="button" class="set-act" @onclick='() => Copy(SiteUrl, "Site address")'>Copy</button>
+                <span class="set-sub">- CMS's BaseURL</span></dd>
+            <dt>Secret</dt>
+            <dd>
+                @if (_newSecret is not null)
+                {
+                    <div class="cd-secret"><code>@_newSecret</code> <button type="button" class="set-act" @onclick='() => Copy(_newSecret, "Secret")'>Copy</button></div>
+                    <div class="set-sub cd-warn"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Copy it now: it is shown only once.
+                        Then save, and put it in CMS (encrypted, in its CMS.IntegrationConfig row) - CMS's tabs stop until it has the new one.</div>
+                }
+                else if (_row.SecretsCipher is not null)
+                {
+                    <span>Saved @Kpi.Web.Data.UkTime.Show(_row.SecretsUpdatedUtc) (ends @_settings.SecretHint)</span>
+                }
+                else
+                {
+                    <span class="set-sub">None yet</span>
+                }
+                @if (_newSecret is null)
+                {
+                    <button type="button" class="set-act" @onclick="Generate">@(_row.SecretsCipher is null ? "Generate secret" : "Replace secret")</button>
+                }
+            </dd>
+            <dt>Last change</dt><dd>@Kpi.Web.Data.UkTime.Show(_row.UpdatedUtc)</dd>
+        </dl>
+
+        <p class="acc-hint">Reports CMS may open. Each one's address goes in its CMS tab (Dashboards row), after the site address.</p>
+        <div class="set-table-wrap cd-reports">
+            <table class="set-table">
+                <thead><tr><th>CMS may open</th><th>Show header</th><th>Address</th></tr></thead>
+                <tbody>
+                    @foreach (var r in KpiReports.All)
+                    {
+                        var on = _ticked.ContainsKey(r.Slug);
+                        <tr>
+                            <td><label class="acc-check"><input type="checkbox" checked="@on" @onchange="e => Tick(r.Slug, e)" /> @r.Label</label></td>
+                            <td><input type="checkbox" disabled="@(!on)" checked="@(on && _ticked[r.Slug])" @onchange="e => Header(r.Slug, e)"
+                                       title="The report's title and As at / Refreshed lines" aria-label="Show header for @r.Label" /></td>
+                            <td>
+                                @if (on)
+                                {
+                                    <code>/embed/@r.Slug</code>
+                                    <button type="button" class="set-act" @onclick='() => Copy(SiteUrl + "/embed/" + r.Slug, r.Label + " address")'>Copy</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <label class="acc-check"><input type="checkbox" @bind="_enabled" /> CMS may open reports (switch off to stop every CMS tab at once)</label>
+
+        <details class="cd-how">
+            <summary>How CMS signs a request</summary>
+            <p class="set-sub">CMS POSTs a form to <code>@(SiteUrl)/embed/{report}</code> from its tab (WebView2), with
+               <code>user</code> (the CMS username), <code>issued</code> (Unix seconds, UTC), <code>nonce</code> (16+ random
+               characters, new each time) and <code>sig</code> = lowercase hex HMAC-SHA256, keyed with the secret's UTF-8 bytes,
+               over <code>{report}|{user}|{issued}|{nonce}</code>. A ticket is good for 60 seconds and once; the tab then keeps
+               the report open for 12 hours.</p>
+        </details>
+
+        <div class="set-dialog-buttons">
+            <button type="button" class="acc-btn-secondary" @onclick="Close">Close</button>
+            <button type="button" class="acc-btn" disabled="@_busy" @onclick="Save">@(_busy ? "Saving…" : "Save")</button>
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private Integration? _row;
+    private CmsDesktopSettings _settings = new(Array.Empty<CmsDesktopReport>(), 0, "");
+    private Dictionary<string, bool> _ticked = new();   // slug -> show header
+    private bool _open, _busy, _enabled = true, _messageOk;
+    private string? _message, _newSecret;
+    private IJSObjectReference? _module;
+
+    // what CMS calls: the live site (Kpi:SiteUrl changes it), never the address this page happens to be opened on
+    private string SiteUrl => (Config["Kpi:SiteUrl"] ?? "https://kpi.performancefinance.co.uk").TrimEnd('/');
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _row = await Desktop.RowAsync();
+        _settings = CmsDesktopStore.SettingsOf(_row);
+    }
+
+    private void Open()
+    {
+        _message = null; _newSecret = null;
+        _ticked = _settings.Reports.ToDictionary(r => r.Slug, r => r.ShowHeader);
+        _enabled = _row!.Status == IntegrationStatus.NotConnected || _row.Enabled;
+        _open = true;
+    }
+
+    private void Close() { _open = false; _newSecret = null; }
+
+    private void Tick(string slug, ChangeEventArgs e)
+    {
+        if (e.Value is true) _ticked[slug] = true; else _ticked.Remove(slug);
+    }
+
+    private void Header(string slug, ChangeEventArgs e)
+    {
+        if (_ticked.ContainsKey(slug)) _ticked[slug] = e.Value is true;
+    }
+
+    private void Generate()
+    {
+        _newSecret = CmsDesktopStore.NewSecret();
+        Say(true, "A new secret is ready below. Copy it, then Save - it is kept only when you save.");
+    }
+
+    private async Task Save()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            var reports = KpiReports.All.Where(r => _ticked.ContainsKey(r.Slug))
+                .Select(r => new CmsDesktopReport(r.Slug, _ticked[r.Slug])).ToList();
+            await Desktop.SaveAsync(await SettingsActor.GetAsync(AuthState, Scopes), reports, _newSecret, _enabled);
+            var hadNew = _newSecret is not null;
+            await Load();
+            Say(true, hadNew ? "Saved, with the new secret. Put it in CMS now - its tabs stop until it has it." : "Saved.");
+            if (hadNew) _newSecret = null;
+        }
+        catch (InvalidOperationException ex) { Say(false, ex.Message); }
+        finally { _busy = false; }
+    }
+
+    private async Task Copy(string text, string what)
+    {
+        _module ??= await JS.InvokeAsync<IJSObjectReference>("import", Scripts.Url("./js/publishedLinks.js"));
+        var ok = await _module.InvokeAsync<bool>("copy", text);
+        Say(ok, ok ? $"{what} copied." : $"Couldn't copy - select the {what.ToLowerInvariant()} and copy it by hand.");
+    }
+
+    private void Say(bool ok, string message) { _messageOk = ok; _message = message; }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { if (_module is not null) await _module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
+}

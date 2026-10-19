@@ -184,6 +184,49 @@ public sealed class IntegrationStore(IDbContextFactory<KpiDbContext> dbs, IDataP
         await db.SaveChangesAsync();
     }
 
+    /// <summary>
+    /// Saves the CMS desktop integration (Views/CmsDesktop): the reports CMS may open (and their header), on/off, and when
+    /// given a NEW SECRET - which raises the generation, so every session opened with the old one ends.
+    /// </summary>
+    public async Task SaveCmsDesktopAsync(KpiUser actor, IReadOnlyList<Kpi.Web.Views.CmsDesktopReport> reports, string? newSecret, bool enabled)
+    {
+        await using var db = await dbs.CreateDbContextAsync();
+        var row = await TrackedAsync(db, Kpi.Web.Views.CmsDesktopStore.Provider);
+        var old = Kpi.Web.Views.CmsDesktopStore.SettingsOf(row);
+        var changes = new List<string>();
+        var generation = old.Generation;
+        var hint = old.SecretHint;
+
+        if (!string.IsNullOrEmpty(newSecret))
+        {
+            row.SecretsCipher = _secrets.Protect(JsonSerializer.Serialize(new Kpi.Web.Views.CmsDesktopSecrets(newSecret)));
+            row.SecretsUpdatedUtc = DateTime.UtcNow;
+            generation++;
+            hint = $"…{newSecret[^4..]}";
+            changes.Add("a NEW secret (CMS must be given it; open CMS tabs stop)");
+        }
+        if (row.SecretsCipher is null) throw new InvalidOperationException("Generate a secret first.");
+
+        var list = string.Join(", ", reports.Select(r => r.Slug + (r.ShowHeader ? "" : " (no header)")));
+        var oldList = string.Join(", ", old.Reports.Select(r => r.Slug + (r.ShowHeader ? "" : " (no header)")));
+        if (list != oldList) changes.Add("reports: " + (list.Length == 0 ? "none" : list));
+        row.SettingsJson = JsonSerializer.Serialize(new Kpi.Web.Views.CmsDesktopSettings(reports, generation, hint));
+
+        if (enabled != row.Enabled) changes.Add(enabled ? "on" : "off");
+        row.Enabled = enabled;
+        if (row.Status != IntegrationStatus.Connected)
+        {
+            row.Status = IntegrationStatus.Connected;
+            row.ConnectedByUserId = actor.Id;
+            row.ConnectedUtc = DateTime.UtcNow;
+        }
+        row.UpdatedByUserId = actor.Id;
+        row.UpdatedUtc = DateTime.UtcNow;
+        AuditLog.Add(db, AuditEvents.IntegrationChanged, actor, null,
+            $"CMS desktop saved{(changes.Count > 0 ? ": " + string.Join("; ", changes) : "")}");
+        await db.SaveChangesAsync();
+    }
+
     /// <summary>An audit line that isn't a change to a row (a test query against the data source).</summary>
     public async Task AuditAsync(KpiUser actor, string auditEvent, string detail)
     {

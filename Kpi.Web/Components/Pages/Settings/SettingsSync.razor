@@ -10,9 +10,10 @@
 @* Settings > Data sync: when the figures were last copied from CMS, whether a copy is overdue, and the recent copies
    with any errors (Ref.LoadRun, through Rpt.spDataStatus / Rpt.spLoadHistory). The site's own copy (KpiPull) collects
    KPI_Export's copies from the office after each refresh there; a failure is logged here once when it starts and then
-   hourly (Settings > Integrations > CMS data source shows the latest problem). Each copy's two parts are shown as
-   ticks (Steve, 19 Oct 2026): Day's figures in every copy, Bad Debt & Exposure only in a "Nightly" one. "Office refresh"
-   is when the office made the data that copy carried, so a fresh refresh can be seen being picked up; a copy that
+   hourly (Settings > Integrations > SQL data source shows the latest problem). Each copy's two parts are shown as
+   ticks (Steve, 19 Oct 2026): Day's figures in every copy, Bad Debt & Exposure only in a "Nightly" one. "Data from" is
+   when the office made the data that copy carried - the day's figures, and on a Nightly copy Bad Debt & Exposure too -
+   so a fresh refresh can be seen being picked up; a copy that
    couldn't go ahead (another copy holding the lock) is a cross with its reason, and one cut off part-way (a restart)
    is closed as failed rather than shown running for ever (migration LoadRunDetail). *@
 
@@ -108,27 +109,31 @@
             <thead>
                 <tr>
                     <th>Started</th>
-                    <th>Office refresh <i class="bi bi-info-circle set-info" tabindex="0" title="@OfficeHelp" aria-label="@OfficeHelp"></i></th>
                     <th class="set-part">Day's figures <i class="bi bi-info-circle set-info" tabindex="0" title="@DayHelp" aria-label="@DayHelp"></i></th>
                     <th class="set-part">Bad Debt &amp; Exposure <i class="bi bi-info-circle set-info" tabindex="0" title="@NightHelp" aria-label="@NightHelp"></i></th>
                     <th>Took</th>
-                    <th>Error</th>
+                    <th>Info <i class="bi bi-info-circle set-info" tabindex="0" title="@DataFromHelp" aria-label="@DataFromHelp"></i></th>
                 </tr>
             </thead>
             <tbody>
                 @if (_runs.Count == 0)
                 {
-                    <tr><td colspan="6" class="set-sub">No copies yet.</td></tr>
+                    <tr><td colspan="5" class="set-sub">No copies yet.</td></tr>
                 }
-                @foreach (var r in _runs)
+                @for (var i = 0; i < _runs.Count; i++)
                 {
+                    var r = _runs[i];
+                    // the copy before this one that carried a data time (the list is newest first)
+                    var before = _runs.Skip(i + 1).FirstOrDefault(x => x.SourceRefreshedUtc is not null);
                     <tr>
                         <td>@UkTime.Show(r.StartedUtc, "dd MMM HH:mm:ss")</td>
-                        <td>@UkTime.Show(r.SourceRefreshedUtc, "dd MMM HH:mm:ss")</td>
                         <td class="set-part">@Part(r, included: true)</td>
                         <td class="set-part">@Part(r, included: r.Scope == "Nightly")</td>
                         <td>@(r.Seconds is null ? "-" : $"{r.Seconds} s")</td>
-                        <td class="set-error-cell" title="@r.Error">@r.Error</td>
+                        <td class="set-datafrom">
+                            @DataFrom(r, before)
+                            @if (!string.IsNullOrEmpty(r.Error)) { <div class="set-error-cell" title="@r.Error">@r.Error</div> }
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -153,6 +158,7 @@
         public DateTime StartedUtc { get; set; }
         public DateTime? FinishedUtc { get; set; }
         public DateTime? SourceRefreshedUtc { get; set; }
+        public DateTime? SourceSnapshotsUtc { get; set; }
         public bool? Succeeded { get; set; }
         public string? Error { get; set; }
         public int? Seconds { get; set; }
@@ -160,8 +166,25 @@
 
     private const string DayHelp = "Day's figures: every table the reports use except Bad Debt and Exposure - leads, salespeople, targets, "
         + "funds, book position and the rest. In every copy: the office refreshes them every 10 minutes (7am-8pm, Monday to Saturday).";
-    private const string OfficeHelp = "When the office made the data this copy carried (its refresh of KPI_Export). Each new refresh "
-        + "should appear here within a couple of minutes; the same time on two rows means a copy of the same refresh was tried again.";
+    private const string DataFromHelp = "What this copy carried, and any error: \"New data from\" the time the office made it (its refresh of KPI_Export, "
+        + "every 10 minutes), or \"Same data as before\" when it was the same refresh as the copy before - and, on a nightly copy, when "
+        + "Bad Debt & Exposure were prepared (about 00:15).";
+
+    // "Data" (Steve, 19 Oct 2026): one comment saying what this copy carried - NEW data (the office's time for it, newer
+    // than the copy before) or the SAME data as before - with Bad Debt & Exposure's preparation time on a nightly copy
+    private static RenderFragment DataFrom(RunRow r, RunRow? before) => __builder =>
+    {
+        if (r.SourceRefreshedUtc is not DateTime day) { if (string.IsNullOrEmpty(r.Error)) { <span class="set-sub">-</span> } return; }
+        var time = UkTime.Show(day, UkTime.FromUtc(day).Date == UkTime.FromUtc(r.StartedUtc).Date ? "HH:mm:ss" : "dd MMM HH:mm:ss");
+        var same = before?.SourceRefreshedUtc == day;
+        var copied = r.Succeeded == true ? ", copied" : r.Succeeded == false ? ", not copied" : "";
+        if (same) { <div class="set-sub">Same data as before (@time)@copied</div> }
+        else { <div>New data from @time@copied</div> }
+        if (r.SourceSnapshotsUtc is DateTime night)
+        {
+            <div class="set-sub">Bad Debt &amp; Exposure prepared @UkTime.Show(night, "dd MMM HH:mm:ss")</div>
+        }
+    };
     private const string NightHelp = "Bad Debt & Exposure: last night's results of the desktop's own Bad Debt and Exposure reports, prepared in "
         + "the office at 00:15. Included in the first copy after they are prepared - so about once a night (a \"Nightly\" copy, which also "
         + "brings the day's figures).";
@@ -171,7 +194,7 @@
     {
         if (!included) { <span class="set-part-none" title="Not part of this copy">–</span> }
         else if (r.Succeeded == true) { <i class="bi bi-check-lg set-part-ok" title="Copied" aria-label="Copied"></i> }
-        else if (r.Succeeded == false) { <i class="bi bi-x-lg set-part-bad" title="Failed - see Error" aria-label="Failed"></i> }
+        else if (r.Succeeded == false) { <i class="bi bi-x-lg set-part-bad" title="Failed - see Info" aria-label="Failed"></i> }
         else { <span class="set-running" title="Copying now"><span class="set-pulse" aria-hidden="true"></span>Running</span> }
     };
 

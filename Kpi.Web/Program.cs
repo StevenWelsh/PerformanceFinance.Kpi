@@ -97,6 +97,7 @@ builder.Services.AddScoped<AuthenticationStateProvider, KpiAuthStateProvider>();
 
 builder.Services.AddSingleton<AccountLinks>();
 builder.Services.AddSingleton<UserAdmin>();
+builder.Services.AddSingleton<Kpi.Web.Views.CmsDesktopStore>();
 // who has the site open, for Settings > Users (each page's live connection, noted as it comes and goes)
 builder.Services.AddSingleton<OnlineUsers>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, OnlineTracker>();
@@ -157,8 +158,10 @@ app.Use(async (context, next) =>
 
 app.UseStaticFiles();
 app.UseAuthentication();
-// a published link (/view/{key}): its key and address are checked here, before the sign-in gate
+// a published link (/view/{key}): switched off 19 Oct 2026 (CMS's tabs use the CMS desktop integration) - refused here
 Kpi.Web.Views.PublishedLinkDoor.UsePublishedLinks(app);
+// a CMS desktop tab (/embed/{report}): its signed ticket, then its session cookie, checked here before the sign-in gate
+Kpi.Web.Views.CmsDesktopDoor.UseCmsDesktop(app);
 // before authorization: a half-set-up account is sent to finish setting up, not told "no access"
 app.UseAccountGate();
 app.UseAuthorization();

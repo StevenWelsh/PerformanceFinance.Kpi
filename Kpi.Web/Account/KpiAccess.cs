@@ -117,7 +117,7 @@ public static class AccountGate
     // the framework's plumbing and static assets, and the health checks (Azure pings them signed out). Everything else
     // is redirected - and refused by the policies. /view is a published link: its own door (PublishedLinkDoor) has
     // already checked the key and the address.
-    private static readonly string[] Open = { "/account", "/_blazor", "/_framework", "/_content", "/css", "/js", "/lib", "/img", "/favicon", "/Error", "/health", "/view" };
+    private static readonly string[] Open = { "/account", "/_blazor", "/_framework", "/_content", "/css", "/js", "/lib", "/img", "/favicon", "/Error", "/health", "/view", "/embed" };
 
     private static readonly string[] AssetExtensions =
         { ".css", ".js", ".map", ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".woff", ".woff2", ".ttf", ".json" };

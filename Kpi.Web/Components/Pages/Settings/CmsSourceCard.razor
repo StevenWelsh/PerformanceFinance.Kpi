@@ -5,7 +5,9 @@
 @inject IntegrationStore Store
 @inject IServiceScopeFactory Scopes
 
-@* The data source card (Settings > Integrations), like Klipfolio's SQL data source: where the KPI copy reads from -
+@* The SQL data source card (Settings > Integrations; "CMS data source" until 19 Oct 2026, when Steve renamed it and gave
+   it a NAME shown in brackets - "SQL data source (CMS)"; stored as provider CmsSource still), like Klipfolio's SQL data
+   source: where the KPI copy reads from -
    KPI_Export on the office SQL Server, through the port forward that admits only the site's static IP (20.90.27.132),
    as the SQL login made by Kpi.Tools grant-pull. Details are tested before they are saved; the password is encrypted
    on the server and never shown back (a blank box keeps it). "Try a query" runs as that same login, so it sees only
@@ -14,7 +16,7 @@
 
 <div class="intg-card">
     <div class="intg-head">
-        <span class="intg-name"><i class="bi bi-database intg-db" aria-hidden="true"></i>CMS data source</span>
+        <span class="intg-name"><i class="bi bi-database intg-db" aria-hidden="true"></i>@CmsSourceSettings.Title(_settings)</span>
         <IntegrationPlug Row="_row" />
     </div>
     <p class="intg-desc">Where the KPI figures are copied from: KPI_Export on the office SQL Server.</p>
@@ -25,7 +27,7 @@
 {
     <div class="set-backdrop" @onclick="() => _open = false"></div>
     <div class="set-dialog set-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="source-title">
-        <h3 id="source-title">CMS data source</h3>
+        <h3 id="source-title">@CmsSourceSettings.Title(_settings)</h3>
         @if (_message is not null)
         {
             <div class="@(_messageOk ? "login-notice" : "login-error")" role="status">
@@ -36,6 +38,7 @@
         @if (!_editing)
         {
             <dl class="acc-facts">
+                <dt>Name</dt><dd>@(string.IsNullOrWhiteSpace(_settings?.Name) ? "-" : _settings!.Name)</dd>
                 <dt>Server</dt><dd>@(_settings is null ? "-" : $"{_settings.Host}, port {_settings.Port}")</dd>
                 <dt>Database</dt><dd>@(_settings?.Database ?? "-")</dd>
                 <dt>Username</dt><dd>@(_settings?.UserName ?? "-")</dd>
@@ -109,6 +112,8 @@
                     <input id="s-port" @bind="_port" inputmode="numeric" autocomplete="off" placeholder="1433" />
                 </div>
             </div>
+            <label class="login-label" for="s-name">Name</label>
+            <input id="s-name" @bind="_name" maxlength="40" autocomplete="off" placeholder="CMS" />
             <label class="login-label" for="s-db">Database</label>
             <input id="s-db" @bind="_database" spellcheck="false" autocomplete="off" placeholder="KPI_Export" />
             <label class="login-label" for="s-user">Username</label>
@@ -142,7 +147,7 @@
     private CmsSourceSettings? _settings;
     private bool _open, _editing, _busy, _running, _confirmDisconnect, _messageOk;
     private string? _message, _queryError;
-    private string _host = "", _port = "", _database = "", _user = "", _password = "";
+    private string _name = "", _host = "", _port = "", _database = "", _user = "", _password = "";
     private bool _encrypt = true, _trust = true, _enabled = true;
     private string _sql = "SELECT * FROM KpiCopy.Refresh";
     private SourceQueryResult? _result;
@@ -168,6 +173,7 @@
 
     private void StartEdit()
     {
+        _name = _settings?.Name ?? "CMS";
         _host = _settings?.Host ?? "";
         _port = _settings?.Port.ToString() ?? "";
         _database = _settings?.Database ?? "KPI_Export";
@@ -199,7 +205,8 @@
             var password = _password.Length > 0 ? _password : _row is null ? null : Store.ReadSecrets<CmsSourceSecrets>(_row)?.Password;
             if (string.IsNullOrEmpty(password)) { Say(false, "Enter the password."); return; }
 
-            var settings = new CmsSourceSettings(host, port, _database.Trim(), _user.Trim(), _encrypt, _trust);
+            var settings = new CmsSourceSettings(host, port, _database.Trim(), _user.Trim(), _encrypt, _trust,
+                                                 string.IsNullOrWhiteSpace(_name) ? null : _name.Trim());
             var answer = await CmsSource.TestAsync(CmsSource.ConnectionString(settings, password));
             await Store.SaveCmsSourceAsync(await SettingsActor.GetAsync(AuthState, Scopes), settings, _password.Length > 0 ? _password : null, _enabled);
             _password = "";

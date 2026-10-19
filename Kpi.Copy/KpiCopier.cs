@@ -139,6 +139,8 @@ public static class KpiCopier
         publish.Parameters.Add("@ReportDate", SqlDbType.Date).Value = state.ReportDate.Date;
         publish.Parameters.Add("@StartedUtc", SqlDbType.DateTime2).Value = startedUtc;
         publish.Parameters.Add("@SourceRefreshedUtc", SqlDbType.DateTime2).Value = state.RefreshedUtc;   // when the office made it
+        publish.Parameters.Add("@SourceSnapshotsUtc", SqlDbType.DateTime2).Value =                         // and Bad Debt & Exposure
+            withSnapshots && state.SnapshotsUtc is DateTime prepared ? prepared : DBNull.Value;
         try { await publish.ExecuteNonQueryAsync(ct); }
         catch (SqlException ex) { throw new PublishFailedException(ex); }
 

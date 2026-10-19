@@ -191,7 +191,7 @@ the tables in full (25k paid leads).
   Protection, never shown back, blank keeps it; a TEST ADDRESS catches every email, and outside Production nothing is
   sent without one), Data sync, Audit. When an email can't be sent the invitation / reset link is shown to the System
   Admin to pass on.
-- **Published links (18 Oct 2026, Steve - to replace the Klipfolio dashboards in CMS's KPI tabs):** Settings > Published
+- **Published links (18 Oct 2026, Steve - to replace the Klipfolio dashboards in CMS's KPI tabs; SWITCHED OFF 19 Oct, see CMS desktop below):** Settings > Published
   links makes a link to ONE report, opened at `/view/{key}` without signing in. The key is 32 random bytes; a link is
   found by its SHA-256 (`Cfg.PublishedLink`, migrations `PublishedLinks`, `PublishedLinkUrls`) and the key is kept
   ENCRYPTED (Data Protection), so Settings shows Copy link / Open on every active link (Steve: not sensitive, and locked
@@ -206,6 +206,22 @@ the tables in full (25k paid leads).
   tab). Made / revoked / addresses changed and refused opens (at most hourly per address) are audited. CMS's tab
   control (`ucKlipfolioDashboard`) still runs Klipfolio's sign-in script after every load: it must skip that for a
   row without a password before a tab is switched over (a CMS change, not made yet).
+- **CMS DESKTOP INTEGRATION (19 Oct 2026, Steve - replaces published links for CMS's KPI tabs; `Views/CmsDesktop.cs`):**
+  CMS decides who may open its KPI screen and VOUCHES for them: its tab (WebView2) POSTs a TICKET to `/embed/{report}` -
+  `user`, `issued` (Unix s), `nonce` (16+), `sig` = lowercase hex HMAC-SHA256 keyed with the secret's UTF-8 bytes over
+  `{report}|{user}|{issued}|{nonce}`. `CmsDesktopDoor` (before AccountGate; `/embed` on its open list) accepts it within
+  60 s either way, once (nonce), integration on and report ticked; then a 12-hour Data Protection cookie for THAT report
+  (`kpi-embed-{report}`, path `/embed/{report}`, carrying the secret's GENERATION - a new secret ends every session) and a
+  redirect to GET `/embed/{report}` (`EmbedView`, as published links rendered: `.kpi-view`, header per report). Opens and
+  refusals audited (`CmsDesktopOpened` hourly per user+report, `CmsDesktopRefused` hourly per address). Settings >
+  Integrations > **CMS desktop** (`CmsDesktopCard`, provider `CmsDesktop`): the site address (`Kpi:SiteUrl`, for CMS's
+  BaseURL), the secret (generated there, shown ONCE), the reports with Show header and their `/embed/...` addresses.
+  CMS side (`IntegrationType.KpiSite = 15`, a hand-applied `CMS.IntegrationConfig` row: BaseURL + Crypto.Encrypt'd secret;
+  a `Dashboards` row whose URL is `/embed/...` opens on the KPI site) is on CMS branch `feature/kpi-site-tabs` (19 Oct,
+  uncommitted, Steve's to review). **Published links are SWITCHED OFF** (`PublishedLinkDoor.PublishedLinksOn = false`):
+  every `/view` is refused and Settings > Published links only explains - code and table kept in case a use appears.
+- **The data source card is "SQL data source (Name)"** (19 Oct 2026, Steve): `CmsSourceSettings.Name`, shown in brackets;
+  still provider `CmsSource`.
 - **The Home Screen app (Oct 2026, Steve):** `manifest.webmanifest` + the head tags in App.razor make the site installable,
   opening full screen with no address bar under the "PF KPIs" icon (`img/apple-touch-icon.png`, `kpi-icon-*`: the PF
   dots with KPI in red - the KPI marks it as this site, the dots may serve another app). `js/appInstall.js` offers it
@@ -233,8 +249,9 @@ the tables in full (25k paid leads).
   fetched each figure twice). One run and one query at a time. Bigger fix if first views still bother: one Rpt
   procedure returning a whole page's grid. Caching to be discussed further (Steve).
 - **Data sync, fuller (19 Oct 2026, Steve; migration `LoadRunDetail`):** each run's "Started"/"Took" cover the WHOLE copy
-  (the site passes `@StartedUtc`), "Office refresh" (`Ref.LoadRun.SourceRefreshedUtc`) is when the office made the data it
-  carried, a run left open 15 minutes (a restart mid-publish) is closed as failed by the next publish and shown so by
+  (the site passes `@StartedUtc`), "Data from" (`Ref.LoadRun.SourceRefreshedUtc`) is when the office made the data it
+  carried - shown with Bad Debt & Exposure's preparation time on a nightly copy (`SourceSnapshotsUtc`, migration
+  `LoadRunSnapshotTime`) in ONE "Info" column (the last; errors in red under it too - Steve): "New data from 18:20:14, copied" or "Same data as before (...)" - a run left open 15 minutes (a restart mid-publish) is closed as failed by the next publish and shown so by
   `Rpt.spLoadHistory`, and a copy refused before starting (the lock held) is a FAILURE (`CopyBlockedException`) - recorded
   once when it starts and hourly, like the rest. A copy refused because the office refreshed mid-copy stays info-only.
 - **New figures are PUSHED (19 Oct 2026, Steve):** after a copy, `KpiWarmer` re-runs the cache and raises `KpiFiguresSignal`;
