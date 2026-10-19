@@ -131,13 +131,63 @@
 .set-bad { color: var(--error); }
 
 .set-pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--panel-head); color: var(--text-2); white-space: nowrap; }
-/* Settings > Integrations > CMS desktop (19 Oct 2026) */
-.cd-secret code, .cd-reports code { font-size: 12.5px; word-break: break-all; }
-.cd-warn { margin-top: 4px; color: var(--warning); }
-.cd-reports { max-height: 300px; overflow-y: auto; margin-bottom: 10px; }
-.cd-reports td { vertical-align: middle; }
-.cd-how { margin: 10px 0 4px; font-size: 13px; }
-.cd-how summary { cursor: pointer; color: var(--text-2); }
+/* Settings > Audit: tabs (segmented buttons, as DavidsonHR) and the report-views summary (19 Oct 2026) */
+.aud-tabs { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 3px; margin: 0 0 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-head); }
+.aud-tabs button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--text-2); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.aud-tabs button:hover { color: var(--text); }
+.aud-tabs button.aud-on { background: var(--surface); color: var(--brand); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.aud-foot { margin-top: 8px; }
+.aud-summary { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+.aud-summary-head { font-weight: 600; font-size: 14px; margin-bottom: 8px; }
+.aud-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.aud-summary-title { font-size: 12.5px; color: var(--text-3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .03em; }
+.aud-bar-row { display: grid; grid-template-columns: 150px 1fr auto; align-items: center; gap: 10px; font-size: 13px; padding: 3px 0; }
+.aud-bar-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aud-bar { height: 8px; background: var(--panel-head); border-radius: 4px; overflow: hidden; }
+.aud-bar span { display: block; height: 100%; background: var(--brand); border-radius: 4px; }
+.aud-bar-n { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.aud-how { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--panel-head); color: var(--text-2); }
+.aud-how-embedded { background: var(--info-bg, #e8f1fb); color: var(--info, #1d6fb8); }
+.aud-how-app { background: var(--success-bg); color: var(--success); }
+
+/* Settings > Integrations > Embedded reports (19 Oct 2026; was "CMS desktop") */
+.set-dialog.ed-dialog { width: 860px; max-width: calc(100vw - 32px); }
+.ed-titlebar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.ed-titlebar h3 { margin: 0; }
+.ed-disable { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; font-weight: 600; color: var(--text-2); cursor: pointer; }
+.set-dialog input.ed-tick { width: 16px; height: 16px; margin: 0; padding: 0; flex: 0 0 auto; accent-color: var(--brand); cursor: pointer; }
+.set-dialog input.ed-tick:disabled { cursor: default; opacity: .4; }
+.ed-section { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+.ed-section-head { font-weight: 600; font-size: 14px; color: var(--text-strong); margin-bottom: 2px; }
+.ed-row { display: grid; grid-template-columns: 110px 1fr auto; align-items: center; gap: 10px; padding: 6px 0; }
+.ed-row + .ed-row { border-top: 1px solid var(--line); }
+.ed-label { color: var(--text-3); font-size: 13.5px; }
+.ed-value { font-size: 13.5px; word-break: break-all; }
+code.ed-value, .ed-address code, .ed-how code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; color: var(--text); background: var(--panel-head); padding: 2px 6px; border-radius: 4px; }
+.ed-muted { color: var(--text-3); }
+.ed-btns { display: inline-flex; gap: 6px; }
+.ed-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; cursor: pointer; white-space: nowrap; }
+.ed-btn:hover { background: var(--panel-head); }
+.ed-btn:disabled { opacity: .5; cursor: default; }
+.ed-btn-primary { background: var(--brand); color: var(--surface); border-color: var(--brand); }
+.ed-btn-primary:hover { background: var(--brand); filter: brightness(1.08); }
+.ed-btn-small { padding: 2px 8px; font-size: 12px; }
+.ed-note { font-size: 13px; color: var(--text-3); margin: 0 0 8px; }
+.ed-note-off { color: var(--warning); font-weight: 600; margin-bottom: 12px; }
+.ed-reports { max-height: 320px; overflow-y: auto; }
+.ed-reports .set-table td { vertical-align: middle; padding: 6px 10px; }
+.ed-reports tr.ed-off td { color: var(--text-3); }
+.ed-report { display: inline-flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; white-space: nowrap; }
+.ed-centre { text-align: center !important; }
+.ed-address { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.ed-how { border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; margin-bottom: 4px; font-size: 13.5px; color: var(--text-2); }
+.ed-how summary { cursor: pointer; font-weight: 600; color: var(--text); }
+.ed-how ol { margin: 10px 0 0; padding-left: 20px; line-height: 1.55; }
+.ed-how li + li { margin-top: 6px; }
+.ed-how dl { display: grid; grid-template-columns: 70px 1fr; gap: 4px 12px; margin: 6px 0 0; }
+.ed-how dt { margin: 0; }
+.ed-how dd { margin: 0; }
+
 /* Settings > Published links, switched off: an explanation only */
 .pl-off { max-width: 720px; }
 .pl-off p { margin: 0 0 10px; line-height: 1.5; }
@@ -401,6 +451,8 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 
 /* ---- Settings > Integrations: a card per service, as DavidsonHR (ResendCard, TwilioCard) ----------------------- */
 .intg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 340px)); gap: 14px; }
+.intg-cell { min-width: 0; display: flex; flex-direction: column; }
+.intg-cell > .intg-card { flex: 1; }
 .intg-card { display: flex; flex-direction: column; min-height: 150px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-alt); }
 .intg-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; min-height: 24px; }
 .intg-name { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--text-strong); }

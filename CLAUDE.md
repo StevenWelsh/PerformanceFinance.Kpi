@@ -214,8 +214,10 @@ the tables in full (25k paid leads).
   (`kpi-embed-{report}`, path `/embed/{report}`, carrying the secret's GENERATION - a new secret ends every session) and a
   redirect to GET `/embed/{report}` (`EmbedView`, as published links rendered: `.kpi-view`, header per report). Opens and
   refusals audited (`CmsDesktopOpened` hourly per user+report, `CmsDesktopRefused` hourly per address). Settings >
-  Integrations > **CMS desktop** (`CmsDesktopCard`, provider `CmsDesktop`): the site address (`Kpi:SiteUrl`, for CMS's
-  BaseURL), the secret (generated there, shown ONCE), the reports with Show header and their `/embed/...` addresses.
+  Integrations > **Embedded reports** (renamed from "CMS desktop" 19 Oct - it is signed embedding, for any app trusted with
+  the secret; `CmsDesktopCard`, provider `CmsDesktop` unchanged): the site address (`Kpi:SiteUrl`, an app's BaseURL), a
+  DISABLED switch, the secret (Create; then Copy at any time - audited - or Replace after a confirm), the reports with
+  Show header and their `/embed/...` addresses, and how to sign a request.
   CMS side (`IntegrationType.KpiSite = 15`, a hand-applied `CMS.IntegrationConfig` row: BaseURL + Crypto.Encrypt'd secret;
   a `Dashboards` row whose URL is `/embed/...` opens on the KPI site) is on CMS branch `feature/kpi-site-tabs` (19 Oct,
   uncommitted, Steve's to review). **Published links are SWITCHED OFF** (`PublishedLinkDoor.PublishedLinksOn = false`):
@@ -264,6 +266,12 @@ the tables in full (25k paid leads).
   problem, every 4 hours in office hours while it lasts, once when it's over. Settings > Users shows an envelope for
   recipients (hover: last sent). Links use `Kpi:SiteUrl` (default the live site). It can't report the site being DOWN -
   Azure's health alert does.
+- **Settings > Audit (19 Oct 2026, Steve):** tabs as segmented buttons (All, Sign-ins, Users, Settings, Embedded reports,
+  Report views), newest 500 per tab with a filter. **Report views** (`Auth.ReportView`, migration `ReportViews`): one row
+  per OPENING (same person + report within 30 min counts once) - recorded by `KpiPanel` for `/kpis/...` (Browser / Phone /
+  App) and by `CmsDesktopDoor` for embedded opens (the person the app vouched for); everyone, admins too. **Kept 3
+  months** (`HistoryPruner.Months`): `Auth.spPruneHistory` deletes older audit lines and views nightly ~02:30 UK - it runs
+  through ownership chaining, so the site's DENY on changing/deleting audit lines still stands for everything newer.
 - **Data Protection key ring** encrypts cookies, emailed links and the Resend key: locally the user profile; **in Azure it
   must be a shared persisted ring (storage + Key Vault)** or every restart signs everyone out and the Resend key becomes
   unreadable. Pin `AllowedHosts` in Azure: emailed links are built from the request's host.
@@ -391,6 +399,12 @@ NAT gateway can't move and is recreated:
 - **Who is online** (Settings > Users, 19 Oct 2026, Steve): `OnlineUsers` / `OnlineTracker`, a `CircuitHandler` noting
   each interactive page's connection up and down per signed-in person; in memory on the one server ("last seen" only
   since the last start; a sleeping phone shows as last seen). Published views aren't counted.
+- **A page's cache loader reads the page's CURRENT choices, not its key's (19 Oct 2026).** The after-copy refresh re-ran
+  each remembered view's loader later, by which time its page might show another view, so the old view was refilled
+  with the new one's figures - live Business Analysis "Facility" showed Arrangement (Own Book / Brokered) until a restart.
+  Now `KpiCache.RefreshViewsAsync` / `WarmAsync` re-run only views whose loader takes its choices as arguments
+  (`SafeToRerun`: `SalesSummaryPanel`, i.e. `SalesSummaryCells`) and DROP every other view, which then loads fresh for
+  its next viewer (an open page reloads its own view on `KpiFiguresSignal`). Never re-run a page's loader in the background.
 - **The App Service clock is UTC: never `ToLocalTime()` / `DateTime.Now` for a time someone reads** - "Refreshed on" did,
   and showed an hour behind "As at" in summer (19 Oct 2026). Show times through `Data/UkTime`.
 - **Ctrl+C on `dotnet run` can leave the program running** (a seed waiting at `Password:`): its exe then locks

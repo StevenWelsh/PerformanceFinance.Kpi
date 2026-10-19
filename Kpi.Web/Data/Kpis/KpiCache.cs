@@ -76,8 +76,8 @@ public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, 
     // Entries are keyed by the business date, so when the morning's first copy moves the date every report starts
     // cold and its first viewer waits for the full calculation on the small database. So the cache remembers each
     // view people actually open (report + filters, the key with its date taken out, and its loader) and KpiWarmer
-    // reloads them under the new date in the background, one at a time. A loader is the page's "pure" one (no
-    // component state written - the same contract the 10-minute background refresh already relies on). Views
+    // reloads them under the new date in the background, one at a time - but only views safe to re-run (see
+    // SafeToRerun below: a page's loader reads the page's current choices, so re-running it later can load the wrong view). Views
     // nobody has opened for three days are forgotten. Empty after a restart: the first viewers then fill it.
     private readonly ConcurrentDictionary<string, (Func<string, Task> Load, Func<string, Task> Refresh, DateTime LastUsedUtc)> _views = new();
     private static readonly TimeSpan ForgetAfter = TimeSpan.FromDays(3);
@@ -89,9 +89,21 @@ public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, 
         if (parts.Length == 4) _views[$"{parts[0]}:{parts[1]}:{DateSlot}:{parts[3]}"] = (load, refresh, DateTime.UtcNow);
     }
 
+    // ONLY THESE VIEWS ARE RE-RUN IN THE BACKGROUND (19 Oct 2026). A report page's loader reads the page's CURRENT
+    // choices when it runs, not the ones its key was made from, so re-running a remembered page view after a copy used
+    // whatever that page showed by then - Business Analysis "Facility" was refilled with Arrangement's figures (Own
+    // Book / Brokered) once its viewer had moved on, and kept them until a restart. Sales Summary / Salesperson Summary
+    // cells (SalesSummaryCells) take their choices as arguments, so theirs is safe to re-run; every other view is
+    // DROPPED instead, and loads afresh - with the right choices - for its next viewer (an open page is told to
+    // reload its own view by KpiFiguresSignal).
+    private static readonly string[] SafeToRerun = { "SalesSummaryPanel" };
+
+    private static bool IsSafe(string view) =>
+        SafeToRerun.Any(n => view.StartsWith($"kpi:{n}:", StringComparison.Ordinal));
+
     /// <summary>
-    /// Re-runs every remembered view for <paramref name="reportDate"/>, one at a time, replacing what is cached - after a
-    /// new dataset is published (same date, same keys, new figures). Returns how many.
+    /// After a new dataset (same date, same keys, new figures): re-runs the remembered views that are safe to re-run, one
+    /// at a time, and DROPS every other remembered view so its next viewer loads it afresh. Returns how many were re-run.
     /// </summary>
     public async Task<int> RefreshViewsAsync(DateTime reportDate, CancellationToken ct)
     {
@@ -100,14 +112,21 @@ public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, 
         foreach (var (view, v) in _views.ToArray())
         {
             if (ct.IsCancellationRequested) break;
-            if (DateTime.UtcNow - v.LastUsedUtc > ForgetAfter) { _views.TryRemove(view, out _); continue; }
-            try { await v.Refresh(view.Replace(DateSlot, date)); done++; }
+            var key = view.Replace(DateSlot, date);
+            if (DateTime.UtcNow - v.LastUsedUtc > ForgetAfter || !IsSafe(view))
+            {
+                cache.Remove(key);              // old figures out; the next viewer loads with its own choices
+                _views.TryRemove(view, out _);  // and its page re-remembers it then
+                continue;
+            }
+            try { await v.Refresh(key); done++; }
             catch (Exception ex) { _logger.LogWarning(ex, "KPI refresh after a new dataset failed for {View}", view); }
         }
         return done;
     }
 
-    /// <summary>Loads every remembered view under <paramref name="reportDate"/>, one at a time; returns how many.</summary>
+    /// <summary>Loads the remembered views that are safe to re-run under <paramref name="reportDate"/>, one at a time;
+    /// any other view simply loads for its first viewer of the day. Returns how many were loaded.</summary>
     public async Task<int> WarmAsync(DateTime reportDate, CancellationToken ct)
     {
         var date = reportDate.ToString("yyyyMMdd");
@@ -115,7 +134,7 @@ public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, 
         foreach (var (view, v) in _views.ToArray())
         {
             if (ct.IsCancellationRequested) break;
-            if (DateTime.UtcNow - v.LastUsedUtc > ForgetAfter) { _views.TryRemove(view, out _); continue; }
+            if (DateTime.UtcNow - v.LastUsedUtc > ForgetAfter || !IsSafe(view)) { _views.TryRemove(view, out _); continue; }
             try { await v.Load(view.Replace(DateSlot, date)); warmed++; }
             catch (Exception ex) { _logger.LogWarning(ex, "KPI pre-load failed for {View}", view); }
         }

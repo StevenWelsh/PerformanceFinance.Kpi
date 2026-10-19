@@ -138,6 +138,8 @@ public static class CmsDesktopDoor
                         Path = "/embed/" + report.ToLowerInvariant(), MaxAge = SessionLifetime, IsEssential = true
                     });
                 await AuditOpenAsync(context, user, report);
+                await context.RequestServices.GetRequiredService<Kpi.Web.Account.ReportViews>()
+                    .RecordAsync(report.ToLowerInvariant(), null, user, Kpi.Data.Auth.ReportViewSources.Embedded);
                 context.Response.Headers.CacheControl = "no-store";
                 context.Response.Redirect("/embed/" + report.ToLowerInvariant());   // 302: the browser GETs the page
                 return;

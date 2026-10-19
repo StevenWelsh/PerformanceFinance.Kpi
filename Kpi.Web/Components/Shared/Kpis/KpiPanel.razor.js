@@ -17,6 +17,14 @@ export function register(id, dotNet) {
     handler();
 }
 
+// KPI site (19 Oct 2026): how this report is being looked at, for Settings > Audit > Report views - the Home Screen
+// app (standalone display), a phone-sized screen, or an ordinary browser.
+export function clientKind() {
+    if (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true) return "App";
+    if (window.matchMedia("(max-width: 767px)").matches) return "Phone";
+    return "Browser";
+}
+
 export function unregister(id) {
     const handler = registry.get(id);
     if (handler) {

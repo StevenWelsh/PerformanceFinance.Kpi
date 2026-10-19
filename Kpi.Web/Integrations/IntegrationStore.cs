@@ -203,16 +203,16 @@ public sealed class IntegrationStore(IDbContextFactory<KpiDbContext> dbs, IDataP
             row.SecretsUpdatedUtc = DateTime.UtcNow;
             generation++;
             hint = $"…{newSecret[^4..]}";
-            changes.Add("a NEW secret (CMS must be given it; open CMS tabs stop)");
+            changes.Add("a NEW secret (every app embedding reports must be given it; open ones stop)");
         }
-        if (row.SecretsCipher is null) throw new InvalidOperationException("Generate a secret first.");
+        if (row.SecretsCipher is null) throw new InvalidOperationException("Create a secret first.");
 
         var list = string.Join(", ", reports.Select(r => r.Slug + (r.ShowHeader ? "" : " (no header)")));
         var oldList = string.Join(", ", old.Reports.Select(r => r.Slug + (r.ShowHeader ? "" : " (no header)")));
         if (list != oldList) changes.Add("reports: " + (list.Length == 0 ? "none" : list));
         row.SettingsJson = JsonSerializer.Serialize(new Kpi.Web.Views.CmsDesktopSettings(reports, generation, hint));
 
-        if (enabled != row.Enabled) changes.Add(enabled ? "on" : "off");
+        if (enabled != row.Enabled) changes.Add(enabled ? "enabled" : "DISABLED");
         row.Enabled = enabled;
         if (row.Status != IntegrationStatus.Connected)
         {
@@ -223,7 +223,7 @@ public sealed class IntegrationStore(IDbContextFactory<KpiDbContext> dbs, IDataP
         row.UpdatedByUserId = actor.Id;
         row.UpdatedUtc = DateTime.UtcNow;
         AuditLog.Add(db, AuditEvents.IntegrationChanged, actor, null,
-            $"CMS desktop saved{(changes.Count > 0 ? ": " + string.Join("; ", changes) : "")}");
+            $"Embedded reports saved{(changes.Count > 0 ? ": " + string.Join("; ", changes) : "")}");
         await db.SaveChangesAsync();
     }
 

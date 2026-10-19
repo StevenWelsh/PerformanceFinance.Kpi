@@ -1,34 +1,47 @@
+@using Kpi.Data.Auth
 @using Kpi.Data.Cfg
 @using Kpi.Web.Data.Kpis
 @using Kpi.Web.Integrations
 @using Kpi.Web.Views
 @implements IAsyncDisposable
 @inject CmsDesktopStore Desktop
+@inject IntegrationStore Store
 @inject IServiceScopeFactory Scopes
 @inject IConfiguration Config
 @inject IJSRuntime JS
 @inject KpiScripts Scripts
 
-@* The CMS desktop card (Settings > Integrations, 19 Oct 2026, Steve - replaces published links for CMS's KPI tabs). An
-   OUTBOUND integration in effect: CMS opens reports here. It holds the secret CMS signs its tickets with (generated here,
-   shown ONCE to copy into CMS's CMS.IntegrationConfig row, encrypted there by CMS's own Crypto.Encrypt), the site's
-   address for CMS's BaseURL, and the reports CMS may open - each with its /embed/{report} address for CMS's Dashboards
-   row and a Show header choice. How a ticket is signed: Views/CmsDesktop.cs. *@
+@* EMBEDDED REPORTS (Settings > Integrations; "CMS desktop" until 19 Oct 2026, when Steve renamed it: it is signed
+   embedding - any app trusted with the secret can show reports here without a separate sign-in; the CMS desktop is the
+   first). The card holds the site address, the shared SECRET (created here; copied or replaced at any time - replacing
+   asks first, as every app using the old one stops), a DISABLED switch, and the reports apps may open - each with its
+   /embed/{report} address and Show header. How a request is signed: Views/CmsDesktop.cs, and the panel at the foot. *@
 
 <div class="intg-card">
     <div class="intg-head">
-        <span class="intg-name"><i class="bi bi-window-desktop intg-db" aria-hidden="true"></i>CMS desktop</span>
+        <span class="intg-name"><i class="bi bi-window-stack intg-db" aria-hidden="true"></i>Embedded reports</span>
         <IntegrationPlug Row="_row" />
     </div>
-    <p class="intg-desc">Lets CMS's KPI tabs open reports here without a separate sign-in: CMS decides who may see them and signs each request.</p>
-    <IntegrationButton Row="_row" ConnectText="Set up CMS desktop" OnClick="Open" />
+    <p class="intg-desc">Lets an app you trust show reports inside itself without a separate sign-in. It signs each request with a shared secret.</p>
+    <IntegrationButton Row="_row" ConnectText="Set up embedded reports" OnClick="Open" />
 </div>
 
 @if (_open && _row is not null)
 {
-    <div class="set-backdrop" @onclick="() => _open = false"></div>
-    <div class="set-dialog set-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="desktop-title">
-        <h3 id="desktop-title">CMS desktop</h3>
+    <div class="set-backdrop" @onclick="Close"></div>
+    <div class="set-dialog ed-dialog" role="dialog" aria-modal="true" aria-labelledby="ed-title">
+        <div class="ed-titlebar">
+            <h3 id="ed-title">Embedded reports</h3>
+            <label class="ed-disable">
+                <input type="checkbox" class="ed-tick" checked="@_disabled" @onchange="e => _disabled = e.Value is true" />
+                Disabled
+            </label>
+        </div>
+        @if (_disabled)
+        {
+            <p class="ed-note ed-note-off"><i class="bi bi-pause-circle" aria-hidden="true"></i> Disabled: no app can open reports. Untick and save to switch it back on.</p>
+        }
+
         @if (_message is not null)
         {
             <div class="@(_messageOk ? "login-notice" : "login-error")" role="status">
@@ -36,67 +49,88 @@
             </div>
         }
 
-        <dl class="acc-facts">
-            <dt>Site address</dt>
-            <dd><code>@SiteUrl</code> <button type="button" class="set-act" @onclick='() => Copy(SiteUrl, "Site address")'>Copy</button>
-                <span class="set-sub">- CMS's BaseURL</span></dd>
-            <dt>Secret</dt>
-            <dd>
-                @if (_newSecret is not null)
+        <div class="ed-section">
+            <div class="ed-row">
+                <span class="ed-label">Site address</span>
+                <code class="ed-value">@SiteUrl</code>
+                <button type="button" class="ed-btn" @onclick='() => Copy(SiteUrl, "Site address")'><i class="bi bi-copy" aria-hidden="true"></i> Copy</button>
+            </div>
+            <div class="ed-row">
+                <span class="ed-label">Secret</span>
+                @if (_row.SecretsCipher is null)
                 {
-                    <div class="cd-secret"><code>@_newSecret</code> <button type="button" class="set-act" @onclick='() => Copy(_newSecret, "Secret")'>Copy</button></div>
-                    <div class="set-sub cd-warn"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i> Copy it now: it is shown only once.
-                        Then save, and put it in CMS (encrypted, in its CMS.IntegrationConfig row) - CMS's tabs stop until it has the new one.</div>
-                }
-                else if (_row.SecretsCipher is not null)
-                {
-                    <span>Saved @Kpi.Web.Data.UkTime.Show(_row.SecretsUpdatedUtc) (ends @_settings.SecretHint)</span>
+                    <span class="ed-value ed-muted">None yet</span>
+                    <button type="button" class="ed-btn ed-btn-primary" disabled="@_busy" @onclick="CreateSecret"><i class="bi bi-key" aria-hidden="true"></i> Create</button>
                 }
                 else
                 {
-                    <span class="set-sub">None yet</span>
+                    <span class="ed-value">•••••••• @_settings.SecretHint <span class="ed-muted">- created @Kpi.Web.Data.UkTime.Show(_row.SecretsUpdatedUtc)</span></span>
+                    <span class="ed-btns">
+                        <button type="button" class="ed-btn" @onclick="CopySecret"><i class="bi bi-copy" aria-hidden="true"></i> Copy</button>
+                        <button type="button" class="ed-btn" @onclick="() => _confirmReplace = true"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> Replace</button>
+                    </span>
                 }
-                @if (_newSecret is null)
-                {
-                    <button type="button" class="set-act" @onclick="Generate">@(_row.SecretsCipher is null ? "Generate secret" : "Replace secret")</button>
-                }
-            </dd>
-            <dt>Last change</dt><dd>@Kpi.Web.Data.UkTime.Show(_row.UpdatedUtc)</dd>
-        </dl>
-
-        <p class="acc-hint">Reports CMS may open. Each one's address goes in its CMS tab (Dashboards row), after the site address.</p>
-        <div class="set-table-wrap cd-reports">
-            <table class="set-table">
-                <thead><tr><th>CMS may open</th><th>Show header</th><th>Address</th></tr></thead>
-                <tbody>
-                    @foreach (var r in KpiReports.All)
-                    {
-                        var on = _ticked.ContainsKey(r.Slug);
-                        <tr>
-                            <td><label class="acc-check"><input type="checkbox" checked="@on" @onchange="e => Tick(r.Slug, e)" /> @r.Label</label></td>
-                            <td><input type="checkbox" disabled="@(!on)" checked="@(on && _ticked[r.Slug])" @onchange="e => Header(r.Slug, e)"
-                                       title="The report's title and As at / Refreshed lines" aria-label="Show header for @r.Label" /></td>
-                            <td>
-                                @if (on)
-                                {
-                                    <code>/embed/@r.Slug</code>
-                                    <button type="button" class="set-act" @onclick='() => Copy(SiteUrl + "/embed/" + r.Slug, r.Label + " address")'>Copy</button>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+            </div>
+            @if (_confirmReplace)
+            {
+                <div class="set-confirm">
+                    <p>Replace the secret? Every app using the current one stops showing reports until it is given the new one.</p>
+                    <button type="button" class="acc-btn-secondary" @onclick="() => _confirmReplace = false">Cancel</button>
+                    <button type="button" class="acc-btn" disabled="@_busy" @onclick="ReplaceSecret">Replace the secret</button>
+                </div>
+            }
         </div>
-        <label class="acc-check"><input type="checkbox" @bind="_enabled" /> CMS may open reports (switch off to stop every CMS tab at once)</label>
 
-        <details class="cd-how">
-            <summary>How CMS signs a request</summary>
-            <p class="set-sub">CMS POSTs a form to <code>@(SiteUrl)/embed/{report}</code> from its tab (WebView2), with
-               <code>user</code> (the CMS username), <code>issued</code> (Unix seconds, UTC), <code>nonce</code> (16+ random
-               characters, new each time) and <code>sig</code> = lowercase hex HMAC-SHA256, keyed with the secret's UTF-8 bytes,
-               over <code>{report}|{user}|{issued}|{nonce}</code>. A ticket is good for 60 seconds and once; the tab then keeps
-               the report open for 12 hours.</p>
+        <div class="ed-section">
+            <div class="ed-section-head">Reports apps may open</div>
+            <p class="ed-note">An app opens a report at the site address followed by the report's address.</p>
+            <div class="ed-reports">
+                <table class="set-table">
+                    <thead><tr><th>Report</th><th class="ed-centre">Show header</th><th>Address</th></tr></thead>
+                    <tbody>
+                        @foreach (var r in KpiReports.All)
+                        {
+                            var on = _ticked.ContainsKey(r.Slug);
+                            <tr class="@(on ? "" : "ed-off")">
+                                <td>
+                                    <label class="ed-report">
+                                        <input type="checkbox" class="ed-tick" checked="@on" @onchange="e => Tick(r.Slug, e)" /> @r.Label
+                                    </label>
+                                </td>
+                                <td class="ed-centre">
+                                    <input type="checkbox" class="ed-tick" disabled="@(!on)" checked="@(on && _ticked[r.Slug])" @onchange="e => Header(r.Slug, e)"
+                                           title="The report's title and As at / Refreshed lines" aria-label="Show header for @r.Label" />
+                                </td>
+                                <td>
+                                    @if (on)
+                                    {
+                                        <span class="ed-address">
+                                            <code>/embed/@r.Slug</code>
+                                            <button type="button" class="ed-btn ed-btn-small" @onclick='() => Copy(SiteUrl + "/embed/" + r.Slug, r.Label + " address")'><i class="bi bi-copy" aria-hidden="true"></i> Copy</button>
+                                        </span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <details class="ed-how">
+            <summary>How an app signs a request</summary>
+            <ol>
+                <li>It POSTs a form to <code>@(SiteUrl)/embed/<i>report</i></code> from the page or browser control that will show the report.</li>
+                <li>The form has four fields:
+                    <dl>
+                        <dt><code>user</code></dt><dd>who is looking, as the app knows them (kept in the audit)</dd>
+                        <dt><code>issued</code></dt><dd>the time now, in Unix seconds (UTC)</dd>
+                        <dt><code>nonce</code></dt><dd>16 or more random characters, different every time</dd>
+                        <dt><code>sig</code></dt><dd>HMAC-SHA256 of <code>report|user|issued|nonce</code>, keyed with the secret's UTF-8 bytes, as lowercase hex</dd>
+                    </dl>
+                </li>
+                <li>A request is good for 60 seconds, and only once. The page then stays open in that window for 12 hours.</li>
+            </ol>
         </details>
 
         <div class="set-dialog-buttons">
@@ -112,11 +146,11 @@
     private Integration? _row;
     private CmsDesktopSettings _settings = new(Array.Empty<CmsDesktopReport>(), 0, "");
     private Dictionary<string, bool> _ticked = new();   // slug -> show header
-    private bool _open, _busy, _enabled = true, _messageOk;
-    private string? _message, _newSecret;
+    private bool _open, _busy, _disabled, _messageOk, _confirmReplace;
+    private string? _message;
     private IJSObjectReference? _module;
 
-    // what CMS calls: the live site (Kpi:SiteUrl changes it), never the address this page happens to be opened on
+    // what apps call: the live site (Kpi:SiteUrl changes it), never the address this page happens to be opened on
     private string SiteUrl => (Config["Kpi:SiteUrl"] ?? "https://kpi.performancefinance.co.uk").TrimEnd('/');
 
     protected override Task OnInitializedAsync() => Load();
@@ -129,13 +163,13 @@
 
     private void Open()
     {
-        _message = null; _newSecret = null;
+        _message = null; _confirmReplace = false;
         _ticked = _settings.Reports.ToDictionary(r => r.Slug, r => r.ShowHeader);
-        _enabled = _row!.Status == IntegrationStatus.NotConnected || _row.Enabled;
+        _disabled = _row!.Status != IntegrationStatus.NotConnected && !_row.Enabled;
         _open = true;
     }
 
-    private void Close() { _open = false; _newSecret = null; }
+    private void Close() { _open = false; _confirmReplace = false; }
 
     private void Tick(string slug, ChangeEventArgs e)
     {
@@ -147,10 +181,41 @@
         if (_ticked.ContainsKey(slug)) _ticked[slug] = e.Value is true;
     }
 
-    private void Generate()
+    private List<CmsDesktopReport> Reports() =>
+        KpiReports.All.Where(r => _ticked.ContainsKey(r.Slug)).Select(r => new CmsDesktopReport(r.Slug, _ticked[r.Slug])).ToList();
+
+    // a new secret is saved at once (with the reports and switch as they stand) and can be copied straight away
+    private async Task CreateSecret() => await NewSecret("Secret created. Copy it into the app that will embed reports.");
+
+    private async Task ReplaceSecret()
     {
-        _newSecret = CmsDesktopStore.NewSecret();
-        Say(true, "A new secret is ready below. Copy it, then Save - it is kept only when you save.");
+        _confirmReplace = false;
+        await NewSecret("Secret replaced. Give the new one to every app that embeds reports - they stop until they have it.");
+    }
+
+    private async Task NewSecret(string done)
+    {
+        _busy = true; _message = null;
+        try
+        {
+            await Desktop.SaveAsync(await SettingsActor.GetAsync(AuthState, Scopes), Reports(), CmsDesktopStore.NewSecret(), !_disabled);
+            await Load();
+            Say(true, done);
+        }
+        catch (InvalidOperationException ex) { Say(false, ex.Message); }
+        finally { _busy = false; }
+    }
+
+    private async Task CopySecret()
+    {
+        try
+        {
+            var (_, _, secret) = await Desktop.CurrentAsync();
+            if (secret is null) { Say(false, "The saved secret can't be read - replace it."); return; }
+            await Store.AuditAsync(await SettingsActor.GetAsync(AuthState, Scopes), AuditEvents.IntegrationChanged, "Embedded reports: secret copied");
+            await Copy(secret, "Secret");
+        }
+        catch (InvalidOperationException ex) { Say(false, ex.Message); }
     }
 
     private async Task Save()
@@ -158,13 +223,9 @@
         _busy = true; _message = null;
         try
         {
-            var reports = KpiReports.All.Where(r => _ticked.ContainsKey(r.Slug))
-                .Select(r => new CmsDesktopReport(r.Slug, _ticked[r.Slug])).ToList();
-            await Desktop.SaveAsync(await SettingsActor.GetAsync(AuthState, Scopes), reports, _newSecret, _enabled);
-            var hadNew = _newSecret is not null;
+            await Desktop.SaveAsync(await SettingsActor.GetAsync(AuthState, Scopes), Reports(), null, !_disabled);
             await Load();
-            Say(true, hadNew ? "Saved, with the new secret. Put it in CMS now - its tabs stop until it has it." : "Saved.");
-            if (hadNew) _newSecret = null;
+            Say(true, _disabled ? "Saved - disabled: no app can open reports." : "Saved.");
         }
         catch (InvalidOperationException ex) { Say(false, ex.Message); }
         finally { _busy = false; }

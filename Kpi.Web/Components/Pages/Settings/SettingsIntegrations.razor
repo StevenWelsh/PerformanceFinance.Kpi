@@ -9,9 +9,11 @@
     </div>
 </div>
 
+@* each card in a cell of its own (19 Oct 2026): a card's settings box and backdrop render beside it, and as loose grid
+   items they could take grid places and push the next card along *@
 <div class="intg-grid">
-    <ResendCard />
-    <TwilioCard />
-    <CmsSourceCard />
-    <CmsDesktopCard />
+    <div class="intg-cell"><ResendCard /></div>
+    <div class="intg-cell"><TwilioCard /></div>
+    <div class="intg-cell"><CmsSourceCard /></div>
+    <div class="intg-cell"><CmsDesktopCard /></div>
 </div>

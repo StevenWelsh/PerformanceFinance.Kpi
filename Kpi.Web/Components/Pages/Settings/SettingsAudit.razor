@@ -1,23 +1,91 @@
 @using Kpi.Data
 @using Kpi.Data.Auth
+@using Kpi.Web.Account
 @using Kpi.Web.Data
+@using Kpi.Web.Data.Kpis
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<KpiDbContext> Dbs
 
-@* Settings > Audit: sign-ins (and refusals), invitations, account and integration changes - newest first. The trail
-   can only be added to: the site's database role is denied changing or deleting it. *@
+@* Settings > Audit (tabs 19 Oct 2026, Steve - as DavidsonHR's segmented buttons): the trail in groups - Sign-ins, Users,
+   Settings, Embedded reports - and Report views (Auth.ReportView: who opened which report, how), each newest first,
+   with a filter within the tab. Nobody can change or delete a line; the trail and report views are kept for
+   HistoryPruner.Months months, after which Auth.spPruneHistory removes them nightly. *@
 
 <div class="set-head">
     <div>
         <h2>Audit</h2>
-        <p class="acc-hint">The latest @Take entries. Nothing here can be changed or deleted.</p>
+        <p class="acc-hint">Kept for @HistoryPruner.Months months, then removed automatically. Nothing here can be changed or deleted.</p>
     </div>
     <input class="set-filter" @bind="_filter" @bind:event="oninput" placeholder="Filter" aria-label="Filter the audit" />
 </div>
 
-@if (_rows is null)
+<div class="aud-tabs" role="group" aria-label="Show">
+    @foreach (var t in Tabs)
+    {
+        <button type="button" class="@(t.Key == _tab ? "aud-on" : null)" aria-pressed="@(t.Key == _tab ? "true" : "false")"
+                @onclick="() => Show(t.Key)">
+            <i class="bi @t.Icon" aria-hidden="true"></i> @t.Label
+        </button>
+    }
+</div>
+
+@if (_loading)
 {
     <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+}
+else if (_tab == "views")
+{
+    @if (_viewSummary is { Count: > 0 })
+    {
+        <div class="aud-summary">
+            <div class="aud-summary-head">Last 30 days</div>
+            <div class="aud-summary-grid">
+                <div>
+                    <div class="aud-summary-title">Most opened reports</div>
+                    @foreach (var s in _viewSummary.Take(8))
+                    {
+                        <div class="aud-bar-row">
+                            <span class="aud-bar-label">@ReportLabel(s.Report)</span>
+                            <span class="aud-bar"><span style="width:@(Pct(s.Opens, _viewSummary[0].Opens))%"></span></span>
+                            <span class="aud-bar-n">@s.Opens <span class="set-sub">· @s.People @(s.People == 1 ? "person" : "people")</span></span>
+                        </div>
+                    }
+                </div>
+                <div>
+                    <div class="aud-summary-title">Who opened most</div>
+                    @foreach (var p in _peopleSummary!.Take(8))
+                    {
+                        <div class="aud-bar-row">
+                            <span class="aud-bar-label">@p.UserName</span>
+                            <span class="aud-bar"><span style="width:@(Pct(p.Opens, _peopleSummary![0].Opens))%"></span></span>
+                            <span class="aud-bar-n">@p.Opens</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    <div class="set-table-wrap">
+        <table class="set-table">
+            <thead><tr><th>When</th><th>Who</th><th>Report</th><th>How</th></tr></thead>
+            <tbody>
+                @if (!ShownViews.Any())
+                {
+                    <tr><td colspan="4" class="set-sub">No report views@(string.IsNullOrWhiteSpace(_filter) ? " yet" : " match the filter").</td></tr>
+                }
+                @foreach (var v in ShownViews)
+                {
+                    <tr>
+                        <td class="set-nowrap">@UkTime.Show(v.OpenedUtc, "dd MMM HH:mm:ss")</td>
+                        <td>@v.UserName</td>
+                        <td>@ReportLabel(v.Report)</td>
+                        <td><span class="aud-how aud-how-@v.Source.ToLowerInvariant()">@v.Source</span></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="set-sub aud-foot">The newest @Take report views. One opening each: the same person reopening the same report within 30 minutes counts once.</p>
 }
 else
 {
@@ -25,6 +93,10 @@ else
         <table class="set-table">
             <thead><tr><th>When</th><th>What</th><th>Who</th><th>About</th><th>Detail</th><th>Address</th></tr></thead>
             <tbody>
+                @if (!Shown.Any())
+                {
+                    <tr><td colspan="6" class="set-sub">Nothing@(string.IsNullOrWhiteSpace(_filter) ? " here yet" : " matches the filter").</td></tr>
+                }
                 @foreach (var a in Shown)
                 {
                     <tr>
@@ -39,21 +111,105 @@ else
             </tbody>
         </table>
     </div>
+    <p class="set-sub aud-foot">The newest @Take entries@(_tab == "all" ? "" : " in this group"). Use the filter to narrow them.</p>
 }
 
 @code {
     private const int Take = 500;
-    private List<AuditEntry>? _rows;
-    private string _filter = "";
 
-    private IEnumerable<AuditEntry> Shown => string.IsNullOrWhiteSpace(_filter) ? _rows! : _rows!.Where(a =>
+    private sealed record Tab(string Key, string Label, string Icon);
+    private static readonly Tab[] Tabs =
+    {
+        new("all", "All", "bi-list-ul"),
+        new("signins", "Sign-ins", "bi-box-arrow-in-right"),
+        new("users", "Users", "bi-people"),
+        new("settings", "Settings", "bi-gear"),
+        new("embedded", "Embedded reports", "bi-window-stack"),
+        new("views", "Report views", "bi-eye")
+    };
+
+    private static readonly string[] SignInEvents =
+    {
+        AuditEvents.SignIn, AuditEvents.SignInFailed, AuditEvents.LockedOut, AuditEvents.SignOut, AuditEvents.SetupStarted,
+        AuditEvents.AuthenticatorSetUp, AuditEvents.AuthenticatorReset, AuditEvents.SetupExpired, AuditEvents.PasswordChanged,
+        AuditEvents.PasswordReset, AuditEvents.PasswordResetRequested
+    };
+    private static readonly string[] UserEvents =
+    {
+        AuditEvents.Invited, AuditEvents.InviteWithdrawn, AuditEvents.InviteAccepted, AuditEvents.UserChanged,
+        AuditEvents.UserDisabled, AuditEvents.UserEnabled, AuditEvents.UserDeleted
+    };
+    private static readonly string[] SettingsEvents =
+    {
+        AuditEvents.IntegrationChanged, AuditEvents.SourceQueried, AuditEvents.PublishedLinkChanged, AuditEvents.PublishedLinkRefused
+    };
+    private static readonly string[] EmbeddedEvents = { AuditEvents.CmsDesktopOpened, AuditEvents.CmsDesktopRefused };
+
+    private sealed record ReportCount(string Report, int Opens, int People);
+    private sealed record PersonCount(string UserName, int Opens);
+
+    private string _tab = "all";
+    private string _filter = "";
+    private bool _loading = true;
+    private List<AuditEntry> _rows = new();
+    private List<ReportView> _views = new();
+    private List<ReportCount>? _viewSummary;
+    private List<PersonCount>? _peopleSummary;
+
+    private IEnumerable<AuditEntry> Shown => string.IsNullOrWhiteSpace(_filter) ? _rows : _rows.Where(a =>
         Has(a.Event) || Has(a.ActorName) || Has(a.SubjectName) || Has(a.Detail) || Has(a.IpAddress));
+
+    private IEnumerable<ReportView> ShownViews => string.IsNullOrWhiteSpace(_filter) ? _views : _views.Where(v =>
+        Has(v.UserName) || Has(ReportLabel(v.Report)) || Has(v.Source));
 
     private bool Has(string? s) => s?.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase) == true;
 
-    protected override async Task OnInitializedAsync()
+    private static string ReportLabel(string slug) => KpiReports.All.FirstOrDefault(r => r.Slug == slug)?.Label ?? slug;
+
+    private static int Pct(int n, int max) => max <= 0 ? 0 : Math.Max(4, n * 100 / max);
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Show(string tab)
     {
-        await using var db = await Dbs.CreateDbContextAsync();
-        _rows = await db.AuditEntries.AsNoTracking().OrderByDescending(a => a.Id).Take(Take).ToListAsync();
+        if (tab == _tab) return;
+        _tab = tab;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true;
+        try
+        {
+            await using var db = await Dbs.CreateDbContextAsync();
+            if (_tab == "views")
+            {
+                _views = await db.ReportViews.AsNoTracking().OrderByDescending(v => v.Id).Take(Take).ToListAsync();
+                var since = DateTime.UtcNow.AddDays(-30);
+                var month = await db.ReportViews.AsNoTracking().Where(v => v.OpenedUtc >= since)
+                    .Select(v => new { v.Report, v.UserName }).ToListAsync();
+                _viewSummary = month.GroupBy(v => v.Report)
+                    .Select(g => new ReportCount(g.Key, g.Count(), g.Select(v => v.UserName).Distinct().Count()))
+                    .OrderByDescending(r => r.Opens).ToList();
+                _peopleSummary = month.GroupBy(v => v.UserName)
+                    .Select(g => new PersonCount(g.Key, g.Count())).OrderByDescending(p => p.Opens).ToList();
+                return;
+            }
+
+            IQueryable<AuditEntry> q = db.AuditEntries.AsNoTracking();
+            q = _tab switch
+            {
+                "signins" => q.Where(a => SignInEvents.Contains(a.Event)),
+                "users" => q.Where(a => UserEvents.Contains(a.Event)),
+                "settings" => q.Where(a => SettingsEvents.Contains(a.Event)),
+                // the opens and refusals, and the integration's own changes (its secret created, replaced or copied)
+                "embedded" => q.Where(a => EmbeddedEvents.Contains(a.Event)
+                    || (a.Event == AuditEvents.IntegrationChanged && (a.Detail.StartsWith("Embedded reports") || a.Detail.StartsWith("CMS desktop")))),
+                _ => q
+            };
+            _rows = await q.OrderByDescending(a => a.Id).Take(Take).ToListAsync();
+        }
+        finally { _loading = false; }
     }
 }

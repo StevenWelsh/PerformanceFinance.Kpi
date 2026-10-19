@@ -212,6 +212,45 @@ namespace Kpi.Data.Migrations
                     b.ToTable("Users", "Auth");
                 });
 
+            modelBuilder.Entity("Kpi.Data.Auth.ReportView", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("OpenedUtc")
+                        .HasColumnType("datetime2(0)");
+
+                    b.Property<string>("Report")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("UserName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OpenedUtc");
+
+                    b.ToTable("ReportView", "Auth");
+                });
+
             modelBuilder.Entity("Kpi.Data.Cfg.Integration", b =>
                 {
                     b.Property<string>("Provider")

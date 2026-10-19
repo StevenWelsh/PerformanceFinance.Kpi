@@ -19,6 +19,7 @@ public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options) : Ident
     public const string Collation = "Latin1_General_CI_AS";
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+    public DbSet<ReportView> ReportViews => Set<ReportView>();
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<PublishedLink> PublishedLinks => Set<PublishedLink>();
 
@@ -47,6 +48,17 @@ public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options) : Ident
         modelBuilder.Entity<IdentityUserLogin<string>>().ToTable("UserLogins", "Auth");
         modelBuilder.Entity<IdentityUserToken<string>>().ToTable("UserTokens", "Auth");
         modelBuilder.Entity<IdentityRoleClaim<string>>().ToTable("RoleClaims", "Auth");
+
+        modelBuilder.Entity<ReportView>(e =>
+        {
+            e.ToTable("ReportView", "Auth");
+            e.Property(v => v.OpenedUtc).HasColumnType("datetime2(0)");
+            e.Property(v => v.Report).HasMaxLength(60).IsUnicode(false);
+            e.Property(v => v.UserId).HasMaxLength(450);
+            e.Property(v => v.UserName).HasMaxLength(256);
+            e.Property(v => v.Source).HasMaxLength(20).IsUnicode(false);
+            e.HasIndex(v => v.OpenedUtc);
+        });
 
         modelBuilder.Entity<AuditEntry>(e =>
         {

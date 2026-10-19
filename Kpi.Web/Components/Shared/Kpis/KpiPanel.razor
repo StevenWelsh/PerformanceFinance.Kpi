@@ -3,6 +3,9 @@
 @inject Kpi.Web.Data.Kpis.KpiScripts Scripts
 @inject Kpi.Web.Data.Kpis.KpiRefreshStatus RefreshStatus
 @inject Kpi.Web.Data.Kpis.KpiDataStatus DataStatus
+@inject NavigationManager Nav
+@inject Kpi.Web.Account.ReportViews Views
+@inject AuthenticationStateProvider AuthState
 
 @* Shared chrome + refresh behaviour for every KPI report. Owns the topbar
    (title + "As at" + "Refreshed on" with an in-place spinner) and the refresh
@@ -106,6 +109,7 @@
             "import", Scripts.Url("./Components/Shared/Kpis/KpiPanel.razor.js"));
         _selfRef = DotNetObjectReference.Create(this);
         await _module.InvokeVoidAsync("register", _id, _selfRef);  // reports initial visibility
+        await RecordViewAsync();
         StartTimer();
 
         // First-load staleness catch-up. Opening a KPI hits the durable shared cache and paints
@@ -195,6 +199,24 @@
         await Task.Delay(300);
         _fading = false;
         await InvokeAsync(StateHasChanged);
+    }
+
+    // KPI site (19 Oct 2026): who opened which report, for Settings > Audit > Report views. Only a report opened on the
+    // site itself (/kpis/{report}): an embedded one (/embed) is recorded by its door, with the person the app vouched for.
+    private async Task RecordViewAsync()
+    {
+        try
+        {
+            var path = new Uri(Nav.Uri).AbsolutePath.Trim('/');
+            if (!path.StartsWith("kpis/", StringComparison.OrdinalIgnoreCase)) return;
+            var report = path["kpis/".Length..].Split('/')[0];
+            var user = (await AuthState.GetAuthenticationStateAsync()).User;
+            if (user.Identity?.IsAuthenticated != true) return;
+            var kind = _module is null ? "Browser" : await _module.InvokeAsync<string>("clientKind");
+            await Views.RecordAsync(report, user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value,
+                user.FindFirst(Kpi.Web.Account.KpiClaims.Name)?.Value ?? user.Identity?.Name ?? "?", kind);
+        }
+        catch { /* a record, never a reason for the page to fail */ }
     }
 
     public async ValueTask DisposeAsync()
