@@ -137,7 +137,7 @@ public static class CmsDesktopDoor
                         HttpOnly = true, Secure = context.Request.IsHttps, SameSite = SameSiteMode.Lax,
                         Path = "/embed/" + report.ToLowerInvariant(), MaxAge = SessionLifetime, IsEssential = true
                     });
-                await AuditOpenAsync(context, user, report);
+                // openings go to Report views (once per person + report per 30 min) - not the audit trail (20 Oct 2026, Steve)
                 await context.RequestServices.GetRequiredService<Kpi.Web.Account.ReportViews>()
                     .RecordAsync(report.ToLowerInvariant(), null, user, Kpi.Data.Auth.ReportViewSources.Embedded);
                 context.Response.Headers.CacheControl = "no-store";
@@ -172,20 +172,6 @@ public static class CmsDesktopDoor
         foreach (var (k, at) in Seen) if (at < cutoff) Seen.TryRemove(k, out _);
     }
 
-    private static async Task AuditOpenAsync(HttpContext context, string user, string report)
-    {
-        var key = "open|" + user + "|" + report;
-        if (LastAudit.TryGetValue(key, out var last) && DateTime.UtcNow - last < TimeSpan.FromHours(1)) return;
-        LastAudit[key] = DateTime.UtcNow;
-        try
-        {
-            await using var db = await context.RequestServices.GetRequiredService<IDbContextFactory<KpiDbContext>>().CreateDbContextAsync();
-            AuditLog.Add(db, AuditEvents.CmsDesktopOpened, null, null, $"CMS user {user} opened {report} (at most one line an hour each)", AuditLog.Ip(context));
-            await db.SaveChangesAsync();
-        }
-        catch { /* the audit is a record, not a gate */ }
-    }
-
     private static async Task Refuse(HttpContext context, string? report, string why)
     {
         var ip = AuditLog.Ip(context) ?? "?";
@@ -196,7 +182,7 @@ public static class CmsDesktopDoor
             try
             {
                 await using var db = await context.RequestServices.GetRequiredService<IDbContextFactory<KpiDbContext>>().CreateDbContextAsync();
-                AuditLog.Add(db, AuditEvents.CmsDesktopRefused, null, null, $"/embed/{report ?? "?"} refused: {why} (at most one line an hour per address)", ip);
+                AuditLog.Add(db, AuditEvents.CmsDesktopRefused, null, null, $"/embed/{report ?? "?"} refused: {why} (recorded once an hour per address)", ip);
                 await db.SaveChangesAsync();
             }
             catch { }

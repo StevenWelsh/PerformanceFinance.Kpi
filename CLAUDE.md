@@ -212,8 +212,8 @@ the tables in full (25k paid leads).
   `{report}|{user}|{issued}|{nonce}`. `CmsDesktopDoor` (before AccountGate; `/embed` on its open list) accepts it within
   60 s either way, once (nonce), integration on and report ticked; then a 12-hour Data Protection cookie for THAT report
   (`kpi-embed-{report}`, path `/embed/{report}`, carrying the secret's GENERATION - a new secret ends every session) and a
-  redirect to GET `/embed/{report}` (`EmbedView`, as published links rendered: `.kpi-view`, header per report). Opens and
-  refusals audited (`CmsDesktopOpened` hourly per user+report, `CmsDesktopRefused` hourly per address). Settings >
+  redirect to GET `/embed/{report}` (`EmbedView`, as published links rendered: `.kpi-view`, header per report). Openings go to
+  Report views (not the audit, since 20 Oct 2026); refusals are audited (`CmsDesktopRefused`, once an hour per address). Settings >
   Integrations > **Embedded reports** (renamed from "CMS desktop" 19 Oct - it is signed embedding, for any app trusted with
   the secret; `CmsDesktopCard`, provider `CmsDesktop` unchanged): the site address (`Kpi:SiteUrl`, an app's BaseURL), a
   DISABLED switch, the secret (Create; then Copy at any time - audited - or Replace after a confirm), the reports with
