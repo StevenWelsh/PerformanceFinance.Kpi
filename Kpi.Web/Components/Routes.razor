@@ -1,12 +1,21 @@
-<Router AppAssembly="@typeof(Program).Assembly">
-    <Found Context="routeData">
-        <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.EmptyLayout)">
-            <NotAuthorized>
-                <div class="kpi-placeholder">
-                    <i class="bi bi-lock"></i>
-                    <p>You don't have access to this report.</p>
-                </div>
-            </NotAuthorized>
-        </AuthorizeRouteView>
-    </Found>
-</Router>
+@* EmbedUser: on an embedded view (/embed), the person the embedding app vouched for - set by CmsDesktopDoor on the page's
+   request and passed in by App.razor (a root component's parameters are protected by Blazor, so it can't be altered in
+   the browser). KpiPanel records their Report activity under it. Null everywhere else. *@
+<CascadingValue Name="KpiEmbedUser" Value="EmbedUser" IsFixed="true">
+    <Router AppAssembly="@typeof(Program).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(Layout.EmptyLayout)">
+                <NotAuthorized>
+                    <div class="kpi-placeholder">
+                        <i class="bi bi-lock"></i>
+                        <p>You don't have access to this report.</p>
+                    </div>
+                </NotAuthorized>
+            </AuthorizeRouteView>
+        </Found>
+    </Router>
+</CascadingValue>
+
+@code {
+    [Parameter] public string? EmbedUser { get; set; }
+}

@@ -35,5 +35,5 @@ public static partial class UkMobile
     }
 
     /// <summary>The last four digits - all a code screen may show, and only after the password.</summary>
-    public static string LastFour(string e164) => e164.Length >= 4 ? e164[^4..] : e164;
+    public static string LastFour(string? e164) => e164 is null ? "" : e164.Length >= 4 ? e164[^4..] : e164;
 }

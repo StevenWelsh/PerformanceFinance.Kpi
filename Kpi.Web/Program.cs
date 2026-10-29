@@ -101,8 +101,12 @@ builder.Services.AddSingleton<Kpi.Web.Views.CmsDesktopStore>();
 // who has the site open, for Settings > Users (each page's live connection, noted as it comes and goes)
 builder.Services.AddSingleton<OnlineUsers>();
 builder.Services.AddSingleton<ReportViews>();        // who opens which report (Settings > Audit > Report views)
-builder.Services.AddHostedService<HistoryPruner>();  // keeps the audit trail and report views to 3 months
+builder.Services.AddSingleton<ReportActivity>();     // what people do on the reports (Settings > Audit > Report activity)
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ReportActivity>());   // its writer
+builder.Services.AddHostedService<HistoryPruner>();  // keeps the audit trail, report views and activity to 3 months
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, OnlineTracker>();
+builder.Services.AddScoped<ReportCircuit>();   // a report's connection dropping / returning (Report activity's time looked at)
+builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler>(sp => sp.GetRequiredService<ReportCircuit>());
 builder.Services.AddHostedService<ExpireSetupsTask>();
 // the pre-load: one instance, also told by the copy (KpiPull) when a new dataset is published
 builder.Services.AddSingleton<KpiFiguresSignal>();   // new figures landed: open pages update (KpiPanel, Data sync)
@@ -111,7 +115,8 @@ builder.Services.AddSingleton<Kpi.Web.Data.Kpis.KpiWarmer>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Kpi.Web.Data.Kpis.KpiWarmer>());
 builder.Services.AddSingleton<SyncAlerts>();         // emails the chosen people when the figures stop arriving
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SyncAlerts>());
-builder.Services.AddHostedService<Kpi.Web.Data.KpiPull>();          // the KPI copy from the office (KPI_Export), every two minutes
+builder.Services.AddSingleton<KpiCopyControl>();     // Data sync's pause, check interval and Copy now
+builder.Services.AddHostedService<Kpi.Web.Data.KpiPull>();          // the KPI copy from the office (KPI_Export), every 2 minutes unless changed
 
 // ---- integrations: Resend for email ----------------------------------------------------------------------------
 builder.Services.AddSingleton<IntegrationStore>();

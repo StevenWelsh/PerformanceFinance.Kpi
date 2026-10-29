@@ -42,7 +42,8 @@ public sealed class OpenAlert
 /// itself is down it can't send anything: Azure's "KPI site cannot reach its database" alert covers that.
 /// </summary>
 public sealed class SyncAlerts(IDbContextFactory<KpiDbContext> dbs, IntegrationStore store, Mailer mailer, KpiPullHealth pull,
-                               KpiSessionFactory sessions, IConfiguration config, IWebHostEnvironment env, ILogger<SyncAlerts> log)
+                               KpiCopyControl copy, KpiSessionFactory sessions, IConfiguration config, IWebHostEnvironment env,
+                               ILogger<SyncAlerts> log)
     : BackgroundService
 {
     public const string Provider = "SyncAlerts";
@@ -138,13 +139,21 @@ public sealed class SyncAlerts(IDbContextFactory<KpiDbContext> dbs, IntegrationS
         if (pull.FailingSinceUtc is DateTime failing && DateTime.UtcNow - failing >= FailingFor)
             problems.Add($"The copy has been failing since {UkTime.Show(failing, "HH:mm")}: {pull.LastError}");
 
+        // paused on Settings > Data sync (29 Oct 2026): say so - and not that figures are overdue, which follows from it -
+        // and give the first copy after a resume a few minutes to land before calling the figures overdue
+        var schedule = await copy.GetAsync();
+        if (schedule.Paused)
+            problems.Add($"Copying is paused, by {schedule.PausedBy ?? "someone"} at {UkTime.Show(schedule.PausedUtc, "HH:mm 'on' dd MMM")}" +
+                         (schedule.PausedReason is null ? "" : $" ({schedule.PausedReason})") + ". Resume it on Settings > Data sync.");
+        var settling = schedule.Paused || DateTime.UtcNow - schedule.ResumedUtc < TimeSpan.FromMinutes(15);
+
         try
         {
             using var db = sessions.Create();
             var s = db.Report<DataStatus>("Rpt.spDataStatus").SingleOrDefault();
-            if (s?.FiguresStale == true)
+            if (s?.FiguresStale == true && !settling)
                 problems.Add($"No new figures since {UkTime.Show(s.LastFrequentLoadUtc, "HH:mm 'on' dd MMM")} - the office refreshes every 10 minutes in office hours.");
-            if (s?.NightlyStale == true)
+            if (s?.NightlyStale == true && !schedule.Paused)   // a resume's first copy may not bring them: no grace here
                 problems.Add($"Bad Debt and Exposure were last copied {UkTime.Show(s.LastNightlyLoadUtc, "HH:mm 'on' dd MMM")} - the nightly run has been missed.");
         }
         catch (Exception ex) { problems.Add("The KPI database couldn't be asked how fresh the figures are: " + ex.Message); }

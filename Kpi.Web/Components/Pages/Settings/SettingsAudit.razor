@@ -33,6 +33,91 @@
 {
     <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
 }
+else if (_tab == "activity")
+{
+    @* Report activity (29 Oct 2026, Steve): what people do ON the reports - filters, views, buttons (the timelapse with
+       its year), time spent, and load times - from Auth.ReportEvent *@
+    @if (_act is not null)
+    {
+        <div class="aud-summary">
+            <div class="aud-summary-head">Last 30 days</div>
+            <div class="aud-summary-grid aud-summary-grid-wide">
+                <div>
+                    <div class="aud-summary-title">Choices made</div>
+                    @if (_act.Choices.Count == 0) { <div class="set-sub">None yet.</div> }
+                    @foreach (var c in _act.Choices)
+                    {
+                        <div class="aud-bar-row aud-bar-row-wide">
+                            <span class="aud-bar-label" title="@ReportLabel(c.Report) · @c.Label: @c.Value">@ReportLabel(c.Report) · @c.Label: <b>@c.Value</b></span>
+                            <span class="aud-bar"><span style="width:@(Pct(c.Count, _act.Choices[0].Count))%"></span></span>
+                            <span class="aud-bar-n">@c.Count <span class="set-sub">· @c.People @(c.People == 1 ? "person" : "people")</span></span>
+                        </div>
+                    }
+                </div>
+                <div>
+                    <div class="aud-summary-title">Buttons pressed</div>
+                    @if (_act.Buttons.Count == 0) { <div class="set-sub">None yet.</div> }
+                    @foreach (var b in _act.Buttons)
+                    {
+                        <div class="aud-bar-row aud-bar-row-wide">
+                            <span class="aud-bar-label" title="@ReportLabel(b.Report) · @b.Label">@ReportLabel(b.Report) · @b.Label</span>
+                            <span class="aud-bar"><span style="width:@(Pct(b.Count, _act.Buttons[0].Count))%"></span></span>
+                            <span class="aud-bar-n">@b.Count <span class="set-sub">· @b.People @(b.People == 1 ? "person" : "people")</span></span>
+                        </div>
+                    }
+                </div>
+                <div>
+                    <div class="aud-summary-title">Time on each report <i class="bi bi-info-circle set-info" tabindex="0" title="@TimeHelp" aria-label="@TimeHelp"></i></div>
+                    @if (_act.Times.Count == 0) { <div class="set-sub">None yet.</div> }
+                    @foreach (var t in _act.Times)
+                    {
+                        <div class="aud-bar-row aud-bar-row-wide">
+                            <span class="aud-bar-label">@ReportLabel(t.Report)</span>
+                            <span class="aud-bar"><span style="width:@(Pct(t.AvgSeconds, _act.Times[0].AvgSeconds))%"></span></span>
+                            <span class="aud-bar-n">@Duration(t.AvgSeconds) avg <span class="set-sub">· @t.Quick of @t.Count under 10 s</span></span>
+                        </div>
+                    }
+                </div>
+                <div>
+                    <div class="aud-summary-title">Slowest loads <i class="bi bi-info-circle set-info" tabindex="0" title="@LoadHelp" aria-label="@LoadHelp"></i></div>
+                    @if (_act.Loads.Count == 0) { <div class="set-sub">None yet.</div> }
+                    @foreach (var l in _act.Loads)
+                    {
+                        <div class="aud-bar-row aud-bar-row-wide">
+                            <span class="aud-bar-label" title="@l.Part">@ReportLabel(l.Report)@(l.Part == ReportPart(l.Report) ? "" : $" ({l.Part})")</span>
+                            <span class="aud-bar"><span style="width:@(Pct(l.AvgMs, _act.Loads[0].AvgMs))%"></span></span>
+                            <span class="aud-bar-n">@Secs(l.AvgMs) avg <span class="set-sub">· @Secs(l.MaxMs) at most · @l.Count</span></span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+    <div class="set-table-wrap">
+        <table class="set-table">
+            <thead><tr><th>When</th><th>Who</th><th>Report</th><th>What</th><th>Filters at the time</th><th>How</th></tr></thead>
+            <tbody>
+                @if (!ShownEvents.Any())
+                {
+                    <tr><td colspan="6" class="set-sub">No report activity@(string.IsNullOrWhiteSpace(_filter) ? " yet" : " matches the filter").</td></tr>
+                }
+                @foreach (var e in ShownEvents)
+                {
+                    <tr>
+                        <td class="set-nowrap">@UkTime.Show(e.OccurredUtc, "dd MMM HH:mm:ss")</td>
+                        <td>@(e.Kind == ReportEventKinds.Load ? "-" : e.UserName)</td>
+                        <td>@ReportLabel(e.Report)</td>
+                        <td>@What(e)</td>
+                        <td class="set-sub">@e.Filters</td>
+                        <td>@if (e.Source.Length > 0) { <span class="aud-how aud-how-@e.Source.ToLowerInvariant()">@HowLabel(e.Source)</span> }</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="set-sub aud-foot">The newest @Take events. Each filter chosen, view switched and button pressed on a report, when it was opened
+       and closed, and how long its figures took to load when someone was waiting.</p>
+}
 else if (_tab == "views")
 {
     @if (_viewSummary is { Count: > 0 })
@@ -62,6 +147,17 @@ else if (_tab == "views")
                         </div>
                     }
                 </div>
+                <div>
+                    <div class="aud-summary-title">How opened</div>
+                    @foreach (var h in _howSummary!)
+                    {
+                        <div class="aud-bar-row">
+                            <span class="aud-bar-label">@HowLabel(h.Report)</span>
+                            <span class="aud-bar"><span style="width:@(Pct(h.Opens, _howSummary![0].Opens))%"></span></span>
+                            <span class="aud-bar-n">@h.Opens <span class="set-sub">· @h.People @(h.People == 1 ? "person" : "people")</span></span>
+                        </div>
+                    }
+                </div>
             </div>
         </div>
     }
@@ -79,7 +175,7 @@ else if (_tab == "views")
                         <td class="set-nowrap">@UkTime.Show(v.OpenedUtc, "dd MMM HH:mm:ss")</td>
                         <td>@v.UserName</td>
                         <td>@ReportLabel(v.Report)</td>
-                        <td><span class="aud-how aud-how-@v.Source.ToLowerInvariant()">@v.Source</span></td>
+                        <td><span class="aud-how aud-how-@v.Source.ToLowerInvariant()">@HowLabel(v.Source)</span></td>
                     </tr>
                 }
             </tbody>
@@ -125,7 +221,8 @@ else
         new("users", "Users", "bi-people"),
         new("settings", "Settings", "bi-gear"),
         new("embedded", "Embedded reports", "bi-window-stack"),
-        new("views", "Report views", "bi-eye")
+        new("views", "Report views", "bi-eye"),
+        new("activity", "Report activity", "bi-activity")
     };
 
     private static readonly string[] SignInEvents =
@@ -146,6 +243,42 @@ else
     private static readonly string[] EmbeddedEvents = { AuditEvents.CmsDesktopOpened, AuditEvents.CmsDesktopRefused };
 
     private sealed record ReportCount(string Report, int Opens, int People);
+
+    // Report activity's summary (last 30 days)
+    private sealed record Choice(string Report, string Label, string? Value, int Count, int People);
+    private sealed record Pressed(string Report, string Label, int Count, int People);
+    private sealed record TimeOn(string Report, int Count, int AvgSeconds, int Quick);
+    private sealed record LoadTime(string Report, string Part, int Count, int AvgMs, int MaxMs);
+    private sealed record ActivitySummary(List<Choice> Choices, List<Pressed> Buttons, List<TimeOn> Times, List<LoadTime> Loads);
+
+    private const string TimeHelp = "How long each report was actually looked at on screen (not counting time in a background tab), "
+        + "on average per opening - and how many openings were closed within 10 seconds.";
+    private const string LoadHelp = "How long a report's figures took to arrive when someone was waiting for them - not when they "
+        + "came straight from the cache. A report made of several parts shows the part in brackets.";
+
+    private List<ReportEvent> _events = new();
+    private ActivitySummary? _act;
+
+    private IEnumerable<ReportEvent> ShownEvents => string.IsNullOrWhiteSpace(_filter) ? _events : _events.Where(e =>
+        Has(e.UserName) || Has(ReportLabel(e.Report)) || Has(e.Label) || Has(e.Value) || Has(e.Filters) || Has(e.Kind) || Has(HowLabel(e.Source)));
+
+    private static string What(ReportEvent e) => e.Kind switch
+    {
+        ReportEventKinds.Opened => "Opened",
+        ReportEventKinds.Closed => $"Closed: looked at for {Duration((e.Ms ?? 0) / 1000)}",
+        ReportEventKinds.Filter or ReportEventKinds.View => $"{e.Label}: {e.Value}",
+        ReportEventKinds.Button => $"Pressed \"{e.Label}\"",
+        ReportEventKinds.Load => $"Loaded {e.Label} in {Secs(e.Ms ?? 0)}",
+        _ => $"{e.Kind} {e.Label}"
+    };
+
+    private static string Duration(int seconds) =>
+        seconds < 60 ? $"{seconds} s" : seconds < 3600 ? $"{seconds / 60} min {seconds % 60} s" : $"{seconds / 3600} h {seconds / 60 % 60} min";
+
+    private static string Secs(int ms) => ms < 10_000 ? $"{ms / 1000.0:0.0} s" : $"{ms / 1000} s";
+
+    // the cache part named like its report (e.g. "YearOnYear" for year-on-year): shown without brackets
+    private static string ReportPart(string slug) => string.Concat(slug.Split('-').Select(w => w.Length == 0 ? w : char.ToUpperInvariant(w[0]) + w[1..]));
     private sealed record PersonCount(string UserName, int Opens);
 
     private string _tab = "all";
@@ -153,20 +286,30 @@ else
     private bool _loading = true;
     private List<AuditEntry> _rows = new();
     private List<ReportView> _views = new();
-    private List<ReportCount>? _viewSummary;
+    private List<ReportCount>? _viewSummary, _howSummary;
     private List<PersonCount>? _peopleSummary;
 
     private IEnumerable<AuditEntry> Shown => string.IsNullOrWhiteSpace(_filter) ? _rows : _rows.Where(a =>
         Has(a.Event) || Has(a.ActorName) || Has(a.SubjectName) || Has(a.Detail) || Has(a.IpAddress));
 
     private IEnumerable<ReportView> ShownViews => string.IsNullOrWhiteSpace(_filter) ? _views : _views.Where(v =>
-        Has(v.UserName) || Has(ReportLabel(v.Report)) || Has(v.Source));
+        Has(v.UserName) || Has(ReportLabel(v.Report)) || Has(HowLabel(v.Source)));
 
     private bool Has(string? s) => s?.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase) == true;
 
     private static string ReportLabel(string slug) => KpiReports.All.FirstOrDefault(r => r.Slug == slug)?.Label ?? slug;
 
     private static int Pct(int n, int max) => max <= 0 ? 0 : Math.Max(4, n * 100 / max);
+
+    // how a report was opened, in words (Steve, 29 Oct 2026: "website, mobile, CMS integrated")
+    private static string HowLabel(string source) => source switch
+    {
+        ReportViewSources.Browser => "Website",
+        ReportViewSources.Phone => "Mobile",
+        ReportViewSources.App => "Mobile app",
+        ReportViewSources.Embedded => "CMS (embedded)",
+        _ => source
+    };
 
     protected override Task OnInitializedAsync() => Load();
 
@@ -183,12 +326,21 @@ else
         try
         {
             await using var db = await Dbs.CreateDbContextAsync();
+            if (_tab == "activity")
+            {
+                _events = await db.ReportEvents.AsNoTracking().OrderByDescending(e => e.Id).Take(Take).ToListAsync();
+                _act = await ActivityAsync(db);
+                return;
+            }
             if (_tab == "views")
             {
                 _views = await db.ReportViews.AsNoTracking().OrderByDescending(v => v.Id).Take(Take).ToListAsync();
                 var since = DateTime.UtcNow.AddDays(-30);
                 var month = await db.ReportViews.AsNoTracking().Where(v => v.OpenedUtc >= since)
-                    .Select(v => new { v.Report, v.UserName }).ToListAsync();
+                    .Select(v => new { v.Report, v.UserName, v.Source }).ToListAsync();
+                _howSummary = month.GroupBy(v => v.Source)
+                    .Select(g => new ReportCount(g.Key, g.Count(), g.Select(v => v.UserName).Distinct().Count()))
+                    .OrderByDescending(r => r.Opens).ToList();
                 _viewSummary = month.GroupBy(v => v.Report)
                     .Select(g => new ReportCount(g.Key, g.Count(), g.Select(v => v.UserName).Distinct().Count()))
                     .OrderByDescending(r => r.Opens).ToList();
@@ -211,5 +363,39 @@ else
             _rows = await q.OrderByDescending(a => a.Id).Take(Take).ToListAsync();
         }
         finally { _loading = false; }
+    }
+
+    // the summary, counted in the database (a month of clicks can be many rows)
+    private static async Task<ActivitySummary> ActivityAsync(KpiDbContext db)
+    {
+        var since = DateTime.UtcNow.AddDays(-30);
+        var month = db.ReportEvents.AsNoTracking().Where(e => e.OccurredUtc >= since);
+
+        // grouped and counted by SQL Server as plain columns (EF can't sort on a record it builds); the records made after
+        var choices = await month.Where(e => e.Kind == ReportEventKinds.Filter || e.Kind == ReportEventKinds.View)
+            .GroupBy(e => new { e.Report, e.Label, e.Value })
+            .Select(g => new { g.Key.Report, g.Key.Label, g.Key.Value, Count = g.Count(), People = g.Select(e => e.UserName).Distinct().Count() })
+            .OrderByDescending(c => c.Count).Take(12).ToListAsync();
+
+        var buttons = await month.Where(e => e.Kind == ReportEventKinds.Button)
+            .GroupBy(e => new { e.Report, e.Label })
+            .Select(g => new { g.Key.Report, g.Key.Label, Count = g.Count(), People = g.Select(e => e.UserName).Distinct().Count() })
+            .OrderByDescending(b => b.Count).Take(12).ToListAsync();
+
+        var times = await month.Where(e => e.Kind == ReportEventKinds.Closed && e.Ms != null)
+            .GroupBy(e => e.Report)
+            .Select(g => new { Report = g.Key, Count = g.Count(), AvgMs = g.Average(e => (double)e.Ms!.Value), Quick = g.Count(e => e.Ms < 10_000) })
+            .ToListAsync();
+
+        var loads = await month.Where(e => e.Kind == ReportEventKinds.Load && e.Ms != null)
+            .GroupBy(e => new { e.Report, e.Label })
+            .Select(g => new { g.Key.Report, g.Key.Label, Count = g.Count(), AvgMs = g.Average(e => (double)e.Ms!.Value), MaxMs = g.Max(e => e.Ms!.Value) })
+            .ToListAsync();
+
+        return new ActivitySummary(
+            choices.Select(c => new Choice(c.Report, c.Label, c.Value, c.Count, c.People)).ToList(),
+            buttons.Select(b => new Pressed(b.Report, b.Label, b.Count, b.People)).ToList(),
+            times.Select(t => new TimeOn(t.Report, t.Count, (int)(t.AvgMs / 1000), t.Quick)).OrderByDescending(t => t.AvgSeconds).Take(12).ToList(),
+            loads.Select(l => new LoadTime(l.Report, l.Label, l.Count, (int)l.AvgMs, l.MaxMs)).OrderByDescending(l => l.AvgMs).Take(10).ToList());
     }
 }

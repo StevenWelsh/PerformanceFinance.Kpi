@@ -37,7 +37,8 @@ namespace Kpi.Web.Data.Kpis;
 /// not per-circuit). A 4-hour sliding expiry frees reports nobody has touched;
 /// closing a tab alone never drops an entry.
 /// </summary>
-public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, ILoggerFactory loggerFactory)
+public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, ILoggerFactory loggerFactory,
+                             Kpi.Web.Account.ReportActivity activity)
 {
     private readonly ILogger _logger = loggerFactory.CreateLogger("Kpi.Web.KpiCache");
 
@@ -69,8 +70,22 @@ public sealed class KpiCache(IMemoryCache cache, ReportDateProvider reportDate, 
     public Task<KpiCacheEntry<T>> GetOrLoad<T>(string key, Func<Task<(T Data, DateTime AsAt)>> load)
     {
         Remember(key, k => Load(k, load), k => RefreshAsync(k, load));
-        return Load(key, load);
+        if (cache.TryGetValue(key, out KpiCacheEntry<T>? hit) && hit is not null) return Task.FromResult(hit);
+        return TimedLoad(key, load);
     }
+
+    // a load someone is waiting for (not in the cache): its time goes to Settings > Audit > Report activity (29 Oct 2026)
+    private async Task<KpiCacheEntry<T>> TimedLoad<T>(string key, Func<Task<(T Data, DateTime AsAt)>> load)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var entry = await Load(key, load);
+        var parts = key.Split(':', 4);   // kpi:{name}:{yyyyMMdd}:{params}
+        if (parts.Length == 4 && !InBackground.Value) activity.RecordLoad(parts[1], parts[3], clock.Elapsed);
+        return entry;
+    }
+
+    /// <summary>Set by the background pre-load (KpiWarmer) for its own work: nobody is waiting on those loads.</summary>
+    public static readonly AsyncLocal<bool> InBackground = new();
 
     // ---- MORNING PRE-LOADING (Steve, 16 Oct 2026: "things seem a bit slow at times") --------------------------
     // Entries are keyed by the business date, so when the morning's first copy moves the date every report starts

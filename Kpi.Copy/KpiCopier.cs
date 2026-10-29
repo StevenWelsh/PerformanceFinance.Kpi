@@ -112,29 +112,42 @@ public static class KpiCopier
     {
         var copies = withSnapshots ? Tables.Concat(SnapshotTables).ToList() : Tables.ToList();
         long rows = 0;
-        foreach (var (from, to) in copies)
+        ExportState? after;
+        try
         {
-            await using (var del = new SqlCommand($"DELETE {to}", kpi) { CommandTimeout = 600 })
-                await del.ExecuteNonQueryAsync(ct);
+            foreach (var (from, to) in copies)
+            {
+                // emptied with TRUNCATE (Stage.spClear), never DELETE (29 Oct 2026): Stage's tables are heaps, and a DELETE
+                // there leaves its pages allocated - Stage.Lead grew to 4.3 GB for 25,000 rows and the copy from 1 minute to 15
+                await using (var clear = new SqlCommand("Stage.spClear", kpi) { CommandType = CommandType.StoredProcedure, CommandTimeout = StepTimeoutSeconds })
+                {
+                    clear.Parameters.Add("@Table", SqlDbType.NVarChar, 128).Value = to["Stage.".Length..];
+                    await clear.ExecuteNonQueryAsync(ct);
+                }
 
-            await using var cmd = new SqlCommand($"SELECT * FROM {from}", source) { CommandTimeout = 600 };
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            using var bulk = new SqlBulkCopy(kpi, SqlBulkCopyOptions.TableLock, null) { DestinationTableName = to, BulkCopyTimeout = 600 };
-            for (var i = 0; i < reader.FieldCount; i++)
-                bulk.ColumnMappings.Add(reader.GetName(i), reader.GetName(i));   // by name, never by position
-            await bulk.WriteToServerAsync(reader, ct);
-            rows += bulk.RowsCopied;
-            progress?.Invoke($"  {to,-20} {bulk.RowsCopied,8:N0} rows");
+                await using var cmd = new SqlCommand($"SELECT * FROM {from}", source) { CommandTimeout = StepTimeoutSeconds };
+                await using var reader = await cmd.ExecuteReaderAsync(ct);
+                using var bulk = new SqlBulkCopy(kpi, SqlBulkCopyOptions.TableLock, null) { DestinationTableName = to, BulkCopyTimeout = StepTimeoutSeconds };
+                for (var i = 0; i < reader.FieldCount; i++)
+                    bulk.ColumnMappings.Add(reader.GetName(i), reader.GetName(i));   // by name, never by position
+                await bulk.WriteToServerAsync(reader, ct);
+                rows += bulk.RowsCopied;
+                progress?.Invoke($"  {to,-20} {bulk.RowsCopied,8:N0} rows");
+            }
+
+            // refreshed while we read? then these tables may not belong together: publish nothing, copy again next time
+            after = await ReadStateAsync(source, ct);
         }
-
-        // refreshed while we read? then these tables may not belong together: publish nothing, copy again next time
-        var after = await ReadStateAsync(source, ct);
+        catch (Exception ex) when (ex is SqlException || ex.InnerException is SqlException)
+        {
+            throw new CopyFailedException(Explain(ex, Steps.Copying, source, kpi), ex);
+        }
         if (after is null || after.RefreshedUtc != state.RefreshedUtc || (withSnapshots && after.SnapshotsUtc != state.SnapshotsUtc))
             return new CopyOutcome(false, scope, copies.Count, rows, state.ReportDate, clock.Elapsed,
                                    "KPI_Export was refreshed while copying; copying again next time");
 
         // everything arrived: swap it in, in one transaction on the CMS_KPI side
-        await using var publish = new SqlCommand("Stage.spPublish", kpi) { CommandType = CommandType.StoredProcedure, CommandTimeout = 600 };
+        await using var publish = new SqlCommand("Stage.spPublish", kpi) { CommandType = CommandType.StoredProcedure, CommandTimeout = StepTimeoutSeconds };
         publish.Parameters.Add("@Scope", SqlDbType.VarChar, 10).Value = scope;
         publish.Parameters.Add("@ReportDate", SqlDbType.Date).Value = state.ReportDate.Date;
         publish.Parameters.Add("@StartedUtc", SqlDbType.DateTime2).Value = startedUtc;
@@ -142,14 +155,71 @@ public static class KpiCopier
         publish.Parameters.Add("@SourceSnapshotsUtc", SqlDbType.DateTime2).Value =                         // and Bad Debt & Exposure
             withSnapshots && state.SnapshotsUtc is DateTime prepared ? prepared : DBNull.Value;
         try { await publish.ExecuteNonQueryAsync(ct); }
-        catch (SqlException ex) { throw new PublishFailedException(ex); }
+        catch (SqlException ex) { throw new PublishFailedException(ex, Explain(ex, Steps.Publishing, source, kpi), scope, startedUtc); }
 
         return new CopyOutcome(true, scope, copies.Count, rows, state.ReportDate, clock.Elapsed);
     }
 
-    /// <summary>A copy that failed before publishing, in CMS_KPI's load log (Settings > Data sync). Never throws.</summary>
+    /// <summary>The longest any one step may take - a statement, a table's bulk copy, the publish - before it is stopped.</summary>
+    public const int StepTimeoutSeconds = 600;
+
+    /// <summary>A part of the copy, for <see cref="Explain"/>: what it was doing in each database, in words.</summary>
+    public sealed record Step(string InOffice, string InSite, string During, bool OfficeByDefault, string Limit, bool Connecting = false);
+
+    public static class Steps
+    {
+        private const string StepLimit = "10 minutes", CheckLimit = "30 seconds";   // StepTimeoutSeconds; SqlCommand's default
+        public static readonly Step Copying = new("Reading from", "Copying into", "the copy", false, StepLimit);
+        public static readonly Step Publishing = new("Reading from", "Publishing into", "publishing", false, StepLimit);
+        public static readonly Step CheckingOffice = new("Checking", "Checking", "the check for new figures", true, CheckLimit);
+        public static readonly Step CheckingSite = new("Checking", "Checking", "the check for new figures", false, CheckLimit);
+        public static readonly Step ConnectingOffice = new("Connecting to", "Connecting to", "connecting", true, "", Connecting: true);
+        public static readonly Step ConnectingSite = new("Connecting to", "Connecting to", "connecting", false, "", Connecting: true);
+    }
+
+    /// <summary>
+    /// A copy failure in plain words that says WHICH database (29 Oct 2026, Steve: "which database?!"): the office's
+    /// KPI_Export or the KPI site's own CMS_KPI - told apart by the connection the error came from - and whether it ran
+    /// past the time limit (the database was slow: the connection was fine), lost its connection, or reported an error.
+    /// </summary>
+    public static string Explain(Exception ex, Step step, SqlConnection? source, SqlConnection? kpi)
+    {
+        var sql = ex as SqlException ?? ex.InnerException as SqlException;
+        var office = sql is not null && kpi is not null && sql.ClientConnectionId == kpi.ClientConnectionId ? false
+                   : sql is not null && source is not null && sql.ClientConnectionId == source.ClientConnectionId ? true
+                   : step.OfficeByDefault;
+        var conn = office ? source : kpi;
+        var name = office ? OfficeName(conn) : SiteName(conn);
+        var message = sql?.Message ?? ex.Message;
+
+        if (step.Connecting) return $"Couldn't connect to {name}: {message}";
+        if (sql?.Number == -2)   // the command's time limit
+            return $"{(office ? step.InOffice : step.InSite)} {name} took longer than {step.Limit}, so the site stopped it. Nothing was published.";
+        if (conn is not null && conn.State != ConnectionState.Open)
+            return $"Lost the connection to {name} during {step.During}. Nothing was published.";
+        return $"{char.ToUpperInvariant(name[0])}{name[1..]} reported an error during {step.During}: {message}";
+    }
+
+    private static string SiteName(SqlConnection? c) =>
+        $"the KPI site's database ({(string.IsNullOrEmpty(c?.Database) ? "CMS_KPI" : c.Database)}" +
+        $"{(c?.DataSource.Contains(".database.windows.net", StringComparison.OrdinalIgnoreCase) == true ? ", Azure" : "")})";
+
+    private static string OfficeName(SqlConnection? c)
+    {
+        var db = string.IsNullOrEmpty(c?.Database) ? "KPI_Export" : c.Database;
+        var host = c?.DataSource ?? "";
+        var local = host.StartsWith('.') || host.StartsWith("(local)", StringComparison.OrdinalIgnoreCase)
+                    || host.StartsWith("localhost", StringComparison.OrdinalIgnoreCase);
+        return local ? $"{db} on this computer" : $"the office's {db} (PF-APP1)";
+    }
+
+    /// <summary>
+    /// A failed copy in CMS_KPI's load log (Settings > Data sync). Never throws. <paramref name="closeOpenRun"/>: the site
+    /// gave up on a PUBLISH that had already opened its run (<paramref name="startedUtc"/> = the one Stage.spPublish was
+    /// given) - close that run with the reason rather than add another.
+    /// </summary>
     public static async Task RecordFailureAsync(string kpiConnection, string scope, DateTime startedUtc, string error,
-                                                DateTime? sourceRefreshedUtc = null)
+                                                DateTime? sourceRefreshedUtc = null, bool closeOpenRun = false)
     {
         try
         {
@@ -160,6 +230,7 @@ public static class KpiCopier
             cmd.Parameters.Add("@StartedUtc", SqlDbType.DateTime2).Value = startedUtc;
             cmd.Parameters.Add("@Error", SqlDbType.NVarChar, 2000).Value = error.Length > 2000 ? error[..2000] : error;
             cmd.Parameters.Add("@SourceRefreshedUtc", SqlDbType.DateTime2).Value = (object?)sourceRefreshedUtc ?? DBNull.Value;
+            if (closeOpenRun) cmd.Parameters.Add("@CloseOpenRun", SqlDbType.Bit).Value = true;
             await cmd.ExecuteNonQueryAsync();
         }
         catch { /* CMS_KPI could not be reached either: the overdue check covers that */ }
@@ -175,5 +246,16 @@ public sealed class CopyBlockedException(string reason, DateTime sourceRefreshed
     public DateTime SourceRefreshedUtc { get; } = sourceRefreshedUtc;
 }
 
-/// <summary>Stage.spPublish refused or failed. It has logged that itself (Ref.LoadRun), so the caller doesn't again.</summary>
-public sealed class PublishFailedException(SqlException inner) : Exception($"Publishing failed: {inner.Message}", inner);
+/// <summary>
+/// Stage.spPublish refused or failed. When it caught the error itself it has closed its run (Ref.LoadRun); when the site
+/// stopped it (its time limit) or the connection dropped it couldn't, so the caller closes that run - found by
+/// <see cref="Scope"/> and <see cref="StartedUtc"/> (KpiCopier.RecordFailureAsync, closeOpenRun).
+/// </summary>
+public sealed class PublishFailedException(SqlException inner, string message, string scope, DateTime startedUtc) : Exception(message, inner)
+{
+    public string Scope { get; } = scope;
+    public DateTime StartedUtc { get; } = startedUtc;
+}
+
+/// <summary>A copy that failed before publishing, in words naming the database (<see cref="KpiCopier.Explain"/>).</summary>
+public sealed class CopyFailedException(string message, Exception inner) : Exception(message, inner);

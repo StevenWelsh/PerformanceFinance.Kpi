@@ -55,6 +55,7 @@ public sealed class KpiWarmer(KpiCache cache, ReportDateProvider reportDate, Kpi
 
     private async Task RunAsync(string why, bool refresh, DateTime date)
     {
+        KpiCache.InBackground.Value = true;   // nobody waits on these loads: not counted in Report activity's load times
         // one run at a time: a dataset arriving mid-run waits, then re-runs with the newer figures
         await _running.WaitAsync(_stopping);
         try

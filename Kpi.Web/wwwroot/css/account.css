@@ -140,9 +140,13 @@
 .aud-summary { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
 .aud-summary-head { font-weight: 600; font-size: 14px; margin-bottom: 8px; }
 .aud-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+.aud-summary-grid-wide { grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); }
 .aud-summary-title { font-size: 12.5px; color: var(--text-3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .03em; }
 .aud-bar-row { display: grid; grid-template-columns: 150px 1fr auto; align-items: center; gap: 10px; font-size: 13px; padding: 3px 0; }
 .aud-bar-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Report activity's longer labels ("Sales Performance · Play 2025 timelapse") */
+.aud-bar-row-wide { grid-template-columns: minmax(0, 1.5fr) minmax(60px, 1fr) auto; }
+.aud-bar-label b { font-weight: 600; }
 .aud-bar { height: 8px; background: var(--panel-head); border-radius: 4px; overflow: hidden; }
 .aud-bar span { display: block; height: 100%; background: var(--brand); border-radius: 4px; }
 .aud-bar-n { font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -199,6 +203,16 @@ code.ed-value, .ed-address code, .ed-how code { font-family: Consolas, "Cascadia
 .set-alerts-problems { margin: 6px 0 8px 18px; padding: 0; color: var(--error); }
 .set-alerts-people { max-height: 220px; margin-bottom: 10px; }
 .set-saved { margin-left: 8px; }
+/* Settings > Data sync: Copying - check interval, pause, Copy now (29 Oct 2026) */
+.set-copy .set-alerts-head { margin-bottom: 4px; }
+.set-copy-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 4px; }
+.set-copy-every { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; margin-right: 8px; }
+.set-copy-every select, .set-copy-reason {
+    height: 36px; padding: 4px 10px; border: 1px solid var(--line-strong); border-radius: 4px;
+    font-family: inherit; font-size: 14px; background: var(--surface); color: var(--text);
+}
+.set-copy-reason { width: 220px; max-width: 100%; }
+.set-copy-bad { color: var(--error); font-size: 13px; margin: 4px 0 0; }
 /* Settings > Users: the envelope for people who get data sync alerts */
 .set-alert-icon { margin-left: 6px; color: var(--text-3); cursor: help; }
 
@@ -278,7 +292,7 @@ code.ed-value, .ed-address code, .ed-how code { font-family: Consolas, "Cascadia
     .pf-logo { margin-bottom: 20px; }
     .pf-logo-img { width: 230px; }
     .login-card input, .acc-form input, .set-form input, .set-form select,
-    .set-dialog input, .set-dialog select, .set-filter, .set-link-row input { font-size: 16px; }
+    .set-dialog input, .set-dialog select, .set-filter, .set-link-row input, .set-copy-every select, .set-copy-reason { font-size: 16px; }
     .acc-qr { width: 170px; height: 170px; }
 }
 

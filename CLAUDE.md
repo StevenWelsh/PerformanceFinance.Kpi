@@ -272,6 +272,22 @@ the tables in full (25k paid leads).
   App) and by `CmsDesktopDoor` for embedded opens (the person the app vouched for); everyone, admins too. **Kept 3
   months** (`HistoryPruner.Months`): `Auth.spPruneHistory` deletes older audit lines and views nightly ~02:30 UK - it runs
   through ownership chaining, so the site's DENY on changing/deleting audit lines still stands for everything newer.
+  Report views also has a **How opened** chart (Website / Mobile / Mobile app / CMS (embedded) - 29 Oct 2026).
+- **Report activity (29 Oct 2026, Steve: "how people interact with the reports ... the timelapse button and for what
+  year"):** `Auth.ReportEvent` (migration `ReportActivity`, kept 3 months by `spPruneHistory`), Settings > Audit > Report
+  activity. Recorded with NO change to the copied pages: `KpiPanel.razor.js` listens on the document - a filter = a
+  KpiField's `<select>` change (caption + option text), a view = a KpiSegmented button, a button = anything clickable
+  (button/link, or a pointer cursor) by its title / aria-label / text (the timelapse's title is "Play 2025 timelapse") -
+  each with the visible filters at that moment; menus (`.kpi-sidebar`, `.kpim-menu`, `.um`) are left out. `KpiPanel`
+  records Opened and Closed (time actually on screen; the clock stops when the connection drops - `ReportCircuit` - as the
+  server keeps a dropped circuit 30 min). `KpiCache` records loads someone WAITED for (not cache hits, not `KpiWarmer`'s:
+  `KpiCache.InBackground`). Embedded views record under the CMS user: `CmsDesktopDoor` puts it in `HttpContext.Items`,
+  App.razor passes it to `Routes` (a protected root parameter), which cascades `KpiEmbedUser`. `ReportActivity` queues and
+  writes in batches every 5 s; never blocks a click.
+- **Data sync's Copying box (29 Oct 2026, Steve):** **Check every** 2/5/10/15/30 min, **Pause / Resume** (optional
+  reason) and **Copy now** (copies even unchanged data; works while paused) - `KpiCopyControl`, a `Cfg.Integration` row
+  provider `CopySchedule`, all audited. While paused the alerts say so (not "overdue"); for 15 min after a resume the
+  day's figures aren't called overdue. No automatic back-off after failures (Steve: not wanted).
 - **Data Protection key ring** encrypts cookies, emailed links and the Resend key: locally the user profile; **in Azure it
   must be a shared persisted ring (storage + Key Vault)** or every restart signs everyone out and the Resend key becomes
   unreadable. Pin `AllowedHosts` in Azure: emailed links are built from the request's host.
@@ -391,6 +407,16 @@ NAT gateway can't move and is recreated:
   few minutes to apply, so the site never noticed). Wrap it: `(... | ConvertFrom-Json) | Where-Object ...`, and list
   what a delete will hit before running it. JMESPath queries with quotes (`[?starts_with(name,'x')]`) don't survive
   PowerShell -> az.cmd either.
+- **NEVER EMPTY A HEAP WITH DELETE (29 Oct 2026).** The copy emptied `Stage`'s tables (heaps: no keys) with `DELETE`;
+  under read-committed snapshot a heap DELETE leaves its pages allocated, so every copy added another load of empty pages
+  - `Stage.Lead` reached 4.3 GB for 25,000 rows, CMS_KPI's disk reads went 0% -> 77%, copies 60 s -> 15 min, and on
+  29 Oct the publish passed the 10-minute limit (no figures 01:24-10:42). Freed that day by TRUNCATE (done holding the
+  copy's `KpiPush` app lock, so no copy was mid-way); now the copy calls `Stage.spClear` (migration `StageClear`: TRUNCATE,
+  `EXECUTE AS 'kpi_stage_owner'`, a user WITHOUT LOGIN with ALTER on schema Stage only - not EXECUTE AS OWNER, which
+  failed locally because dbo was a Windows account SQL Server couldn't look up). Failures now NAME the database
+  (`KpiCopier.Explain`: the site's CMS_KPI or the office's KPI_Export; ran past the limit / lost the connection / an
+  error), and a publish the site gives up on closes its own run (`spRecordFailure @CloseOpenRun`) - "Stopped part-way"
+  now means a real restart.
 - **A session app lock on a POOLED connection outlives the "close" (19 Oct 2026).** The copy's `sp_getapplock ... @LockOwner =
   'Session'` was meant to end with its connection, but closing a pooled connection only returns it to the pool, still
   holding the lock; with `Min Pool Size=5` it could sit there for hours, and every copy said "another copy was still

@@ -20,6 +20,7 @@ public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options) : Ident
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<ReportView> ReportViews => Set<ReportView>();
+    public DbSet<ReportEvent> ReportEvents => Set<ReportEvent>();
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<PublishedLink> PublishedLinks => Set<PublishedLink>();
 
@@ -58,6 +59,22 @@ public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options) : Ident
             e.Property(v => v.UserName).HasMaxLength(256);
             e.Property(v => v.Source).HasMaxLength(20).IsUnicode(false);
             e.HasIndex(v => v.OpenedUtc);
+        });
+
+        modelBuilder.Entity<ReportEvent>(e =>
+        {
+            e.ToTable("ReportEvent", "Auth");
+            e.Property(v => v.OccurredUtc).HasColumnType("datetime2(0)");
+            e.Property(v => v.Session).HasMaxLength(32).IsUnicode(false);
+            e.Property(v => v.Report).HasMaxLength(60).IsUnicode(false);
+            e.Property(v => v.UserId).HasMaxLength(450);
+            e.Property(v => v.UserName).HasMaxLength(256);
+            e.Property(v => v.Source).HasMaxLength(20).IsUnicode(false);
+            e.Property(v => v.Kind).HasMaxLength(20).IsUnicode(false);
+            e.Property(v => v.Label).HasMaxLength(200);
+            e.Property(v => v.Value).HasMaxLength(400);
+            e.Property(v => v.Filters).HasMaxLength(1000);
+            e.HasIndex(v => v.OccurredUtc);
         });
 
         modelBuilder.Entity<AuditEntry>(e =>

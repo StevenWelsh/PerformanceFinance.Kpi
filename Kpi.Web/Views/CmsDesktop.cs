@@ -93,6 +93,9 @@ public static class CmsDesktopDoor
 
     public static string CookieName(string report) => "kpi-embed-" + report.ToLowerInvariant();
 
+    /// <summary>HttpContext.Items key: the person an embedded view's session belongs to (set on the page's GET).</summary>
+    public const string EmbedUserItem = "KpiEmbedUser";
+
     public static IApplicationBuilder UseCmsDesktop(this IApplicationBuilder app) =>
         app.Use(async (context, next) =>
         {
@@ -163,6 +166,7 @@ public static class CmsDesktopDoor
             }
             context.Response.Headers.CacheControl = "no-store";
             context.Response.Headers["Referrer-Policy"] = "no-referrer";
+            context.Items[EmbedUserItem] = s.User;   // who the app vouched for: App.razor hands it to the page (Report activity)
             await next();
         });
 

@@ -1,9 +1,11 @@
 @using Kpi.Web.Data
 @using Kpi.Web.Account
+@using Kpi.Data.Auth
 @inject KpiSessionFactory Sessions
 @inject KpiFiguresSignal Figures
 @inject SyncAlerts Alerts
 @inject UserAdmin Admin
+@inject KpiCopyControl Copy
 @inject IServiceScopeFactory Scopes
 @implements IDisposable
 
@@ -20,7 +22,7 @@
 <div class="set-head">
     <div>
         <h2>Data sync</h2>
-        <p class="acc-hint">The office refreshes the figures every 10 minutes (7am-8pm, Monday to Saturday) and the site collects each refresh within two minutes; Bad Debt and Exposure are prepared once a night.</p>
+        <p class="acc-hint">The office refreshes the figures every 10 minutes (7am-8pm, Monday to Saturday) and the site collects each refresh within @EveryText; Bad Debt and Exposure are prepared once a night.</p>
     </div>
     <button type="button" class="acc-btn-secondary" disabled="@_loading" @onclick="RefreshAll"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh</button>
 </div>
@@ -48,6 +50,69 @@
             <span class="set-tile-value">@Kpi.Web.Data.Kpis.KpiDataStatus.AsAtText(_status.ReportDate, new(_status.LastFrequentLoadUtc, _status.FiguresStale))</span>
             <span class="set-tile-note">@FailedToday</span>
         </div>
+    </div>
+}
+
+@* Copying (29 Oct 2026, Steve, after a day of failing copies): how often the site checks the office, pause / resume, and
+   Copy now - which copies even unchanged data, and works while paused (KpiCopyControl) *@
+@if (_schedule is not null)
+{
+    <div class="set-alerts set-copy">
+        <div class="set-alerts-head">
+            <h3>Copying</h3>
+            @if (Copy.Running)
+            {
+                <span class="set-running"><span class="set-pulse" aria-hidden="true"></span>Copying now (since @UkTime.Show(Copy.RunningSinceUtc, "HH:mm:ss"))</span>
+            }
+            else if (_schedule.Paused)
+            {
+                <span class="set-pill set-pill-switchedoff"><i class="bi bi-pause-fill"></i> Paused</span>
+            }
+            else
+            {
+                <span class="set-pill set-pill-active"><i class="bi bi-play-fill"></i> On</span>
+            }
+        </div>
+        @if (_schedule.Paused)
+        {
+            <p class="set-sub">Paused by @_schedule.PausedBy at @UkTime.Show(_schedule.PausedUtc, "HH:mm 'on' dd MMM")@(_schedule.PausedReason is null ? "" : $": {_schedule.PausedReason}").
+               The reports keep the figures they have until it's resumed. Copy now still works.</p>
+        }
+        else if (!Copy.Running && Copy.NextCheckUtc is { } next)
+        {
+            <p class="set-sub">Next check at @UkTime.Show(next, "HH:mm:ss"): a copy only when the office has refreshed since the last one.</p>
+        }
+        <div class="set-copy-row">
+            <label class="set-copy-every">Check every
+                <select value="@_schedule.EveryMinutes" @onchange="ChangeEvery" disabled="@_busy">
+                    @foreach (var m in KpiCopyControl.EveryChoices) { <option value="@m">@m minutes</option> }
+                </select>
+            </label>
+            <button type="button" class="acc-btn" disabled="@(_busy || Copy.PendingBy is not null)" @onclick="CopyNow"
+                    title="Copy now, even if the office has nothing newer - to check the copy works">
+                <i class="bi bi-arrow-repeat" aria-hidden="true"></i> Copy now
+            </button>
+            @if (_schedule.Paused)
+            {
+                <button type="button" class="acc-btn-secondary" disabled="@_busy" @onclick="Resume"><i class="bi bi-play-fill" aria-hidden="true"></i> Resume</button>
+            }
+            else
+            {
+                <input class="set-copy-reason" @bind="_pauseReason" placeholder="Reason (optional)" maxlength="200" aria-label="Reason for pausing" />
+                <button type="button" class="acc-btn-secondary" disabled="@_busy" @onclick="Pause"><i class="bi bi-pause-fill" aria-hidden="true"></i> Pause</button>
+            }
+        </div>
+        @if (Copy.PendingBy is not null)
+        {
+            <p class="set-sub">Copy now asked for by @Copy.PendingBy: it starts @(Copy.Running ? "when the copy running now finishes" : "in a moment").</p>
+        }
+        else if (Copy.LastManual is { } m)
+        {
+            <p class="@(m.Ok == false ? "set-copy-bad" : "set-sub")">
+                Copy now by @m.By at @UkTime.Show(m.RequestedUtc, "HH:mm:ss"):
+                @(m.Result ?? "copying…")
+            </p>
+        }
     </div>
 }
 
@@ -221,23 +286,64 @@
     private List<string>? _problems;
     private bool _recipientsDirty, _savingRecipients, _recipientsSaved;
 
+    private CopyScheduleSettings? _schedule;
+    private string? _pauseReason;
+    private bool _busy;
+
+    private string EveryText => _schedule is null || _schedule.EveryMinutes == 2 ? "two minutes" : $"{_schedule.EveryMinutes} minutes";
+
     protected override async Task OnInitializedAsync()
     {
         Figures.Landed += OnChanged;    // a new copy landed: show it without pressing Refresh
         Alerts.Changed += OnChanged;    // an alert opened or closed
+        Copy.Changed += OnCopyChanged;  // a copy started / finished, the schedule changed
+        _schedule = await Copy.GetAsync();
         await Load();
         await LoadAlerts(resetTicks: true);
     }
 
     private void OnChanged() => _ = InvokeAsync(async () => { await Load(); await LoadAlerts(resetTicks: false); StateHasChanged(); });
 
+    // the copy's own state is in memory: just redraw, and re-read the schedule (pause / interval) - and the list when a copy ends
+    private void OnCopyChanged() => _ = InvokeAsync(async () =>
+    {
+        _schedule = await Copy.GetAsync();
+        if (!Copy.Running) await Load();
+        StateHasChanged();
+    });
+
     public void Dispose()
     {
         Figures.Landed -= OnChanged;
         Alerts.Changed -= OnChanged;
+        Copy.Changed -= OnCopyChanged;
     }
 
-    private async Task RefreshAll() { await Load(); await LoadAlerts(resetTicks: false); }
+    private async Task RefreshAll() { _schedule = await Copy.GetAsync(); await Load(); await LoadAlerts(resetTicks: false); }
+
+    private async Task Act(Func<KpiUser, Task> action)
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await action(await SettingsActor.GetAsync(AuthState, Scopes));
+            _schedule = await Copy.GetAsync();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private Task ChangeEvery(ChangeEventArgs e) =>
+        int.TryParse(e.Value?.ToString(), out var m) ? Act(actor => Copy.SetEveryAsync(actor, m)) : Task.CompletedTask;
+
+    private Task Pause() => Act(async actor => { await Copy.PauseAsync(actor, _pauseReason); _pauseReason = null; });
+
+    private Task Resume() => Act(actor => Copy.ResumeAsync(actor));
+
+    private Task CopyNow() => Act(async actor =>
+    {
+        if (!await Copy.CopyNowAsync(actor)) _error = "A Copy now is already waiting to start.";
+    });
 
     private async Task LoadAlerts(bool resetTicks)
     {

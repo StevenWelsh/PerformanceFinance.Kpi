@@ -356,6 +356,13 @@ public static class AccountEndpoints
     // Texts the sign-in code. False (and the reason in the log, never on screen) when it couldn't be sent.
     private static async Task<bool> SendSignInCodeAsync(UserManager<KpiUser> users, KpiUser user, ILoggerFactory logs)
     {
+        // two-factor on but no confirmed mobile (an account from the authenticator-app days): nothing to text - the System
+        // Admin resets their mobile (29 Oct 2026: this threw a NullReferenceException at the sign-in page)
+        if (!user.PhoneNumberConfirmed || string.IsNullOrEmpty(user.PhoneNumber))
+        {
+            logs.CreateLogger("Kpi.Web.Account").LogError("A sign-in code could not be texted: {Email} has no confirmed mobile", user.Email);
+            return false;
+        }
         try { await users.GenerateTwoFactorTokenAsync(user, SmsTokenProvider.Name); return true; }
         catch (InvalidOperationException ex)
         {

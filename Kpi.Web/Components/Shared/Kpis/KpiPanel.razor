@@ -5,6 +5,8 @@
 @inject Kpi.Web.Data.Kpis.KpiDataStatus DataStatus
 @inject NavigationManager Nav
 @inject Kpi.Web.Account.ReportViews Views
+@inject Kpi.Web.Account.ReportActivity Activity
+@inject Kpi.Web.Account.ReportCircuit Circuit
 @inject AuthenticationStateProvider AuthState
 
 @* Shared chrome + refresh behaviour for every KPI report. Owns the topbar
@@ -110,6 +112,7 @@
         _selfRef = DotNetObjectReference.Create(this);
         await _module.InvokeVoidAsync("register", _id, _selfRef);  // reports initial visibility
         await RecordViewAsync();
+        await StartActivityAsync();
         StartTimer();
 
         // First-load staleness catch-up. Opening a KPI hits the durable shared cache and paints
@@ -160,6 +163,7 @@
     {
         var wasHidden = !_visible;
         _visible = visible;
+        CountVisible(visible);
         // Returning to view is treated like a re-open: if we've gone stale while
         // hidden, refresh now rather than waiting for the next tick.
         if (visible && wasHidden &&
@@ -219,8 +223,86 @@
         catch { /* a record, never a reason for the page to fail */ }
     }
 
+    // ---- KPI site (29 Oct 2026, Steve): what people do here, for Settings > Audit > Report activity ----
+    // Opened, then each filter / view / button the tracker (KpiPanel.razor.js) reports, then Closed with how long the page
+    // was actually looked at. Who: the signed-in person, or on an embedded view the person the app vouched for (the
+    // door's cookie, handed down by App.razor as "KpiEmbedUser").
+    [CascadingParameter(Name = "KpiEmbedUser")] public string? EmbedUser { get; set; }
+
+    private string? _activityReport, _activityUserId, _activityUser, _activitySource;
+    private readonly string _session = Guid.NewGuid().ToString("N");
+    private readonly DateTime _openedUtc = DateTime.UtcNow;
+    private DateTime? _visibleSinceUtc;
+    private TimeSpan _visibleFor;
+
+    private async Task StartActivityAsync()
+    {
+        try
+        {
+            var path = new Uri(Nav.Uri).AbsolutePath.Trim('/').Split('/');
+            if (path.Length < 2 || path[0] is not ("kpis" or "embed")) return;
+            if (path[0] == "embed")
+            {
+                if (string.IsNullOrEmpty(EmbedUser)) return;
+                (_activityUser, _activitySource) = (EmbedUser, Kpi.Data.Auth.ReportViewSources.Embedded);
+            }
+            else
+            {
+                var user = (await AuthState.GetAuthenticationStateAsync()).User;
+                if (user.Identity?.IsAuthenticated != true) return;
+                _activityUserId = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                _activityUser = user.FindFirst(Kpi.Web.Account.KpiClaims.Name)?.Value ?? user.Identity?.Name ?? "?";
+                _activitySource = _module is null ? "Browser" : await _module.InvokeAsync<string>("clientKind");
+            }
+            _activityReport = path[1].ToLowerInvariant();
+            Circuit.Connection += OnConnection;
+            Track(Kpi.Data.Auth.ReportEventKinds.Opened, Title, null, null);
+            if (_module is not null) await _module.InvokeVoidAsync("track", _id, _selfRef);
+        }
+        catch { /* a record, never a reason for the page to fail */ }
+    }
+
+    [JSInvokable]
+    public void OnActivity(string kind, string label, string? value, string? filters)
+    {
+        if (kind is Kpi.Data.Auth.ReportEventKinds.Filter or Kpi.Data.Auth.ReportEventKinds.View or Kpi.Data.Auth.ReportEventKinds.Button)
+            Track(kind, label, value, filters);
+    }
+
+    private void Track(string kind, string label, string? value, string? filters, int? ms = null, DateTime? atUtc = null)
+    {
+        if (_activityReport is null) return;
+        Activity.Record(new Kpi.Data.Auth.ReportEvent
+        {
+            OccurredUtc = atUtc ?? DateTime.UtcNow,
+            Session = _session, Report = _activityReport, UserId = _activityUserId, UserName = _activityUser!,
+            Source = _activitySource ?? "", Kind = kind, Label = label, Value = value, Filters = filters, Ms = ms
+        });
+    }
+
+    private void CountVisible(bool visible)
+    {
+        if (visible) _visibleSinceUtc ??= DateTime.UtcNow;
+        else if (_visibleSinceUtc is DateTime since) { _visibleFor += DateTime.UtcNow - since; _visibleSinceUtc = null; }
+    }
+
+    // the connection dropped (another page loaded, the tab closed, the phone slept): the person has gone - stop the clock,
+    // and date the Closed then, not when the server finally lets the connection go (up to 30 minutes later)
+    private DateTime? _goneUtc;
+    private void OnConnection(bool up)
+    {
+        if (up) { _goneUtc = null; if (_visible) CountVisible(true); }
+        else { CountVisible(false); _goneUtc ??= DateTime.UtcNow; }
+    }
+
     public async ValueTask DisposeAsync()
     {
+        Circuit.Connection -= OnConnection;
+        CountVisible(false);
+        var closedUtc = _goneUtc ?? DateTime.UtcNow;
+        Track(Kpi.Data.Auth.ReportEventKinds.Closed, Title,
+              ((int)(closedUtc - _openedUtc).TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture),
+              null, (int)Math.Min(int.MaxValue, _visibleFor.TotalMilliseconds), closedUtc);
         Figures.Landed -= OnFiguresLanded;
         StopTimer();
         try
