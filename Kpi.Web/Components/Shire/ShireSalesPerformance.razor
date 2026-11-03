@@ -16,13 +16,13 @@
    Income; Proposed to PF (All / Yes / No); every salesperson ranked (no core / "Other" split); NO target lines (Shire has no
    targets); no timelapse. In Shire's colours (kpi-shire). *@
 
-<PageTitle>Shire Sales Performance — KPIs</PageTitle>
+<PageTitle>@ShireReports.Title("Sales Performance") — KPIs</PageTitle>
 
 <div class="kpi-shell kpi-shire">
     <KpiSidebar Active="shire-sales-performance" />
 
     <main class="kpi-main">
-        <KpiPanel @ref="_panel" Title="Shire Sales Performance" AsAt="_asOf" RefreshedOn="_refreshedOn" IsShire="true"
+        <KpiPanel @ref="_panel" Title="@ShireReports.Title("Sales Performance")" Subtitle="@ShireReports.Source" AsAt="_asOf" RefreshedOn="_refreshedOn" IsShire="true"
                   RefreshRequested="OnRefreshRequested">
             <div class="kpi-filters kpi-sp-filters">
                 <KpiField Caption="Measure" Value="@_measure" Options="ShireReports.MeasureOptions"
@@ -106,7 +106,7 @@
                             }
                             else if (rows.Count == 0)
                             {
-                                <div class="slt-tgt-empty">No Shire sales for @yr.</div>
+                                <div class="slt-tgt-empty">No sales for @yr.</div>
                             }
                             else
                             {

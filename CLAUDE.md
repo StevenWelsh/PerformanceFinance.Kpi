@@ -354,7 +354,13 @@ NAT gateway can't move and is recreated:
   unencrypted, the login the CMS desktop also uses - a separate fix (own read-only login for Klipfolio, encryption,
   then a new Fendra password with a desktop update) for Steve and PCS, not part of the KPI site.
 
-## Shire Salesforce (built 3 Nov 2026, Steve - on the STAGING slot, not yet live)
+## Shire Salesforce (built 3 Nov 2026, Steve - LIVE since 3 Nov 2026, by a slot swap)
+
+**Shown as "Mobberley" (Steve, 3 Nov 2026 - the office Shire became):** the menu section is MOBBERLEY (`KpiReports.Shire`,
+first "Shire - Salesforce"); the full view's title is "Mobberley: Year on Year" with "Taken from Salesforce" in small type
+under it (`ShireReports.Title` / `Source`, KpiPanel `Subtitle`); the phone bar shows the report's name alone with
+"Mobberley · Taken from Salesforce" under it (`ShireReports.PhoneSource`, KpiMobile `Subtitle` - the full title didn't fit).
+The code, schema, Settings > Shire sync and the Salesforce (Shire) card keep the Shire name.
 
 **Who sees them: tick-only** (`KpiReport.TickOnly`) - only people ticked by name in Settings > Users (Steve, Stuart, Andy);
 System Admin and "All reports" do NOT include them (claim "*,shire-..." - `KpiReportAccess.ClaimFor` / `CanSee`).
@@ -390,12 +396,12 @@ applied file, add a numbered one).
   Opportunity Shareholder), External Client App **PF Integration** (client credentials, Run As pf.integration, admin-approved
   users only). Its key and secret go in **Settings > Integrations > Salesforce (Shire)** (`ShireSalesforce`, provider
   `ShireSalesforce`, both encrypted). Token URL is the My Domain (`https://shireprofessionalfunding.my.salesforce.com`).
-- **Staging (3 Nov 2026):** the staging slot (`pf-kpi-staging.azurewebsites.net`, `Kpi:BackgroundWork` = false) runs ONLY
-  the Shire copy, by slot setting **`Shire__Copy` = true** (Program.cs: `Shire:Copy`, absent = follows BackgroundWork).
-  **When the live site gets the Shire reports, delete `Shire__Copy` from staging** - otherwise both slots copy (harmless:
-  the app lock takes turns, but twice the Salesforce calls). The Salesforce card's settings and secret are in the shared
+- **`Shire:Copy`** (Program.cs; absent = follows `Kpi:BackgroundWork`) runs the Shire copy on its own: set true as a slot
+  setting on staging (`Shire__Copy`) to try Shire changes there with real data - and delete it again before or after the
+  swap, or both slots copy (harmless: the app lock takes turns, but twice the Salesforce calls). Used that way 3 Nov 2026
+  for the first release, deleted after the swap. The Salesforce card's settings and secret are in the shared
   CMS_KPI (`Cfg.Integration`), so entering them on staging serves live too.
-- **Not yet:** the live site; IP-locking pf.integration to 20.90.27.132; email alerts for the Shire copy.
+- **Not yet:** IP-locking pf.integration to 20.90.27.132; email alerts for the Shire copy.
 
 ## Gotchas met building it
 

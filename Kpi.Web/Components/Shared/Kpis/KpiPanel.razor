@@ -19,7 +19,15 @@
    the child content, wrapped so the fade can apply. *@
 
 <header class="kpi-topbar">
-    <h1>@Title</h1>
+    @if (Subtitle is null)
+    {
+        <h1>@Title</h1>
+    }
+    else
+    {
+        @* a small line under the title (Mobberley's "Taken from Salesforce", 3 Nov 2026) *@
+        <div class="kpi-titles"><h1>@Title</h1><span class="kpi-title-sub">@Subtitle</span></div>
+    }
     <div class="kpi-dateline">
         @if (AsAt is not null)
         {
@@ -56,6 +64,7 @@
 @code {
     // ---- What the page supplies ----
     [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }        // small, under the title
     [Parameter] public DateTime? AsAt { get; set; }           // business date (from fnReportDate)
     [Parameter] public DateTime? RefreshedOn { get; set; }    // wall-clock of last fetch (UTC)
     [Parameter] public RenderFragment? ChildContent { get; set; }

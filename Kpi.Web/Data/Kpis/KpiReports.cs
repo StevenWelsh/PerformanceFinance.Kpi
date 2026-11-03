@@ -4,9 +4,9 @@ namespace Kpi.Web.Data.Kpis;
 /// the people ticked for it by name in Settings > Users: "every report" (System Admin, "All reports") leaves it out.</summary>
 public sealed record KpiReport(string Slug, string Label, string Icon, string Section, bool TickOnly = false)
 {
-    /// <summary>The name away from its menu heading (a user's report list, the audit): a Shire report says Shire there,
+    /// <summary>The name away from its menu heading (a user's report list, the audit): a Shire report says Mobberley there,
     /// as "Year on Year" alone would read as PF's (3 Nov 2026).</summary>
-    public string Name => Section == KpiReports.Shire ? $"Shire {Label}" : Label;
+    public string Name => Section == KpiReports.Shire ? $"{KpiReports.Shire}: {Label}" : Label;
 }
 
 /// <summary>Every report, in menu order: the menus, My Account's favourites, Settings > Users' report ticks and the
@@ -15,9 +15,11 @@ public static class KpiReports
 {
     public static readonly string[] Sections = { "Sales", "Suppliers", "Analysis", "Own Book", Shire };
 
-    /// <summary>Shire's Salesforce reports (3 Nov 2026, Steve): their own section, in Shire's colours (kpi.css "Shire").
-    /// Tick-only: Steve, Stuart and Andy, no one else - not even a System Admin unless ticked.</summary>
-    public const string Shire = "Shire - Salesforce";
+    /// <summary>Shire's Salesforce reports (3 Nov 2026, Steve): their own section, in Shire's colours (kpi.css "Shire"),
+    /// called Mobberley (the office Shire became; first "Shire - Salesforce"). Each report's title is "Mobberley: ..." with
+    /// "Taken from Salesforce" under it (ShireReports.Title / Source). Tick-only: Steve, Stuart and Andy, no one else -
+    /// not even a System Admin unless ticked.</summary>
+    public const string Shire = "Mobberley";
 
     public static readonly KpiReport[] All =
     {

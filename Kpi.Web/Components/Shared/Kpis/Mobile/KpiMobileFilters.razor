@@ -6,6 +6,8 @@
    in a line ("Kettering · Medical", just "All" when nothing does) and a chevron - so more of the report shows while
    it stays obvious the filters are there; a tap on the bar opens them again.
    Never folds while a filter has focus (a picker open) or holds it open (KeepOpen); a change restarts the clock.
+   Turning the phone opens them again, to fold after the same few seconds (Steve, 3 Nov 2026: the other view's
+   filters had folded on the same clock, unseen). KpiMobile cascades the turns as "KpiTurn".
    Wrap the report's filter row:  <KpiMobileFilters><div class="kpim-filters" ...>…KpiFields…</div></KpiMobileFilters>
    (Compact="true" in a landscape row). The summary is built from the KpiFields inside (they report to this through
    a cascade); anything else that should appear in it calls Report(key, text) itself. The fields stay rendered when
@@ -34,6 +36,11 @@
 
     /// <summary>The shorter landscape version.</summary>
     [Parameter] public bool Compact { get; set; }
+
+    /// <summary>Times the phone has been turned (KpiMobile); each turn opens the filters again.</summary>
+    [CascadingParameter(Name = "KpiTurn")] public int Turns { get; set; }
+
+    private int _turnsSeen;
 
     // Folds after this long with no input.
     private static readonly TimeSpan IdleFold = TimeSpan.FromSeconds(6);
@@ -84,7 +91,19 @@
         if (_parts.RemoveAll(p => ReferenceEquals(p.Key, key)) > 0) _ = InvokeAsync(StateHasChanged);
     }
 
-    protected override void OnInitialized() => RestartClock();
+    protected override void OnInitialized()
+    {
+        _turnsSeen = Turns;
+        RestartClock();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Turns == _turnsSeen) return;
+        _turnsSeen = Turns;
+        _open = true;
+        RestartClock();
+    }
 
     private void Toggle()
     {

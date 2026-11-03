@@ -1371,6 +1371,13 @@ button.kpim-hm-row { cursor: pointer; }
     --kpim-ba-s4: var(--shire-lilac);
     --kpim-ba-part: var(--shire-lilac);
 }
+/* A title with a small line under it (Mobberley: "Taken from Salesforce"), full view and phone bar */
+.kpi-titles { display: flex; flex-direction: column; min-width: 0; }
+.kpi-titles h1 { line-height: 1.15; }
+.kpi-title-sub { font-size: 12px; color: var(--text-3); line-height: 1.3; }
+.kpim-bar h1.kpim-bar-titles { display: flex; flex-direction: column; line-height: 1.15; }
+.kpim-bar-titles > span, .kpim-bar-titles > small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpim-bar-titles > small { font-size: 11.5px; font-weight: 400; opacity: 0.85; margin-top: 1px; }
 /* the reports menu lists every section, so over a Shire page (the phone drawer is inside it) it stays PF crimson;
    the bar above a Shire report stays purple (Steve liked it) */
 .kpi-shire .kpim-menu { --kpim-crimson: var(--pf-crimson); --kpim-crimson-dark: var(--pf-crimson-dark); }

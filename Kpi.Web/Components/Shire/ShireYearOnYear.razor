@@ -16,13 +16,13 @@
    (not AF / TFI); Arrangement became Proposed to PF (All / Yes / No); one Total row (Shire has no own book / brokered
    split). In Shire's colours (kpi-shire). *@
 
-<PageTitle>Shire Year on Year — KPIs</PageTitle>
+<PageTitle>@ShireReports.Title("Year on Year") — KPIs</PageTitle>
 
 <div class="kpi-shell kpi-shire">
     <KpiSidebar Active="shire-year-on-year" />
 
     <main class="kpi-main">
-        <KpiPanel @ref="_panel" Title="Shire Year on Year" AsAt="_asOf" RefreshedOn="_refreshedOn" IsShire="true"
+        <KpiPanel @ref="_panel" Title="@ShireReports.Title("Year on Year")" Subtitle="@ShireReports.Source" AsAt="_asOf" RefreshedOn="_refreshedOn" IsShire="true"
                   RefreshRequested="OnRefreshRequested">
         <div class="yoy-body">
             <div class="kpi-filters kpi-yoy-filters">
@@ -38,7 +38,7 @@
 
             <div class="ss-card yoy-card">
                 <div class="ss-card-head kpi-yoy-head">
-                    <span class="kpi-yoy-title">Shire Year on Year Comparison — @ShireReports.MeasureLabel(_measure)</span>
+                    <span class="kpi-yoy-title">@Kpi.Web.Data.Kpis.KpiReports.Shire Year on Year Comparison — @ShireReports.MeasureLabel(_measure)</span>
                     @if (MaxBack > 0)
                     {
                         <span class="kpi-yoy-steps">
@@ -60,7 +60,7 @@
                 }
                 else if (_years.Count == 0)
                 {
-                    <div class="ss-loading">No Shire sales for these filters yet@(_anyCopy ? "" : " - nothing has been copied from Shire's Salesforce (Settings > Shire sync)").</div>
+                    <div class="ss-loading">No sales for these filters yet@(_anyCopy ? "" : " - nothing has been copied from Shire's Salesforce (Settings > Shire sync)").</div>
                 }
                 else
                 {
@@ -120,7 +120,7 @@
     </main>
 </div>
 
-<KpiMobile Title="Shire Year on Year" Active="shire-year-on-year" AsAt="_asOf" IsShire="true" Hint="KpiMobileHint.LandscapeOnly">
+<KpiMobile Title="Year on Year" Subtitle="@ShireReports.PhoneSource" Active="shire-year-on-year" AsAt="_asOf" IsShire="true" Hint="KpiMobileHint.LandscapeOnly">
     <ChildContent>
         <ShireYearOnYearMobile Measure="@_measure" Rows="_rows" Years="_years" Periods="_periods"
                                Loading="_loading" Error="@_error" />

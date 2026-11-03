@@ -47,6 +47,16 @@ public sealed class ShireReports(KpiDb db)
 
     public static string MeasureLabel(string measure) => measure == "Income" ? "Income" : "Amount Financed";
 
+    /// <summary>A Shire report's title on the full view, "Mobberley: Year on Year" (Steve, 3 Nov 2026), with
+    /// <see cref="Source"/> in small type under it.</summary>
+    public static string Title(string report) => $"{KpiReports.Shire}: {report}";
+
+    public const string Source = "Taken from Salesforce";
+
+    /// <summary>The phone bar's small line: there the title is the report's name alone and Mobberley moves down here, as
+    /// "Mobberley: Business Analysis" didn't fit beside the menu button, star and dates (Steve, 3 Nov 2026).</summary>
+    public static string PhoneSource => $"{KpiReports.Shire} · {Source}";
+
     /// <summary>"" = all, "1" = proposed to PF, "0" = not.</summary>
     public static bool? ProposedToPF(string? choice) => choice switch { "1" => true, "0" => false, _ => null };
 

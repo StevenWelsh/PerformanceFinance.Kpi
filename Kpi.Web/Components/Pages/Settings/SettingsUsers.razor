@@ -353,13 +353,13 @@ else
         catch (JSException) { }
     }
 
-    // "every report" leaves out the tick-only (Shire) reports, so "All" says whether they have those too
+    // "every report" leaves out the tick-only (Mobberley) reports, so "All" says whether they have those too
     private static string ReportsText(UserAdmin.UserRow u)
     {
         if (u.Role != KpiRoles.SystemAdmin && !u.AllReports)
             return u.Reports.Count == 0 ? "None" : $"{u.Reports.Count} of {KpiReports.All.Length}";
         var ticked = u.Reports.Count(KpiReports.IsTickOnly);
-        return ticked == 0 ? "All except Shire" : ticked == KpiReports.All.Count(r => r.TickOnly) ? "All" : $"All + {ticked} Shire";
+        return ticked == 0 ? $"All except {KpiReports.Shire}" : ticked == KpiReports.All.Count(r => r.TickOnly) ? "All" : $"All + {ticked} {KpiReports.Shire}";
     }
 
     // the reports themselves, on hover

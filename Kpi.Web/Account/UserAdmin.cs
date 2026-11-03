@@ -233,7 +233,7 @@ public sealed class UserAdmin(IServiceScopeFactory scopes, Mailer mailer, Accoun
         {
             // "every report" leaves the tick-only ones out: name the ones they have
             var tickOnly = list.Where(KpiReports.IsTickOnly).Select(KpiReports.NameOf).ToList();
-            return tickOnly.Count == 0 ? "every report except Shire's" : "every report, and " + string.Join(", ", tickOnly);
+            return tickOnly.Count == 0 ? $"every report except {KpiReports.Shire}'s" : "every report, and " + string.Join(", ", tickOnly);
         }
         return list.Count > 0 ? string.Join(", ", list.Select(KpiReports.NameOf)) : "no reports";
     }

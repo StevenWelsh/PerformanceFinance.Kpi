@@ -26,13 +26,13 @@
    Facility always lists PF's four (HP, Loan, Lease, Rental) - Steve, 3 Nov 2026. In Shire's colours (kpi-shire). The phone view is PF's BusinessAnalysisMobile, given Shire's
    choices. *@
 
-<PageTitle>Shire Business Analysis — KPIs</PageTitle>
+<PageTitle>@ShireReports.Title("Business Analysis") — KPIs</PageTitle>
 
 <div class="kpi-shell kpi-shire">
     <KpiSidebar Active="shire-business-analysis" />
 
     <main class="kpi-main">
-        <KpiPanel @ref="_panel" Title="@_panelTitle" AsAt="_asOf" RefreshedOn="_refreshedOn" IsShire="true"
+        <KpiPanel @ref="_panel" Title="@_panelTitle" Subtitle="@ShireReports.Source" AsAt="_asOf" RefreshedOn="_refreshedOn" IsShire="true"
                   RefreshRequested="OnRefreshRequested">
             <div class="kpi-filters kpi-ba-filters">
                 <KpiField Caption="Dimension" Value="@_dimension" ValueChanged="OnDimension" Options="DimensionOptions" />
@@ -54,7 +54,7 @@
             }
             else if (IsLender ? _lenderYears.Count == 0 : _rows.Count == 0)
             {
-                <div class="ss-loading">No Shire sales for these filters@(_anyCopy ? "" : " - nothing has been copied from Shire's Salesforce yet (Settings > Shire sync)").</div>
+                <div class="ss-loading">No sales for these filters@(_anyCopy ? "" : " - nothing has been copied from Shire's Salesforce yet (Settings > Shire sync)").</div>
             }
             else if (IsLender)
             {
@@ -194,7 +194,7 @@
     </main>
 </div>
 
-<KpiMobile Title="Shire Business Analysis" Active="shire-business-analysis" AsAt="_asOf" IsShire="true">
+<KpiMobile Title="Business Analysis" Subtitle="@ShireReports.PhoneSource" Active="shire-business-analysis" AsAt="_asOf" IsShire="true">
     <BusinessAnalysisMobile Loading="_loading" Error="@_error"
                             Dimension="@_dimension" Measure="@_measure" Year="_year" Quarter="_quarter"
                             Years="_allYears" Rows="_rows" Dims="_dims"
@@ -243,7 +243,7 @@
     private const int LenderRowSlots = 15;     // the top 15 lenders per card, padded; the rest are Others
     private const int LenderCardCount = 4;     // the latest four years, oldest left
     private bool IsLender => _dimension == ShireReports.LenderDimension;
-    private string _panelTitle => IsLender ? "Shire Business Analysis — By Lender" : "Shire Business Analysis";
+    private string _panelTitle => ShireReports.Title(IsLender ? "Business Analysis — By Lender" : "Business Analysis");
     private List<BusinessAnalysisLenderRow> _lenderRows = new();
     private List<int> _lenderYears = new();
 

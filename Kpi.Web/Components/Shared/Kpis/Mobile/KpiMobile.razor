@@ -19,13 +19,15 @@
 
    Whether the phone view is showing is cascaded as "KpiPhone" (KpiMobile.razor.js watches the same
    media query as the sheet), so a phone part that loads its own figures does so only on a phone and a
-   desktop never pays for the hidden view. *@
+   desktop never pays for the hidden view. The number of turns of the phone is cascaded as "KpiTurn", so the
+   folded filters (KpiMobileFilters) open again on each. *@
 
 <HeadContent>
     <link rel="stylesheet" href="css/kpi.css?v=@CssVersion" />
 </HeadContent>
 
 <CascadingValue Name="KpiPhone" Value="_isPhone">
+<CascadingValue Name="KpiTurn" Value="_turns">
 <div class="kpim @(Landscape is null ? "" : "kpim-has-land") @(IsShire ? "kpi-shire" : "")" style="display: none">
     @if (MenuPage)
     {
@@ -37,7 +39,14 @@
             <button type="button" class="kpim-bar-btn" aria-label="Reports menu" @onclick="() => _menuOpen = true">
                 <i class="bi bi-list" aria-hidden="true"></i>
             </button>
-            <h1>@Title</h1>
+            @if (Subtitle is null)
+            {
+                <h1>@Title</h1>
+            }
+            else
+            {
+                <h1 class="kpim-bar-titles"><span>@Title</span><small>@Subtitle</small></h1>
+            }
             @if (Favourites.Loaded && !string.IsNullOrEmpty(Active))
             {
                 @* adds or removes the report on screen from the menu's favourites *@
@@ -119,10 +128,14 @@
     }
 </div>
 </CascadingValue>
+</CascadingValue>
 
 @code {
     /// <summary>The report's name, as on its full view.</summary>
     [Parameter] public string Title { get; set; } = "";
+
+    /// <summary>A small line under the title (Mobberley's "Taken from Salesforce").</summary>
+    [Parameter] public string? Subtitle { get; set; }
 
     /// <summary>The report's slug, to mark it in the menu (as KpiSidebar's Active).</summary>
     [Parameter] public string Active { get; set; } = "";
@@ -162,6 +175,7 @@
     };
 
     private bool _isPhone;
+    private int _turns;     // times the phone has been turned (KpiTurn)
     private IJSObjectReference? _module;
     private DotNetObjectReference<KpiMobile>? _selfRef;
     private readonly string _id = Guid.NewGuid().ToString("N");
@@ -199,6 +213,14 @@
         if (isPhone == _isPhone) return;
         _isPhone = isPhone;
         if (isPhone) _ = Favourites.EnsureLoadedAsync();   // for the bar's star - only a phone shows it
+        StateHasChanged();
+    }
+
+    /// <summary>The phone was turned: the filters on both views open again (KpiMobileFilters).</summary>
+    [JSInvokable]
+    public void Turned()
+    {
+        _turns++;
         StateHasChanged();
     }
 
