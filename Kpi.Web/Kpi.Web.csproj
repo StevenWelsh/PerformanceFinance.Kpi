@@ -10,6 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.Extensions.AspNetCore.DataProtection.Keys" Version="1.6.5" />
+    <PackageReference Include="Azure.Identity" Version="1.21.0" />
     <PackageReference Include="Dapper" Version="2.1.35" />
     <PackageReference Include="DevExpress.Blazor" Version="25.2.7" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.7" />

@@ -1,0 +1,253 @@
+@using Kpi.Data.Auth
+@using Kpi.Data.Cfg
+@using Kpi.Web.Integrations
+@using Kpi.Web.Shire
+@using Kpi.Web.Components.Pages.Settings
+@inject IntegrationStore Store
+@inject ShireSalesforce Salesforce
+@inject IServiceScopeFactory Scopes
+
+@* The Salesforce card (Settings > Integrations; 3 Nov 2026, Steve - Shire's Salesforce for the Shire reports), as the SQL
+   data source card: the address and the External Client App's Consumer Key and Secret (client credentials, running as
+   pf.integration - read only). Tested before saved; key and secret encrypted on the server and never shown back (blank
+   keeps them). "Try a query" runs SOQL as that same user, so it sees only what the copy can and can change nothing;
+   every query is audited. What is copied is fixed in code (Shire/ShireQueries), not set here. *@
+
+<div class="intg-card">
+    <div class="intg-head">
+        <span class="intg-name"><i class="bi bi-cloud intg-db" aria-hidden="true"></i>@ShireSalesforceSettings.Title(_settings)</span>
+        <IntegrationPlug Row="_row" />
+    </div>
+    <p class="intg-desc">Where the Shire reports' figures are copied from: the won deals in Shire's Salesforce.</p>
+    <IntegrationButton Row="_row" ConnectText="Connect Salesforce" OnClick="Open" />
+</div>
+
+@if (_open && _row is not null)
+{
+    <div class="set-backdrop" @onclick="() => _open = false"></div>
+    <div class="set-dialog set-dialog-wide" role="dialog" aria-modal="true" aria-labelledby="sf-title">
+        <h3 id="sf-title">@ShireSalesforceSettings.Title(_settings)</h3>
+        @if (_message is not null)
+        {
+            <div class="@(_messageOk ? "login-notice" : "login-error")" role="status">
+                <i class="bi @(_messageOk ? "bi-check-circle" : "bi-exclamation-triangle-fill")"></i> @_message
+            </div>
+        }
+
+        @if (!_editing)
+        {
+            <dl class="acc-facts">
+                <dt>Name</dt><dd>@(string.IsNullOrWhiteSpace(_settings?.Name) ? "-" : _settings!.Name)</dd>
+                <dt>Address</dt><dd>@(_settings?.Domain ?? "-")</dd>
+                <dt>Consumer Key</dt><dd>@(_row.SecretsCipher is null ? "-" : $"{_settings?.KeyHint} (saved {Kpi.Web.Data.UkTime.Show(_row.SecretsUpdatedUtc)})")</dd>
+                <dt>Consumer Secret</dt><dd>@(_row.SecretsCipher is null ? "-" : "saved")</dd>
+                <dt>Copying</dt><dd>@(_row.Enabled ? "On - see Settings > Shire sync" : "Switched off")</dd>
+                <dt>Last worked</dt><dd>@Kpi.Web.Data.UkTime.Show(_row.LastOkUtc)</dd>
+                @if (_row.LastErrorUtc is not null && (_row.LastOkUtc is null || _row.LastErrorUtc > _row.LastOkUtc))
+                {
+                    <dt>Last problem</dt><dd class="set-bad">@Kpi.Web.Data.UkTime.Show(_row.LastErrorUtc): @_row.LastError</dd>
+                }
+            </dl>
+            <div class="set-buttons">
+                <button type="button" class="acc-btn" @onclick="StartEdit">Change</button>
+                <button type="button" class="acc-btn-secondary" disabled="@_busy" @onclick="TestSaved">@(_busy && !_running ? "Testing…" : "Test connection")</button>
+                <button type="button" class="acc-btn-secondary set-act-danger" @onclick="() => _confirmDisconnect = true">Disconnect</button>
+            </div>
+            @if (_confirmDisconnect)
+            {
+                <div class="set-confirm">
+                    <p>Disconnect Salesforce? The saved key and secret are deleted and the site stops copying from Shire's Salesforce,
+                       so the Shire reports keep the figures they have until it is connected again.</p>
+                    <button type="button" class="acc-btn-secondary" @onclick="() => _confirmDisconnect = false">Cancel</button>
+                    <button type="button" class="acc-btn" @onclick="Disconnect">Disconnect</button>
+                </div>
+            }
+
+            <div class="intg-query">
+                <label class="login-label" for="sf-soql">Try a query (SOQL)</label>
+                <p class="acc-hint">Runs as the copy's own Salesforce user, read only (nothing can be changed), the first @ShireSalesforce.MaxRows rows.
+                   Recorded in the audit.</p>
+                <textarea id="sf-soql" @bind="_soql" spellcheck="false" rows="3"></textarea>
+                <div class="set-buttons">
+                    <button type="button" class="acc-btn-secondary" disabled="@_busy" @onclick="RunQuery">@(_running ? "Running…" : "Run")</button>
+                    @if (_result is not null)
+                    {
+                        <span class="acc-hint">@_result.Rows.Count row@(_result.Rows.Count == 1 ? "" : "s")@(_result.MoreRows ? $" (the first {ShireSalesforce.MaxRows})" : "") in @_result.Elapsed.TotalSeconds.ToString("0.0") s</span>
+                    }
+                </div>
+                @if (_queryError is not null)
+                {
+                    <p class="set-bad intg-query-error">@_queryError</p>
+                }
+                @if (_result is { Columns.Count: > 0 })
+                {
+                    <div class="set-table-wrap intg-result">
+                        <table class="set-table">
+                            <thead><tr>@foreach (var c in _result.Columns) { <th>@c</th> }</tr></thead>
+                            <tbody>
+                                @foreach (var r in _result.Rows)
+                                {
+                                    <tr>@foreach (var v in r) { <td class="@(v is null ? "intg-null" : null)">@(v ?? "NULL")</td> }</tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <p class="acc-hint">From Shire's Salesforce: Setup > External Client App Manager > PF Integration > Settings > OAuth Settings >
+               Consumer Key and Secret (Salesforce emails a code first). The details are tested before they're saved.</p>
+            <label class="login-label" for="sf-name">Name</label>
+            <input id="sf-name" @bind="_name" maxlength="40" autocomplete="off" placeholder="Shire" />
+            <label class="login-label" for="sf-domain">Salesforce address</label>
+            <input id="sf-domain" @bind="_domain" spellcheck="false" autocomplete="off" placeholder="shireprofessionalfunding.my.salesforce.com" />
+            <label class="login-label" for="sf-key">Consumer Key</label>
+            <input id="sf-key" type="password" @bind="_key" autocomplete="new-password" data-lpignore="true" data-1p-ignore
+                   placeholder="@(_row.SecretsCipher is null ? "" : "Leave blank to keep the saved key")" />
+            <label class="login-label" for="sf-secret">Consumer Secret</label>
+            <input id="sf-secret" type="password" @bind="_secret" autocomplete="new-password" data-lpignore="true" data-1p-ignore
+                   placeholder="@(_row.SecretsCipher is null ? "" : "Leave blank to keep the saved secret")" />
+            <label class="acc-check"><input type="checkbox" @bind="_enabled" /> Copy from this Salesforce</label>
+        }
+
+        <div class="set-dialog-buttons">
+            @if (_editing)
+            {
+                <button type="button" class="acc-btn-secondary" @onclick="CancelEdit">Cancel</button>
+                <button type="button" class="acc-btn" disabled="@_busy" @onclick="Save">@(_busy ? "Testing…" : "Test & save")</button>
+            }
+            else
+            {
+                <button type="button" class="acc-btn-secondary" @onclick="() => _open = false">Close</button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private Integration? _row;
+    private ShireSalesforceSettings? _settings;
+    private bool _open, _editing, _busy, _running, _confirmDisconnect, _messageOk;
+    private string? _message, _queryError;
+    private string _name = "", _domain = "", _key = "", _secret = "";
+    private bool _enabled = true;
+    private string _soql = "SELECT CALENDAR_YEAR(CloseDate) yr, COUNT(Id) deals, SUM(Amount) amount, SUM(Income__c) income FROM Opportunity WHERE IsWon = true GROUP BY CALENDAR_YEAR(CloseDate) ORDER BY CALENDAR_YEAR(CloseDate)";
+    private SourceQueryResult? _result;
+
+    protected override Task OnInitializedAsync() => Load();
+
+    private async Task Load()
+    {
+        _row = await Store.GetAsync(ShireSalesforce.Provider);
+        _settings = IntegrationStore.ReadSettings<ShireSalesforceSettings>(_row);
+    }
+
+    private void Open()
+    {
+        _message = null; _confirmDisconnect = false; _result = null; _queryError = null;
+        if (_row?.Status == IntegrationStatus.NotConnected) StartEdit(); else _editing = false;
+        _open = true;
+    }
+
+    private void StartEdit()
+    {
+        _name = _settings?.Name ?? "Shire";
+        _domain = _settings?.Domain.Replace("https://", "") ?? "shireprofessionalfunding.my.salesforce.com";
+        _key = ""; _secret = "";
+        _enabled = _row?.Status == IntegrationStatus.NotConnected || (_row?.Enabled ?? true);
+        _message = null;
+        _editing = true;
+    }
+
+    private void CancelEdit()
+    {
+        if (_row?.Status == IntegrationStatus.NotConnected) _open = false;
+        _editing = false; _message = null;
+    }
+
+    // the typed details are tried first; they are saved only once they have worked
+    private async Task Save()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            var domain = ShireSalesforce.NormaliseDomain(_domain);
+            var saved = _row?.SecretsCipher is null ? null : Store.ReadSecrets<ShireSalesforceSecrets>(_row);
+            var key = _key.Trim().Length > 0 ? _key.Trim() : saved?.ConsumerKey;
+            var secret = _secret.Trim().Length > 0 ? _secret.Trim() : saved?.ConsumerSecret;
+            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(secret)) { Say(false, "Enter the Consumer Key and the Consumer Secret."); return; }
+
+            var answer = await Salesforce.TestAsync(domain, new ShireSalesforceSecrets(key, secret));
+            await Store.SaveShireSalesforceAsync(await SettingsActor.GetAsync(AuthState, Scopes), domain, _name,
+                                                 _key.Trim().Length > 0 ? _key : null, _secret.Trim().Length > 0 ? _secret : null, _enabled);
+            _key = ""; _secret = "";
+            await Load();
+            _editing = false;
+            Say(true, answer + (_enabled ? " Saved: the site copies from it within a minute or two (Settings > Shire sync)." : " Saved, with copying switched off."));
+        }
+        catch (Exception ex) when (ex is SalesforceException or HttpRequestException or TaskCanceledException
+                                         or InvalidOperationException or IntegrationSecretsUnreadableException)
+        {
+            Say(false, $"Not saved: {ex.Message}");
+        }
+        finally { _busy = false; }
+    }
+
+    private async Task TestSaved()
+    {
+        _busy = true; _message = null;
+        try
+        {
+            var (domain, secrets) = Saved();
+            Say(true, await Salesforce.TestAsync(domain, secrets));
+            await Store.RecordCallAsync(ShireSalesforce.Provider, null);
+        }
+        catch (Exception ex) when (ex is SalesforceException or HttpRequestException or TaskCanceledException
+                                         or InvalidOperationException or IntegrationSecretsUnreadableException)
+        {
+            await Store.RecordCallAsync(ShireSalesforce.Provider, ex.Message);
+            Say(false, ex.Message);
+        }
+        finally { _busy = false; await Load(); }
+    }
+
+    private async Task RunQuery()
+    {
+        if (string.IsNullOrWhiteSpace(_soql)) { _queryError = "Enter a query."; return; }
+        _busy = _running = true; _queryError = null; _result = null;
+        try
+        {
+            var me = await SettingsActor.GetAsync(AuthState, Scopes);
+            await Store.AuditAsync(me, AuditEvents.SourceQueried, $"Test query on Salesforce (Shire): {_soql.Trim()}");
+            var (domain, secrets) = Saved();
+            _result = await Salesforce.RunAsync(domain, secrets, _soql);
+        }
+        catch (Exception ex) when (ex is SalesforceException or HttpRequestException or TaskCanceledException
+                                         or InvalidOperationException or IntegrationSecretsUnreadableException)
+        {
+            _queryError = ex.Message;
+        }
+        finally { _busy = _running = false; }
+    }
+
+    private (string Domain, ShireSalesforceSecrets Secrets) Saved()
+    {
+        var settings = _settings ?? throw new InvalidOperationException("Salesforce isn't connected.");
+        var secrets = Store.ReadSecrets<ShireSalesforceSecrets>(_row!) ?? throw new InvalidOperationException("No key and secret are saved.");
+        return (settings.Domain, secrets);
+    }
+
+    private async Task Disconnect()
+    {
+        await Store.DisconnectAsync(ShireSalesforce.Provider, await SettingsActor.GetAsync(AuthState, Scopes));
+        _confirmDisconnect = false;
+        _open = false;
+        await Load();
+    }
+
+    private void Say(bool ok, string message) { _messageOk = ok; _message = message; }
+}

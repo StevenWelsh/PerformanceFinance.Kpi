@@ -21,16 +21,18 @@ public static class SalesSummaryCells
     /// Marshall, Pete George, Ryan O'Dwyer, Stuart Burn.</summary>
     public static readonly int[] SalespersonSummaryTeam = { 74, 68, 73, 82 };
 
-    public static string Key(KpiCache cache, string period, int divisionId, int salespersonId) =>
-        cache.Key("SalesSummaryPanel", period, divisionId, salespersonId);
+    /// <param name="salesOfficeId">The Sales Office filter (null = every office) - Sales Summary's; Salesperson Summary has none.</param>
+    public static string Key(KpiCache cache, string period, int divisionId, int salespersonId, int? salesOfficeId = null) =>
+        cache.Key("SalesSummaryPanel", period, divisionId, salespersonId, salesOfficeId);
 
     /// <summary>The "pure" loader: one session, the report date and the cell's two rows; nothing else touched.</summary>
     public static Func<Task<(SalesSummaryCell Data, DateTime AsAt)>> Loader(
-        KpiSessionFactory sessions, string period, int divisionId, int salespersonId) => async () =>
+        KpiSessionFactory sessions, string period, int divisionId, int salespersonId, int? salesOfficeId = null) => async () =>
     {
         using var cms = await sessions.BeginAsync();
         var asAt = cms.Db.ReportDate();
-        var rows = new SalesSummaryService(cms.Db).GetSummary(period, divisionId: divisionId, salespersonId: salespersonId);
+        var rows = new SalesSummaryService(cms.Db).GetSummary(period, divisionId: divisionId, salespersonId: salespersonId,
+                                                              salesOfficeId: salesOfficeId);
         return (new SalesSummaryCell(rows.FirstOrDefault(r => r.PeriodId == 1), rows.FirstOrDefault(r => r.PeriodId == 2)), asAt);
     };
 
@@ -41,19 +43,25 @@ public static class SalesSummaryCells
     public static async Task<int> PrimeAsync(KpiCache cache, KpiSessionFactory sessions, bool refresh, CancellationToken ct)
     {
         List<int> divisions;
+        List<int?> offices;
         using (var cms = await sessions.BeginAsync())
+        {
             divisions = cms.Db.Options("Divisions").Select(o => o.Id).ToList();
+            offices = cms.Db.Options("Offices").Select(o => (int?)o.Id).ToList();
+        }
 
-        var cells = Periods.SelectMany(p => new[] { -1 }.Concat(divisions).Select(d => (p, d, s: -1)))     // Sales Summary
-            .Concat(Periods.SelectMany(p => SalespersonSummaryTeam.Select(s => (p, d: -1, s))))         // Salesperson Summary
+        // Sales Summary for every office and each one (its Sales Office filter), then Salesperson Summary (no office)
+        var cells = new int?[] { null }.Concat(offices)
+            .SelectMany(o => Periods.SelectMany(p => new[] { -1 }.Concat(divisions).Select(d => (p, d, s: -1, o))))
+            .Concat(Periods.SelectMany(p => SalespersonSummaryTeam.Select(s => (p, d: -1, s, o: (int?)null))))
             .ToList();
 
         var done = 0;
-        foreach (var (period, division, person) in cells)
+        foreach (var (period, division, person, office) in cells)
         {
             if (ct.IsCancellationRequested) break;
-            var key = Key(cache, period, division, person);
-            var load = Loader(sessions, period, division, person);
+            var key = Key(cache, period, division, person, office);
+            var load = Loader(sessions, period, division, person, office);
             if (refresh) await cache.RefreshAsync(key, load);
             else await cache.GetOrLoad(key, load);
             done++;

@@ -8,10 +8,10 @@ namespace Kpi.Web.Reports;
 /// </summary>
 public sealed class BusinessAnalysisLenderService(KpiDb db)
 {
-    public List<BusinessAnalysisLenderRow> GetByLender(string measure, int quarter = 0)
+    public List<BusinessAnalysisLenderRow> GetByLender(string measure, int quarter = 0, int? salesOfficeId = null)
     {
         var reportYear = db.ReportDate().Year;
-        var figures = db.Report<BusinessAnalysisLenderFigureRow>("Rpt.spBusinessAnalysisByLender");
+        var figures = db.Report<BusinessAnalysisLenderFigureRow>("Rpt.spBusinessAnalysisByLender", new { SalesOfficeId = salesOfficeId });
         return Build(figures, measure, quarter, reportYear);
     }
 

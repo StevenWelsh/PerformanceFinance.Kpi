@@ -35,6 +35,8 @@ public sealed class ReportActivity(IDbContextFactory<KpiDbContext> dbs, ILogger<
         ["SalesPerformance"] = "sales-performance", ["SalesProductivity"] = "sales-productivity",
         ["SalesSummary"] = "sales-summary", ["SalesSummaryPanel"] = "sales-summary",
         ["SalespersonSummary"] = "salesperson-summary", ["SupplierFigures"] = "suppliers-yoy", ["YearOnYear"] = "year-on-year",
+        ["ShireYearOnYear"] = "shire-year-on-year", ["ShireSalesPerformance"] = "shire-sales-performance",
+        ["ShireBusinessAnalysis"] = "shire-business-analysis",
     };
 
     /// <summary>A report's figures loaded for someone waiting (not from the cache, not the background pre-load).</summary>

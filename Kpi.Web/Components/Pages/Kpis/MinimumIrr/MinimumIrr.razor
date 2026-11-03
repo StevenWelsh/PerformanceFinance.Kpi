@@ -3,6 +3,7 @@
 @attribute [Authorize(Policy = "Dashboard.View")]
 @inject KpiSessionFactory SessionFactory
 @inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
 @using System.Globalization
 @using Kpi.Web.Reports
 @using Kpi.Web.Components.Shared.Kpis
@@ -25,6 +26,7 @@
                   RefreshRequested="OnRefreshRequested">
           <div class="kpi-mi">
             <div class="kpi-filters">
+                <KpiOfficeField Changed="OnOffice" />
                 <KpiField Caption="Division" Value="@_divisionId.ToString(CultureInfo.InvariantCulture)"
                           ValueChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" Options="DivisionOptions" />
             </div>
@@ -52,12 +54,12 @@
     <ChildContent>
         <MinimumIrrMobile Month="_month" Quarter="_quarter" Year="_year" Divisions="_divisions" DivisionId="_divisionId"
                           Loading="_loading" Error="@_error" @bind-Period="_mobilePeriod"
-                          DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" />
+                          DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" OfficeChanged="OnOffice" />
     </ChildContent>
     <Landscape>
         <MinimumIrrMobileLandscape Month="_month" Quarter="_quarter" Year="_year" Divisions="_divisions" DivisionId="_divisionId"
                                    Loading="_loading" Error="@_error" @bind-Period="_mobilePeriod"
-                                   DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" />
+                                   DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" OfficeChanged="OnOffice" />
     </Landscape>
 </KpiMobile>
 
@@ -106,7 +108,7 @@
             // Cached per (division + report date): instant on a repeat open / tab-flick, one DB
             // hit the first time. GetOrLoad is single-flight, so concurrent viewers load once.
             var entry = await KpiCache.GetOrLoad(
-                KpiCache.Key("MinimumIrr", _divisionId),
+                KpiCache.Key("MinimumIrr", _divisionId, Office.OfficeId),
                 LoadPayload);
             Apply(entry.Data);
             _asOf = entry.AsAt;
@@ -131,9 +133,10 @@
         using var cms = await SessionFactory.BeginAsync();
         var asAt = cms.Db.ReportDate();
         var svc = new MinIRRService(cms.Db);
-        var month = svc.GetAnalysis("M_This", _divisionId);
-        var quarter = svc.GetAnalysis("Q_This", _divisionId);
-        var year = svc.GetAnalysis("Y_This", _divisionId);
+        var office = Office.OfficeId;   // KPI site: the Sales Office filter
+        var month = svc.GetAnalysis("M_This", _divisionId, office);
+        var quarter = svc.GetAnalysis("Q_This", _divisionId, office);
+        var year = svc.GetAnalysis("Y_This", _divisionId, office);
         return (new Payload(month, quarter, year), asAt);
     }
 
@@ -153,7 +156,7 @@
         try
         {
             var (entry, changed) = await KpiCache.RefreshAsync(
-                KpiCache.Key("MinimumIrr", _divisionId),
+                KpiCache.Key("MinimumIrr", _divisionId, Office.OfficeId),
                 LoadPayload);
             _refreshedOn = entry.LoadedAtUtc;
             if (changed)
@@ -168,6 +171,9 @@
 
     private async Task OnDivision(ChangeEventArgs e)
     { _divisionId = int.TryParse(e.Value?.ToString(), out var v) ? v : -1; await Load(); }
+
+    // KPI site: the Sales Office (full view or phone) - KpiOfficeState holds it, the load reads it
+    private Task OnOffice() => Load();
 
     private IReadOnlyList<KpiOption> DivisionOptions =>
         new[] { new KpiOption("-1", "All") }

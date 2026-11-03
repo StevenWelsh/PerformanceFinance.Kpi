@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.13" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.13" />
     <!-- SqlClient 6.1.7 (under EF Core) brings Pkcs 9.0.11, which has known vulnerabilities (NU1902/NU1903): pinned to the
@@ -19,6 +20,11 @@
          Kpi.Data). The console's EF commands come from Tools; Design alone serves only `dotnet ef`. Tooling only. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.13" PrivateAssets="all" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.13" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Shire Salesforce's SQL as reviewable .sql files, run by the Shire migrations (Shire/ShireScripts.cs). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Shire\*.sql" />
   </ItemGroup>
 
 </Project>

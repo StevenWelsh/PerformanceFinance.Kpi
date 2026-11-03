@@ -53,9 +53,17 @@ builder.Services.AddSingleton<KpiScripts>();
 
 // ---- sign-in: ASP.NET Identity with a compulsory text code to the person's mobile (Twilio Verify), as DavidsonHR's portal
 // The key ring encrypts the sign-in cookies, the emailed links and the integration secrets. Locally it lives in the
-// user profile; in Azure it must be a shared, persisted ring (storage + Key Vault) or every restart signs everyone
-// out and the saved Resend key becomes unreadable.
-builder.Services.AddDataProtection().SetApplicationName("Kpi.Web");
+// user profile. In Azure (3 Nov 2026, for deployment slots) it is ONE ring for both slots, in CMS_KPI
+// (Auth.DataProtectionKeys, DataProtection:InDatabase = true), each key wrapped by a Key Vault key
+// (DataProtection:KeyVaultKeyId, reached with the slot's managed identity) - with a ring per slot, a swap would sign
+// everyone out and the saved secrets couldn't be read. In the database, not Azure Storage: Steve's Azure role can't
+// grant an identity access to storage, and both slots already reach CMS_KPI. Keys made before (plain XML, copied into
+// the table) still read: wrapping applies to new keys.
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("Kpi.Web");
+if (builder.Configuration.GetValue("DataProtection:InDatabase", false))
+    dataProtection.PersistKeysToDbContext<KpiDbContext>();
+if (builder.Configuration["DataProtection:KeyVaultKeyId"] is { Length: > 0 } keyId)
+    dataProtection.ProtectKeysWithAzureKeyVault(new Uri(keyId), new Azure.Identity.DefaultAzureCredential());
 
 builder.Services.AddAuthentication(o =>
     {
@@ -103,7 +111,6 @@ builder.Services.AddSingleton<OnlineUsers>();
 builder.Services.AddSingleton<ReportViews>();        // who opens which report (Settings > Audit > Report views)
 builder.Services.AddSingleton<ReportActivity>();     // what people do on the reports (Settings > Audit > Report activity)
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ReportActivity>());   // its writer
-builder.Services.AddHostedService<HistoryPruner>();  // keeps the audit trail, report views and activity to 3 months
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, OnlineTracker>();
 builder.Services.AddScoped<ReportCircuit>();   // a report's connection dropping / returning (Report activity's time looked at)
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler>(sp => sp.GetRequiredService<ReportCircuit>());
@@ -114,9 +121,29 @@ builder.Services.AddSingleton<KpiPullHealth>();      // how the copy is doing, f
 builder.Services.AddSingleton<Kpi.Web.Data.Kpis.KpiWarmer>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Kpi.Web.Data.Kpis.KpiWarmer>());
 builder.Services.AddSingleton<SyncAlerts>();         // emails the chosen people when the figures stop arriving
-builder.Services.AddHostedService(sp => sp.GetRequiredService<SyncAlerts>());
 builder.Services.AddSingleton<KpiCopyControl>();     // Data sync's pause, check interval and Copy now
-builder.Services.AddHostedService<Kpi.Web.Data.KpiPull>();          // the KPI copy from the office (KPI_Export), every 2 minutes unless changed
+// The work that must run ONCE, not in every copy of the site (3 Nov 2026, deployment slots): the copy, the alerts and
+// the nightly pruning. Kpi:BackgroundWork = false on the staging slot (a slot setting, so it stays with the slot when
+// they swap); absent = on. A copy without it still shows every report, from the same database.
+var backgroundWork = builder.Configuration.GetValue("Kpi:BackgroundWork", true);
+if (backgroundWork)
+{
+    builder.Services.AddHostedService(sp => sp.GetRequiredService<SyncAlerts>());
+    builder.Services.AddHostedService<HistoryPruner>();  // keeps the audit trail, report views and activity to 3 months
+    builder.Services.AddHostedService<Kpi.Web.Data.KpiPull>();      // the KPI copy from the office (KPI_Export), every 2 minutes unless changed
+}
+// The Shire copy from Shire's Salesforce, every 15 minutes unless changed: with the rest, unless Shire:Copy says
+// otherwise. Shire:Copy = true on the staging slot (a slot setting) while the Shire reports are tried there before the
+// live site has them (3 Nov 2026, Steve) - delete it once live has them, or both copies run (harmless, but twice).
+if (builder.Configuration.GetValue("Shire:Copy", backgroundWork))
+    builder.Services.AddHostedService<Kpi.Web.Shire.ShirePull>();
+
+// ---- Shire's Salesforce (3 Nov 2026, Steve): the Shire reports, their copy and its controls - all in Kpi.Web/Shire --
+builder.Services.AddSingleton<Kpi.Web.Shire.ShireSalesforce>();      // Settings > Integrations > Salesforce, and the copy's client
+builder.Services.AddSingleton<Kpi.Web.Shire.ShireCopyControl>();     // Settings > Shire sync's pause, check interval and Copy now
+builder.Services.AddSingleton<Kpi.Web.Shire.ShireDataStatus>();      // the Shire reports' "As at"
+builder.Services.AddSingleton<Kpi.Web.Shire.ShireFiguresSignal>();   // a Shire copy landed: open Shire reports update
+builder.Services.AddHttpClient(Kpi.Web.Shire.ShireSalesforce.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(60));
 
 // ---- integrations: Resend for email ----------------------------------------------------------------------------
 builder.Services.AddSingleton<IntegrationStore>();

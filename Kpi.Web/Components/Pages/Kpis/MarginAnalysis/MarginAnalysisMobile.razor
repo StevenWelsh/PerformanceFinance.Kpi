@@ -2,13 +2,14 @@
 @using System.Text.RegularExpressions
 @using Kpi.Web.Components.Shared.Kpis.Mobile
 
-@* Margin Analysis on a phone, portrait: Division, a Years / Months / Last days switch (with the window under
+@* Margin Analysis on a phone, portrait: Sales Office and Division, a Years / Months / Last days switch (with the window under
    it in the Last days view), then one row per year, month or window. Years and Months rows are a
    dimension line between the buy and sell dots on one rate scale, the margin centred above it; the
    Last days row adds its funding and AF. The page's own data and filters - nothing is loaded here. *@
 
 <KpiMobileFilters>
-    <div class="kpim-filters" style="--kpim-cols:1">
+    <div class="kpim-filters" style="--kpim-cols:2">
+        <KpiOfficeField Changed="OfficeChanged" />
         <KpiField Caption="Division" Value="@DivisionId.ToString(CultureInfo.InvariantCulture)"
                   ValueChanged="DivisionChanged" Options="DivisionOptions" />
     </div>
@@ -140,6 +141,9 @@ else
     [Parameter] public bool Loading { get; set; }
     [Parameter] public string? Error { get; set; }
     [Parameter] public EventCallback<string> DivisionChanged { get; set; }
+
+    /// <summary>The Sales Office was changed here - the page's handler, which reloads for it (KPI site).</summary>
+    [Parameter] public EventCallback OfficeChanged { get; set; }
     [Parameter] public EventCallback<string> DaysChanged { get; set; }
 
     private const string ViewYears = "Years", ViewMonths = "Months", ViewDays = "Days";

@@ -23,8 +23,7 @@
      route, which redirects here with ?dimension=Lender). The Year filter does not apply in
      this mode (the four cards ARE the years).
      UNVERIFIED beyond spot full-total checks.
-   Filters: Sales Office first, then Dimension, Measure, Year, Quarter; an office with no figures
-   shows KpiOfficeEmpty in place of the cards and charts.
+   Filters: Sales Office first (the procedures' @SalesOfficeId), then Dimension, Measure, Year, Quarter.
    The phone view (BusinessAnalysisMobile, inside KpiMobile) shows the same fields and drives
    the same filters. *@
 
@@ -46,11 +45,7 @@
                 <KpiField Caption="Quarter" Value="@_quarter.ToString()" ValueChanged="OnQuarter" Options="QuarterOptions" />
             </div>
 
-            @if (!Office.ShowsData)
-            {
-                <KpiOfficeEmpty />
-            }
-            else if (_loading)
+            @if (_loading)
             {
                 <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
             }
@@ -289,7 +284,7 @@
     }
 
     // The donut's and the trend's hosts are on the page: a dimension's figures, loaded, for an office that has them.
-    private bool ChartsShown => Office.ShowsData && !_loading && _error is null && !IsLender;
+    private bool ChartsShown => !_loading && _error is null && !IsLender;
 
     // Hand the current slices to the JS donut and wire the trend bars' hover popups.
     // Colours are resolved to real hex here (JS draws raw SVG and can't read var(--chart-n)),
@@ -387,11 +382,11 @@
                 _year = boot.Db.ReportDate().Year;
             }
 
-            // Cached per (dimension + measure + year + quarter + report date): instant on a
+            // Cached per (dimension + measure + year + quarter + office + report date): instant on a
             // repeat open / filter flick-back, one DB hit the first time. _dimension is in the
             // key, so the Lender payload and each dimension payload occupy distinct entries.
             var entry = await KpiCache.GetOrLoad(
-                KpiCache.Key("BusinessAnalysis", _dimension, _measure, _year, _quarter),
+                KpiCache.Key("BusinessAnalysis", _dimension, _measure, _year, _quarter, Office.OfficeId),
                 LoadPayload);
             Apply(entry.Data);
             _asOf = entry.AsAt;
@@ -420,7 +415,7 @@
         if (IsLender)
         {
             // (lender, year) with the same lender's figure for the year before (to date for the report year).
-            var lenderRows = new BusinessAnalysisLenderService(cms.Db).GetByLender(_measure, _quarter);
+            var lenderRows = new BusinessAnalysisLenderService(cms.Db).GetByLender(_measure, _quarter, Office.OfficeId);
             // the latest LenderCardCount years that have data, displayed oldest-left to
             // newest-right (2023 … 2026) to match the report layout
             var lenderYears = lenderRows.Select(r => r.Yr).Distinct()
@@ -429,7 +424,7 @@
             return (new Payload(new(), new(), new(), new(), lenderRows, lenderYears), asAt);
         }
 
-        var rows = new BusinessAnalysisService(cms.Db).GetAnalysis(_dimension, _measure, _quarter);
+        var rows = new BusinessAnalysisService(cms.Db).GetAnalysis(_dimension, _measure, _quarter, Office.OfficeId);
 
         var allYears = rows.Select(r => r.Yr).Distinct().OrderByDescending(y => y).ToList();
 
@@ -465,7 +460,7 @@
         try
         {
             var (entry, changed) = await KpiCache.RefreshAsync(
-                KpiCache.Key("BusinessAnalysis", _dimension, _measure, _year, _quarter),
+                KpiCache.Key("BusinessAnalysis", _dimension, _measure, _year, _quarter, Office.OfficeId),
                 LoadPayload);
             _refreshedOn = entry.LoadedAtUtc;
             if (changed)
@@ -485,18 +480,8 @@
     private async Task OnYear(string v)      { _year = int.TryParse(v, out var y) ? y : _year; await Load(); }
     private async Task OnQuarter(string v)   { _quarter = int.TryParse(v, out var q) ? q : 0; await Load(); }
 
-    // The Sales Office (full view or phone) shows the figures or KpiOfficeEmpty, so the JS charts' hosts go and
-    // come back with it: stop the trend's resize watcher while its host is still there, and draw both again
-    // once they are back (OnAfterRenderAsync waits for ChartsShown).
-    private async Task OnOffice()
-    {
-        if (!Office.ShowsData && _module is not null && !IsLender)
-        {
-            try { await _module.InvokeVoidAsync("disposeTrend", _barsHost); }
-            catch (JSDisconnectedException) { }
-        }
-        _pieDirty = true;
-    }
+    // The Sales Office (full view or phone): KpiOfficeState holds the choice, the load reads it - as a filter.
+    private Task OnOffice() => Load();
 
     private static readonly KpiOption[] DimensionOptions = _dimensions.Select(d => new KpiOption(d, d)).ToArray();
     private static readonly KpiOption[] MeasureOptions = { new("AF", "AF"), new("TFI", "TFI") };

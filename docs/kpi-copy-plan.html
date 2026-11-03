@@ -116,8 +116,10 @@ td { color: var(--text-2); }
     <div class="it"><span class="n">pip-pf-apps-out = 20.90.27.132</span><span class="tag">static IP</span></div>
     <div class="it"><span class="n">nat-pf-apps, vnet-pf-apps</span><span class="tag">route out</span></div>
     <div class="it"><span class="n">pf-kpi (Kpi.Web) + KpiPull</span><span class="tag">collects</span></div>
+    <div class="it"><span class="n">pf-kpi/staging</span><span class="tag">next release</span></div>
     <div class="it"><span class="n">pf-sql-uk / CMS_KPI</span><span class="tag">figures</span></div>
-    <p class="sec">Where to copy from is set in the site: Settings &gt; Integrations &gt; CMS data source.</p></div>
+    <div class="it"><span class="n">kv-pf-apps-uk</span><span class="tag">key ring</span></div>
+    <p class="sec">Where to copy from is set in the site: Settings &gt; Integrations &gt; CMS data source. Plan <code>plan-pf-apps</code> is P0v3 (29 Oct): a release goes to the staging slot, is checked there, then swapped in - no downtime.</p></div>
 </div>
 
 <h2>3. One copy, step by step</h2>
@@ -156,21 +158,23 @@ td { color: var(--text-2); }
   <tr><td>The views in CMS, the copies outside it (18 Oct)</td><td>The views name CMS's columns, so they live where a CMS change would break them. The copies (65,000 rows every 10 minutes) stay out of CMS_Live and its transaction log.</td></tr>
   <tr><td>SQL Server Agent, not CMS.Scheduler or a program</td><td>The work is one stored procedure. Agent runs it inside the server with no exe, no credentials and no CMS release to change it - and it is what starts CMS.Scheduler anyway.</td></tr>
   <tr><td>A dedicated static IP</td><td>App Service's own outbound addresses (31 of them) are shared with other Azure customers; the office rule should admit PF alone.</td></tr>
+  <tr><td>Stage emptied by TRUNCATE (29 Oct)</td><td>Stage's tables are heaps; under read-committed snapshot a DELETE left every load's pages allocated (Stage.Lead reached 4.3 GB for 25,000 rows) until a publish ran past the site's 10-minute limit. <code>Stage.spClear</code> truncates, as a user that may alter Stage and nothing else.</td></tr>
+  <tr><td>Deployment slots, the key ring in CMS_KPI (3 Nov)</td><td>Steve wanted releases without downtime. Both slots must share one key ring or a swap signs everyone out and the saved secrets (the data source password among them) can't be read. In the database (<code>Auth.DataProtectionKeys</code>) rather than Azure Storage: Steve's Contributor role can't grant an identity access to storage, and both slots already reach CMS_KPI. Each key is wrapped by a Key Vault key (access policies, which Contributor can set). Only the live slot copies (<code>Kpi:BackgroundWork</code>, a slot setting).</td></tr>
   <tr><td>No certificate on PF-APP1's SQL Server (for now)</td><td>The connection is encrypted; without a certificate it can't also verify the server. The address is locked both ways, so Steve chose not to ask PCS for one.</td></tr>
 </table>
 
-<h2>7. Status (18 October 2026)</h2>
+<h2>7. Status (3 November 2026)</h2>
 <table>
   <tr><th>Step</th><th>Status</th></tr>
-  <tr><td>CMS migration <code>mgKpiExport</code> on CMS_Live; CMS 1.0.1.1426 published</td><td>Done</td></tr>
-  <tr><td>KPI_Export v3 and its two Agent jobs on PF-APP1; first nightly run by hand (25,002 leads)</td><td>Done</td></tr>
-  <tr><td>The site's login <code>kpi_site_azure</code>, its limits proved</td><td>Done</td></tr>
-  <tr><td>Static IP 20.90.27.132, proven as the site's only way out</td><td>Done</td></tr>
-  <tr><td>The site redeployed on the matching code; the CMS data source card</td><td>Done</td></tr>
-  <tr><td><code>grant-push</code> for the site's identity</td><td>To do (Steve, any time)</td></tr>
-  <tr><td>PCS's port forward</td><td>Requested 16 Oct</td></tr>
-  <tr><td>Connect the card; first live copy; 241-report comparison against CMS_Live</td><td>After PCS</td></tr>
-  <tr><td>Tidy Azure: drop <code>kpi-push-office</code>, password sign-in off, remove <code>pf-office</code> rule</td><td>Done</td></tr>
+  <tr><td>CMS migration <code>mgKpiExport</code> on CMS_Live; CMS 1.0.1.1426 published</td><td>Done 18 Oct</td></tr>
+  <tr><td>KPI_Export v3 and its two Agent jobs on PF-APP1; first nightly run by hand (25,002 leads)</td><td>Done 18 Oct</td></tr>
+  <tr><td>The site's login <code>kpi_site_azure</code>, its limits proved</td><td>Done 18 Oct</td></tr>
+  <tr><td>Static IP 20.90.27.132, proven as the site's only way out</td><td>Done 16 Oct</td></tr>
+  <tr><td><code>grant-push</code> for the site's identity; PCS's port forward; the CMS data source card connected</td><td>Done - the site copies CMS_Live's figures</td></tr>
+  <tr><td>Tidy Azure: drop <code>kpi-push-office</code>, password sign-in off, remove <code>pf-office</code> rule</td><td>Done 18 Oct</td></tr>
+  <tr><td>Copy fix (Stage by TRUNCATE); Data sync's Pause, Check every and Copy now; plan to P0v3</td><td>Done 29 Oct</td></tr>
+  <tr><td>Staging slot, Key Vault <code>kv-pf-apps-uk</code>, the key ring moved into CMS_KPI</td><td>Slot and vault made 3 Nov; the move goes with the first swap</td></tr>
+  <tr><td>241-report comparison against CMS_Live</td><td>To do</td></tr>
 </table>
 
 <h2>8. Retiring the CMS copy of the KPIs</h2>
@@ -184,7 +188,7 @@ td { color: var(--text-2); }
 </table>
 <p><b>What stays in CMS:</b> the <code>KpiExport</code> schema, and the desktop's own Bad Debt and Exposure procedures (<code>OB.AnnualBadDebtList</code>, <code>Reports.Exposure</code>), which the desktop uses and the nightly snapshot calls. Each report's calculation already lives in the KPI repo (<code>Rpt.sp*</code> in CMS_KPI, matched 241 of 241 against CMS). Once WebKPI goes there is nothing left to compare with, so the last step before removing it is one final full comparison.</p>
 
-<p class="footer">PerformanceFinance.Kpi · docs/kpi-copy-plan.html · the design as built, 18 October 2026 · switch-on steps: docs/kpi-pull-runbook.md</p>
+<p class="footer">PerformanceFinance.Kpi · docs/kpi-copy-plan.html · the design as built, updated 3 November 2026 · switch-on steps: docs/kpi-pull-runbook.md</p>
 </main>
 </body>
 </html>

@@ -58,7 +58,8 @@
             {
                 var reports = _visible.Where(r => r.Section == section).ToList();
                 if (reports.Count == 0) continue;
-                <div class="nav-section">
+                @* Shire's own section in Shire's colours (3 Nov 2026, Steve - easy to tell apart) *@
+                <div class="nav-section @(section == KpiReports.Shire ? "kpi-nav-shire" : "")">
                     <div class="nav-section-heading">@section</div>
                     <ul class="nav-list">
                         @foreach (var r in reports) { @Row(r) }
@@ -119,8 +120,10 @@
     private RenderFragment Row(KpiReport r) => __builder =>
     {
         var fav = Favourites.Contains(r.Slug);
-        <li class="kpi-navrow">
-            @if (r.Slug == "sales-performance") { @NavItemSvg(r.Slug, r.Label, TargetDartSvg) } else { @NavItem(r.Slug, r.Label, r.Icon) }
+        @* the open report shades its WHOLE row, star included (Steve, 3 Nov 2026); a Shire report is marked as one wherever
+           it's listed (Favourites has no Shire section to colour it) *@
+        <li class="kpi-navrow @(r.Slug == Active ? "kpi-navrow-on" : "") @(r.Section == KpiReports.Shire ? "kpi-navrow-shire" : "")">
+            @if (r.Slug is "sales-performance" or "shire-sales-performance") { @NavItemSvg(r.Slug, r.Label, TargetDartSvg) } else { @NavItem(r.Slug, r.Label, r.Icon) }
             @if (!_collapsed)
             {
                 <button type="button" class="kpi-navstar @(fav ? "kpi-on" : "")" aria-pressed="@(fav ? "true" : "false")"

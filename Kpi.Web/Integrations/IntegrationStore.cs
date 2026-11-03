@@ -185,6 +185,52 @@ public sealed class IntegrationStore(IDbContextFactory<KpiDbContext> dbs, IDataP
     }
 
     /// <summary>
+    /// Saves Shire's Salesforce (Shire/ShireSalesforce) - already tested by the caller - and, when given, a new Consumer Key
+    /// and Secret (both encrypted; blank keeps the saved pair).
+    /// </summary>
+    public async Task SaveShireSalesforceAsync(KpiUser actor, string domain, string? name, string? newKey, string? newSecret, bool enabled)
+    {
+        await using var db = await dbs.CreateDbContextAsync();
+        var row = await TrackedAsync(db, Shire.ShireSalesforce.Provider);
+        var old = ReadSettings<Shire.ShireSalesforceSettings>(row);
+        var hint = old?.KeyHint ?? "";
+        var changes = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(newKey) || !string.IsNullOrWhiteSpace(newSecret))
+        {
+            var saved = row.SecretsCipher is null ? null : ReadSecrets<Shire.ShireSalesforceSecrets>(row);
+            var key = string.IsNullOrWhiteSpace(newKey) ? saved?.ConsumerKey : newKey.Trim();
+            var secret = string.IsNullOrWhiteSpace(newSecret) ? saved?.ConsumerSecret : newSecret.Trim();
+            if (string.IsNullOrEmpty(key) || string.IsNullOrEmpty(secret)) throw new InvalidOperationException("Enter the Consumer Key and the Consumer Secret.");
+            row.SecretsCipher = _secrets.Protect(JsonSerializer.Serialize(new Shire.ShireSalesforceSecrets(key, secret)));
+            row.SecretsUpdatedUtc = DateTime.UtcNow;
+            hint = key.Length > 10 ? $"{key[..4]}…{key[^4..]}" : "saved";
+            changes.Add("a new key and secret");
+        }
+        if (row.SecretsCipher is null) throw new InvalidOperationException("Enter the Consumer Key and the Consumer Secret.");
+
+        var settings = new Shire.ShireSalesforceSettings(domain, hint, string.IsNullOrWhiteSpace(name) ? null : name.Trim());
+        if (row.SettingsJson != JsonSerializer.Serialize(settings)) changes.Add($"{Shire.ShireSalesforceSettings.Title(settings)} at {domain}");
+        row.SettingsJson = JsonSerializer.Serialize(settings);
+
+        if (enabled != row.Enabled) changes.Add(enabled ? "copying on" : "copying off");
+        row.Enabled = enabled;
+
+        if (row.Status != IntegrationStatus.Connected)
+        {
+            row.Status = IntegrationStatus.Connected;
+            row.ConnectedByUserId = actor.Id;
+            row.ConnectedUtc = DateTime.UtcNow;
+        }
+        row.LastOkUtc = DateTime.UtcNow;   // it has just signed in
+        row.UpdatedByUserId = actor.Id;
+        row.UpdatedUtc = DateTime.UtcNow;
+        AuditLog.Add(db, AuditEvents.IntegrationChanged, actor, null,
+            $"Salesforce (Shire) saved{(changes.Count > 0 ? ": " + string.Join(", ", changes) : "")}");
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
     /// Saves the CMS desktop integration (Views/CmsDesktop): the reports CMS may open (and their header), on/off, and when
     /// given a NEW SECRET - which raises the generation, so every session opened with the old one ends.
     /// </summary>

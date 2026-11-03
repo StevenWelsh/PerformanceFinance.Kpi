@@ -1,11 +1,12 @@
 @using System.Globalization
 @using Kpi.Web.Components.Shared.Kpis.Mobile
 
-@* Minimum IRR on a phone, portrait: Period and Division, the period's deals below the minimum
+@* Minimum IRR on a phone, portrait: Sales Office, Period and Division, the period's deals below the minimum
    IRR with its totals, then a card per salesperson, largest AF first. The page's own data and filters. *@
 
 <KpiMobileFilters>
-    <div class="kpim-filters" style="--kpim-cols:2">
+    <div class="kpim-filters" style="--kpim-cols:3">
+        <KpiOfficeField Changed="OfficeChanged" />
         <KpiField Caption="Period" Value="@Period" ValueChanged="PeriodChanged" Options="MinimumIrrMobileLandscape.PeriodOptions" />
         <KpiField Caption="Division" Value="@DivisionId.ToString(CultureInfo.InvariantCulture)"
                   ValueChanged="DivisionChanged" Options="DivisionOptions" />
@@ -98,6 +99,9 @@ else
     [Parameter] public bool Loading { get; set; }
     [Parameter] public string? Error { get; set; }
     [Parameter] public EventCallback<string> DivisionChanged { get; set; }
+
+    /// <summary>The Sales Office was changed here - the page's handler, which reloads for it (KPI site).</summary>
+    [Parameter] public EventCallback OfficeChanged { get; set; }
 
     /// <summary>Month, Quarter or Year - shared with the landscape view, so turning the phone keeps it.</summary>
     [Parameter] public string Period { get; set; } = "Year";

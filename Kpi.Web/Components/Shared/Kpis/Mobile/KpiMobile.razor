@@ -26,7 +26,7 @@
 </HeadContent>
 
 <CascadingValue Name="KpiPhone" Value="_isPhone">
-<div class="kpim @(Landscape is null ? "" : "kpim-has-land")" style="display: none">
+<div class="kpim @(Landscape is null ? "" : "kpim-has-land") @(IsShire ? "kpi-shire" : "")" style="display: none">
     @if (MenuPage)
     {
         <KpiMobileMenu AsPage="true" />
@@ -53,8 +53,8 @@
             <div class="kpim-bar-dates">
                 @if (AsAt is not null)
                 {
-                    var status = DataStatus.Get();
-                    var stale = Kpi.Web.Data.Kpis.KpiDataStatus.StaleNote(status);
+                    var status = IsShire ? ShireStatus.Get() : DataStatus.Get();
+                    var stale = IsShire ? Kpi.Web.Shire.ShireDataStatus.StaleNote(status) : Kpi.Web.Data.Kpis.KpiDataStatus.StaleNote(status);
                     <span class="@(stale is null ? "" : "kpi-stale")" title="@stale">
                         @if (stale is not null) { <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> }
                         As at @Kpi.Web.Data.Kpis.KpiDataStatus.AsAtText(AsAt.Value, status)
@@ -138,6 +138,11 @@
 
     /// <summary>Landscape content. When set, turning the phone shows this in place of the portrait content.</summary>
     [Parameter] public RenderFragment? Landscape { get; set; }
+
+    /// <summary>A Shire report (Kpi.Web/Shire): Shire's colours, and the Shire copy's "As at".</summary>
+    [Parameter] public bool IsShire { get; set; }
+
+    [Inject] private Kpi.Web.Shire.ShireDataStatus ShireStatus { get; set; } = default!;
 
     /// <summary>The KPI home: the phone shows the reports menu as the page itself.</summary>
     [Parameter] public bool MenuPage { get; set; }

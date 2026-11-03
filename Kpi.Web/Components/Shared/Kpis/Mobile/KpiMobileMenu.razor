@@ -55,7 +55,7 @@
                 {
                     var reports = Visible.Where(r => r.Section == section).ToList();
                     if (reports.Count == 0) continue;
-                    <div class="kpim-menu-section">
+                    <div class="kpim-menu-section @(section == KpiReports.Shire ? "kpim-menu-shire" : "")">
                         <div class="kpim-menu-heading">@section</div>
                         @foreach (var r in reports)
                         {
@@ -134,7 +134,7 @@
     {
         var on = r.Slug == Active;
         var fav = Favourites.Contains(r.Slug);
-        <div class="kpim-menu-row @(on ? "kpim-on" : "")">
+        <div class="kpim-menu-row @(on ? "kpim-on" : "") @(r.Section == KpiReports.Shire ? "kpim-menu-row-shire" : "")">
             <a href="/kpis/@r.Slug" class="kpim-menu-item" aria-current="@(on ? "page" : null)">
                 <i class="bi @r.Icon" aria-hidden="true"></i>
                 <span>@r.Label</span>

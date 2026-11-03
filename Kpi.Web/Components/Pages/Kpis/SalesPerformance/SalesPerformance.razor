@@ -6,6 +6,7 @@
 @inject IJSRuntime JS
 @inject Kpi.Web.Data.Kpis.KpiCache KpiCache
 @inject Kpi.Web.Data.Kpis.ReportDateProvider ReportDate
+@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
 @implements IAsyncDisposable
 @using Kpi.Web.Reports
 @using Kpi.Web.Components.Shared.Kpis
@@ -20,7 +21,9 @@
    week-by-week bar race, which shows the same two target lines with a key under its standings.
    The AF/TFI toggle at the top drives tables, target panels and races alike.
    Both years fit one page: no card footer, the race button lives in the header.
-   Each (measure, year) loads and caches on its own, the first time a view shows it. *@
+   Each (measure, year) loads and caches on its own, the first time a view shows it.
+   KPI site (3 Nov 2026, Steve): the Sales Office is the first filter, before Measure - the league, its "Other" and
+   the timelapse count only that office's deals (the core salespeople stay Cfg.SalespersonScope's). *@
 
 <PageTitle>Sales Performance — KPIs</PageTitle>
 
@@ -31,6 +34,7 @@
         <KpiPanel @ref="_panel" Title="Sales Performance" AsAt="_asOf" RefreshedOn="_refreshedOn"
                   RefreshRequested="OnRefreshRequested">
             <div class="kpi-filters kpi-sp-filters">
+                <KpiOfficeField Changed="OnOffice" />
                 <KpiField Caption="Measure" Value="@_measure" Options="MeasureOptions"
                           ValueChanged="@(v => OnMeasure(new ChangeEventArgs { Value = v }))" />
             </div>
@@ -197,7 +201,7 @@
 
 @* the phone view (KpiMobile): one year at a time, the league table, the target chart and the timelapse *@
 <SalesPerformanceMobile AsAt="_asOf"
-                        Measure="@_measure" MeasureChanged="@(v => OnMeasure(new ChangeEventArgs { Value = v }))"
+                        Measure="@_measure" MeasureChanged="@(v => OnMeasure(new ChangeEventArgs { Value = v }))" OfficeChanged="OnOffice"
                         Years="YearList" Year="PhoneYear" YearChanged="OnPhoneYear"
                         League="_league" Targets="_targets" Loading="@(_error is null && (_loading || !_league.ContainsKey(PhoneYear)))" Error="@_error"
                         LoadRace="yr => BuildRace(yr, true)"
@@ -419,8 +423,9 @@
     // first time; GetOrLoad is single-flight, so concurrent viewers load once. Writes only for the current load.
     private async Task LoadYear(int yr, int seq)
     {
-        var measure = _measure;
-        var entry = await KpiCache.GetOrLoad(KpiCache.Key("SalesPerformance", measure, yr), () => LoadYearData(yr, measure));
+        var (measure, office) = (_measure, Office.OfficeId);
+        var entry = await KpiCache.GetOrLoad(KpiCache.Key("SalesPerformance", measure, yr, office),
+                                             () => LoadYearData(yr, measure, office));
         if (seq != _loadSeq) return;
         _league[yr] = entry.Data.League;
         _targets[yr] = entry.Data.Targets;
@@ -429,12 +434,12 @@
 
     // Pure loader: opens a one-shot session, runs the procs for the year, returns its data + the as-at.
     // No component-field mutation here, so the cache can call this off the render path during a refresh.
-    private async Task<(YearData, DateTime)> LoadYearData(int yr, string measure)
+    private async Task<(YearData, DateTime)> LoadYearData(int yr, string measure, int? office)
     {
         using var cms = await SessionFactory.BeginAsync();
         var asAt = cms.Db.ReportDate();
         var svc = new SalesLeagueTableService(cms.Db);
-        return (new YearData(svc.GetLeague(yr, measure), svc.GetTargets(yr, measure)), asAt);
+        return (new YearData(svc.GetLeague(yr, measure, office), svc.GetTargets(yr, measure)), asAt);
     }
 
     // A year picked on either view: shown at once when loaded (the cache still answers, as other viewers may have
@@ -470,13 +475,13 @@
         if (_loading) return;
         try
         {
-            var measure = _measure;
+            var (measure, office) = (_measure, Office.OfficeId);
             var seq = _loadSeq;
             var changed = false;
             foreach (var yr in WantedYears().ToList())
             {
                 var (entry, ch) = await KpiCache.RefreshAsync(
-                    KpiCache.Key("SalesPerformance", measure, yr), () => LoadYearData(yr, measure));
+                    KpiCache.Key("SalesPerformance", measure, yr, office), () => LoadYearData(yr, measure, office));
                 if (seq != _loadSeq) return;
                 _league[yr] = entry.Data.League;
                 _targets[yr] = entry.Data.Targets;
@@ -496,6 +501,13 @@
     {
         _measure = e.Value?.ToString() ?? "TFI";
         // a measure change invalidates a running race — close it (it was built on the old measure)
+        await CloseRace();
+        await Load();
+    }
+
+    // The Sales Office (KPI site; full view or phone): as a measure change - the race was built for the old office
+    private async Task OnOffice()
+    {
         await CloseRace();
         await Load();
     }
@@ -545,7 +557,7 @@
     {
         using var cms = await SessionFactory.BeginAsync();
         var svc = new SalesLeagueTableService(cms.Db);
-        var weeks = svc.GetTimelapse(yr, _measure);
+        var weeks = svc.GetTimelapse(yr, _measure, Office.OfficeId);
         // targets for the race's lines — already loaded for the page, reused here. Only the
         // people actually IN the race matter, and only non-zero targets draw a line.
         var raceIds = weeks.Select(w => w.SalesId).Distinct().ToHashSet();

@@ -37,7 +37,7 @@ public sealed class KpiClaimsPrincipalFactory(
         var id = await base.GenerateClaimsAsync(user);
         var everything = user.AllReports || await UserManager.IsInRoleAsync(user, KpiRoles.SystemAdmin);
         id.AddClaim(new Claim(KpiClaims.TwoFactor, user.TwoFactorEnabled ? "on" : "off"));
-        id.AddClaim(new Claim(KpiClaims.Reports, everything ? KpiReportAccess.Everything : user.Reports ?? ""));
+        id.AddClaim(new Claim(KpiClaims.Reports, KpiReportAccess.ClaimFor(everything, user.Reports)));
         id.AddClaim(new Claim(KpiClaims.Name, user.DisplayName.Length > 0 ? user.DisplayName : user.Email ?? ""));
         return id;
     }
@@ -67,14 +67,28 @@ public static class KpiPolicies
     }
 }
 
-/// <summary>Who may open which report: the System Admin and "all reports" see everything; a User sees the reports
-/// ticked for them in Settings > Users. The menus ask it to HIDE what isn't theirs; the pages ask it to refuse.</summary>
+/// <summary>Who may open which report: the System Admin and "all reports" see everything but the tick-only reports
+/// (Shire's); a User sees the reports ticked for them in Settings > Users; a tick-only report needs its own tick, whoever
+/// they are. The menus ask it to HIDE what isn't theirs; the pages ask it to refuse.</summary>
 public static class KpiReportAccess
 {
     public const string Everything = "*";
 
-    public static bool CanSee(ClaimsPrincipal user, string slug) =>
-        user.FindFirstValue(KpiClaims.Reports) is { } v && (v == Everything || v.Split(',').Contains(slug));
+    public static bool CanSee(ClaimsPrincipal user, string slug)
+    {
+        if (user.FindFirstValue(KpiClaims.Reports) is not { } v) return false;
+        var list = v.Split(',');
+        return list.Contains(slug) || (list.Contains(Everything) && !KpiReports.IsTickOnly(slug));
+    }
+
+    /// <summary>The claim: the ticked slugs; or for every report "*", plus the tick-only reports ticked by name
+    /// ("*,shire-year-on-year").</summary>
+    public static string ClaimFor(bool everything, string? reports)
+    {
+        if (!everything) return reports ?? "";
+        var ticked = (reports ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
+        return string.Join(',', ticked.Where(KpiReports.IsTickOnly).Prepend(Everything));
+    }
 
     /// <summary>The report a page or address is: "" for the KPI home, null for anything that isn't a report.</summary>
     public static string? SlugFor(string? path)

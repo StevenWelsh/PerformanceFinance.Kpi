@@ -10,7 +10,7 @@
 @* Sales Summary — a grid of comparison cards: each division (All + each real
    division) across Year / Quarter / Month to date, this year vs last. Each cell
    is a SalesSummaryPanel that loads its own data. The Sales Office filter sits
-   above the grid. UNVERIFIED against live numbers. *@
+   above the grid; each cell is for the chosen office. UNVERIFIED against live numbers. *@
 
 <PageTitle>Sales Summary — KPIs</PageTitle>
 
@@ -25,11 +25,7 @@
                     <KpiOfficeField Changed="StateHasChanged" />
                 </div>
 
-                @if (!Office.ShowsData)
-                {
-                    <KpiOfficeEmpty />
-                }
-                else if (_loading)
+                @if (_loading)
                 {
                     <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
                 }
@@ -47,8 +43,9 @@
                         {
                             @foreach (var div in _divisions)
                             {
-                                <SalesSummaryPanel @key="Key(period, div.Id)"
-                                                   DivisionId="div.Id" Title="@div.Title" Period="@period" />
+                                <SalesSummaryPanel @key="Key(period, div.Id, Office.OfficeId)"
+                                                   DivisionId="div.Id" Title="@div.Title" Period="@period"
+                                                   SalesOfficeId="Office.OfficeId" />
                             }
                         }
                     </div>
@@ -65,7 +62,8 @@
 @code {
     private static readonly string[] Periods = { "Year", "Quarter", "Month" };
 
-    private static string Key(string period, int divisionId) => period + "-" + divisionId;
+    // the office too (KPI site): a new Sales Office makes new cells, which load their own figures
+    private static string Key(string period, int divisionId, int? officeId) => period + "-" + divisionId + "-" + officeId;
 
     // (DivisionId, Title, Name) — "All" (-1) plus each real division; the phone picks by Name.
     private List<(int Id, string Title, string Name)>? _divisions;

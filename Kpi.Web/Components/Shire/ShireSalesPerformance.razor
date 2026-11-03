@@ -1,0 +1,354 @@
+@page "/kpis/shire-sales-performance"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@inject Kpi.Web.Shire.ShireFiguresSignal Figures
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Pages.Kpis.SalesPerformance
+@using Kpi.Web.Shire
+
+@* Shire Sales Performance (3 Nov 2026, Steve): PF's Sales Performance (Components/Pages/Kpis/SalesPerformance) over Shire's
+   Salesforce - a row per year (today's year on top; below it any year from 2021, picked in that row's league table header,
+   the year before by default): a Sales League Table of Shire's salespeople (opportunity owners, as their own lists) ranked by
+   the measure, beside a column chart of the same. Figures mirror Shire's "Closed Won ... by Salesperson" report: Closed Won by
+   Close Date (Shire.spSalesLeague). Changed from PF's: the title says Shire; no Sales Office; Measure = Amount Financed /
+   Income; Proposed to PF (All / Yes / No); every salesperson ranked (no core / "Other" split); NO target lines (Shire has no
+   targets); no timelapse. In Shire's colours (kpi-shire). *@
+
+<PageTitle>Shire Sales Performance — KPIs</PageTitle>
+
+<div class="kpi-shell kpi-shire">
+    <KpiSidebar Active="shire-sales-performance" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Shire Sales Performance" AsAt="_asOf" RefreshedOn="_refreshedOn" IsShire="true"
+                  RefreshRequested="OnRefreshRequested">
+            <div class="kpi-filters kpi-sp-filters">
+                <KpiField Caption="Measure" Value="@_measure" Options="ShireReports.MeasureOptions"
+                          ValueChanged="@(v => OnMeasure(new ChangeEventArgs { Value = v }))" />
+                <KpiField Caption="Proposed to PF" Value="@_pf" Options="ShireReports.ProposedToPFOptions"
+                          ValueChanged="@(v => OnProposedToPF(new ChangeEventArgs { Value = v }))" />
+            </div>
+
+            @if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+            else
+            {
+                @foreach (var (yr, pick) in new[] { (_reportYear, false), (CompareYear, true) })
+                {
+                    var loaded = _league.ContainsKey(yr);
+                    var rows = _league.TryGetValue(yr, out var r) ? r : new();
+                    var total = rows.Sum(x => x.MeasureValue);
+
+                    <div class="slt-yearrow @(pick ? "slt-yearrow-pick" : "")">
+                        <div class="ss-card slt-tablecard">
+                            <div class="ss-card-head slt-head">
+                                @if (pick)
+                                {
+                                    <span class="slt-head-pick">
+                                        <span class="slt-yearfield kpim-compact">
+                                            <KpiField Caption="Year" Value="@yr.ToString(Inv)" ValueChanged="OnCompareYear" Options="YearOptions" />
+                                        </span>
+                                        <span>Sales League Table</span>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span>@yr - Sales League Table</span>
+                                }
+                            </div>
+                            @if (!loaded)
+                            {
+                                <div class="ss-loading"><span class="ss-spinner"></span> Loading @yr…</div>
+                            }
+                            else
+                            {
+                                <table class="slt-table">
+                                    <thead>
+                                        <tr><th class="slt-rank"></th><th class="slt-name">Salesperson</th><th class="slt-val">@ShireReports.MeasureLabel(_measure)</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (var i = 0; i < rows.Count; i++)
+                                        {
+                                            <tr>
+                                                <td class="slt-rank">@(i + 1)</td>
+                                                <td class="slt-name" title="@($"{rows[i].Deals:N0} deal{(rows[i].Deals == 1 ? "" : "s")}")">@rows[i].Salesperson</td>
+                                                <td class="slt-val">@Cur(rows[i].MeasureValue)</td>
+                                            </tr>
+                                        }
+                                        @* pad the shorter year with blank rows, so both tables stay the same height *@
+                                        @for (var i = rows.Count; i < _maxRows; i++)
+                                        {
+                                            <tr class="slt-blankrow"><td class="slt-rank"></td><td class="slt-name"></td><td class="slt-val"></td></tr>
+                                        }
+                                    </tbody>
+                                    <tfoot>
+                                        <tr><td class="slt-rank"></td><td class="slt-name"></td><td class="slt-val">@Cur(total)</td></tr>
+                                    </tfoot>
+                                </table>
+                            }
+                        </div>
+
+                        <div class="ss-card slt-targetcard">
+                            <div class="ss-card-head slt-head">
+                                <span>@yr - Sales by Salesperson</span>
+                            </div>
+                            @if (!loaded)
+                            {
+                                <div class="ss-loading"><span class="ss-spinner"></span> Loading @yr…</div>
+                            }
+                            else if (rows.Count == 0)
+                            {
+                                <div class="slt-tgt-empty">No Shire sales for @yr.</div>
+                            }
+                            else
+                            {
+                                @Chart(rows)
+                            }
+                        </div>
+                    </div>
+                }
+            }
+        </KpiPanel>
+    </main>
+</div>
+
+@* the phone view: one year at a time, the league table and (landscape) the chart *@
+<ShireSalesPerformanceMobile AsAt="_asOf"
+                             Measure="@_measure" MeasureChanged="@(v => OnMeasure(new ChangeEventArgs { Value = v }))"
+                             ProposedToPF="@_pf" ProposedToPFChanged="@(v => OnProposedToPF(new ChangeEventArgs { Value = v }))"
+                             Years="YearList" Year="PhoneYear" YearChanged="OnPhoneYear"
+                             League="_league" Loading="@(_error is null && (_loading || !_league.ContainsKey(PhoneYear)))" Error="@_error"
+                             AxisLabel="AxisLabel" NiceStep="NiceStep" FirstName="FirstName" />
+
+@code {
+    private string _measure = "AF";
+    private string _pf = "";
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    private int _reportYear;              // today's year: the top row, and the phone's default
+    private int? _compareYear;            // the full view's second row; none = the year before
+    private int? _phoneYear;              // the phone's year; none = the report year
+    private int CompareYear => _compareYear ?? _reportYear - 1;
+    private int PhoneYear => _phoneYear ?? _reportYear;
+
+    private List<int> YearList => _reportYear < ShireReports.FirstYear ? new()
+        : Enumerable.Range(ShireReports.FirstYear, _reportYear - ShireReports.FirstYear + 1).ToList();
+    private List<KpiOption> YearOptions => YearList.Select(y => new KpiOption(y.ToString(Inv), y.ToString(Inv))).ToList();
+
+    // every year loaded for the current measure and Proposed to PF choice, by year
+    private Dictionary<int, List<ShireLeagueRow>> _league = new();
+    private int _loadSeq;
+
+    // the longer of the two rosters on screen: the shorter table pads to it, and the chart columns line up
+    private int _maxRows => new[] { _reportYear, CompareYear }.Select(y => _league.TryGetValue(y, out var rows) ? rows.Count : 0).Max();
+
+    private IEnumerable<int> WantedYears() => new[] { _reportYear, CompareYear, PhoneYear }.Distinct();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Load();
+    }
+
+    private async Task Load()
+    {
+        var seq = ++_loadSeq;
+        _loading = true; _error = null; _league = new(); StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            using (var cms = await SessionFactory.BeginAsync())
+                _reportYear = new ShireReports(cms.Db).ReportDate().Year;
+            while (seq == _loadSeq && WantedYears().Where(y => !_league.ContainsKey(y)).Cast<int?>().FirstOrDefault() is int yr)
+                await LoadYear(yr, seq);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally
+        {
+            if (seq == _loadSeq) { _loading = false; StateHasChanged(); }
+        }
+    }
+
+    // the Shire copy's generation is part of the key: a copy makes every cached Shire figure obsolete (ShireFiguresSignal)
+    private string KeyFor(int yr, string measure, string pf) => KpiCache.Key("ShireSalesPerformance", Figures.Generation, measure, pf, yr);
+
+    private async Task LoadYear(int yr, int seq)
+    {
+        var (measure, pf) = (_measure, _pf);
+        var entry = await KpiCache.GetOrLoad(KeyFor(yr, measure, pf), () => LoadYearData(yr, measure, pf));
+        if (seq != _loadSeq) return;
+        _league[yr] = entry.Data;
+        if (yr == _reportYear) { _asOf = entry.AsAt; _refreshedOn = entry.LoadedAtUtc; }
+    }
+
+    private async Task<(List<ShireLeagueRow>, DateTime)> LoadYearData(int yr, string measure, string pf)
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var reports = new ShireReports(cms.Db);
+        return (reports.GetLeague(yr, measure, ShireReports.ProposedToPF(pf)), reports.ReportDate());
+    }
+
+    private async Task ShowYear(int yr)
+    {
+        if (_loading) return;
+        var seq = _loadSeq;
+        try { await LoadYear(yr, seq); }
+        catch (Exception ex) { _error = ex.Message; }
+        StateHasChanged();
+    }
+
+    private Task OnCompareYear(string value)
+    {
+        if (!int.TryParse(value, System.Globalization.NumberStyles.Integer, Inv, out var y)) return Task.CompletedTask;
+        _compareYear = y;
+        StateHasChanged();
+        return ShowYear(y);
+    }
+
+    private Task OnPhoneYear(int y)
+    {
+        _phoneYear = y;
+        StateHasChanged();
+        return ShowYear(y);
+    }
+
+    // KpiPanel calls this on its 10-min timer, return-to-view, and when a Shire copy lands
+    private async Task OnRefreshRequested()
+    {
+        if (_loading) return;
+        try
+        {
+            var (measure, pf) = (_measure, _pf);
+            var seq = _loadSeq;
+            var changed = false;
+            foreach (var yr in WantedYears().ToList())
+            {
+                var (entry, ch) = await KpiCache.RefreshAsync(KeyFor(yr, measure, pf), () => LoadYearData(yr, measure, pf));
+                if (seq != _loadSeq) return;
+                _league[yr] = entry.Data;
+                if (yr == _reportYear) _refreshedOn = entry.LoadedAtUtc;
+                changed |= ch;
+            }
+            if (changed)
+            {
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private Task OnMeasure(ChangeEventArgs e)
+    {
+        _measure = e.Value?.ToString() == "Income" ? "Income" : "AF";
+        return Load();
+    }
+
+    private Task OnProposedToPF(ChangeEventArgs e)
+    {
+        _pf = e.Value?.ToString() ?? "";
+        return Load();
+    }
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+
+    private static readonly System.Globalization.CultureInfo Inv = System.Globalization.CultureInfo.InvariantCulture;
+    private static string N(double v) => v.ToString("0.##", Inv);
+
+    // £ axis label - compact k/m, as PF's Sales Performance
+    private static string AxisLabel(double v)
+    {
+        if (v >= 1_000_000d) return "£" + (v / 1_000_000d).ToString("0.##", Inv) + "m";
+        if (v >= 1_000d) return "£" + (v / 1_000d).ToString("0.#", Inv) + "k";
+        return "£" + v.ToString("0", Inv);
+    }
+
+    // a "nice" round gridline step that gives ~4 lines up to the max (1/2/5 x 10^n)
+    private static double NiceStep(double max, int target = 4)
+    {
+        if (max <= 0) return 1;
+        var raw = max / target;
+        var mag = Math.Pow(10, Math.Floor(Math.Log10(raw)));
+        var norm = raw / mag;
+        var step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+        return step * mag;
+    }
+
+    // columns are narrow - show the first name
+    private static string FirstName(string full)
+    {
+        if (string.IsNullOrWhiteSpace(full)) return "";
+        var sp = full.Split(' ');
+        return sp.Length > 1 ? sp[0] : full;
+    }
+
+    /// <summary>
+    /// PF's Sales Target Performance column chart without the target lines: a column per salesperson (largest first), a £
+    /// axis with gridlines, the amount above each column and the first name below; hover for the detail. Each year scales
+    /// to its own tallest column (with headroom for its amount); the slots follow the longer roster on screen, so the two
+    /// years' columns line up. Unlike PF's fixed-shape chart it FILLS its card (3 Nov 2026, Steve: a big gap under it -
+    /// Shire's league lists every salesperson, so the cards are taller): the shapes stretch with the card, and the labels
+    /// are text laid over them (as PF's phone chart), so they never stretch.
+    /// </summary>
+    private RenderFragment Chart(List<ShireLeagueRow> rows) => __builder =>
+    {
+        const double W = 1000, H = 320;
+        const double padL = 64, padR = 16, padT = 26, padB = 30;
+        double plotW = W - padL - padR, plotH = H - padT - padB;
+
+        double scale = Math.Max(1, (double)rows.Select(x => x.MeasureValue).DefaultIfEmpty(0).Max()) * 1.08;
+        double step = NiceStep(scale, 5);
+        double niceMax = Math.Max(step, Math.Ceiling(scale / step) * step);
+        double Y(double v) => padT + (1 - Math.Min(Math.Max(v, 0), niceMax) / niceMax) * plotH;
+        double baseY = Y(0);
+
+        int slots = Math.Max(rows.Count, Math.Max(1, _maxRows));
+        double slot = plotW / slots;
+        double colW = Math.Max(16, Math.Min(90, slot * 0.46));
+        string X(double v) => (v / W * 100).ToString("0.###", Inv) + "%";
+        string Yp(double v) => (v / H * 100).ToString("0.###", Inv) + "%";
+        var grid = new List<double>();
+        for (double g = 0; g <= niceMax + step / 2; g += step) grid.Add(g);
+
+        <div class="shire-chart">
+            <svg class="shire-chart-svg" viewBox="0 0 @N(W) @N(H)" preserveAspectRatio="none" role="img"
+                 aria-label="Sales by salesperson">
+                @foreach (var g in grid)
+                {
+                    <line class="slt-gl" x1="@N(padL)" y1="@N(Y(g))" x2="@N(W - padR)" y2="@N(Y(g))" vector-effect="non-scaling-stroke" />
+                }
+                @for (var i = 0; i < rows.Count; i++)
+                {
+                    var b = rows[i];
+                    var cx = padL + (i + 0.5) * slot;
+                    var top = Y((double)b.MeasureValue);
+                    <rect class="slt-col" x="@N(cx - colW / 2)" y="@N(top)" width="@N(colW)" height="@N(Math.Max(0, baseY - top))">
+                        <title>@($"{b.Salesperson}\n{ShireReports.MeasureLabel(_measure)}: {Cur(b.MeasureValue)}\n{b.Deals:N0} deal{(b.Deals == 1 ? "" : "s")}")</title>
+                    </rect>
+                }
+            </svg>
+            @foreach (var g in grid)
+            {
+                <div class="shire-chart-ax" style="width:@X(padL - 8);top:@Yp(Y(g))">@AxisLabel(g)</div>
+            }
+            @for (var i = 0; i < rows.Count; i++)
+            {
+                var b = rows[i];
+                var cx = padL + (i + 0.5) * slot;
+                <div class="shire-chart-val" style="left:@X(cx - slot / 2);width:@X(slot);top:@Yp(Y((double)b.MeasureValue))">@AxisLabel((double)b.MeasureValue)</div>
+                <div class="shire-chart-name" style="left:@X(cx - slot / 2);width:@X(slot);top:@Yp(baseY)">@FirstName(b.Salesperson)</div>
+            }
+        </div>
+    };
+}

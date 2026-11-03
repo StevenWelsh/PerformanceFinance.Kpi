@@ -13,6 +13,8 @@
     --kpi-overlay: rgba(0, 0, 0, 0.45);
     --kpi-on-dark-rule: rgba(255, 255, 255, 0.35);
     --intg-twilio: #f22f46;             /* Twilio's own red, for its name on its card */
+    --shire-deep: #62368b;              /* the sidebar's Shire section: kpi.css's Shire values (it loads on report pages only) */
+    --shire-magenta: #b93491;
 }
 
 /* ---- account screens (inside CMS.Web's .login-card) -------------------------------------------------------- */
@@ -321,12 +323,30 @@ code.ed-value, .ed-address code, .ed-how code { font-family: Consolas, "Cascadia
     justify-content: center; font-size: 14px; }
 .kpi-navstar:hover { background: var(--sidebar-hover); color: var(--sidebar-fg); }
 .kpi-navstar.kpi-on { color: var(--kpim-star); }
+/* The open report shades its WHOLE row, star included, with the white edge down its left (3 Nov 2026, Steve: only the
+   link was shaded, which stopped short of the star - most visible on Shire's magenta). */
+.kpi-navrow.kpi-navrow-on { background: var(--sidebar-active); box-shadow: inset 3px 0 0 var(--sidebar-fg); }
+.app-nav .kpi-navrow.kpi-navrow-on > .nav-item.active,
+.app-nav .kpi-navrow.kpi-navrow-on > .nav-item.active:hover { background: none; border-left-color: transparent; }
+/* Tighter rows and headings, so every report fits one screen (3 Nov 2026, Steve). */
+.kpi-sidebar .app-nav .nav-item { padding-top: 5px; padding-bottom: 5px; }
+.kpi-sidebar .app-nav .nav-section-heading { padding-top: 9px; padding-bottom: 3px; }
+.kpi-sidebar .kpi-navstar { width: 26px; height: 26px; }
+/* The sidebar's SHIRE - SALESFORCE section in Shire's purple, the open report in magenta, on every page (kpi.css has the
+   Shire report pages and the phone menu). */
+.kpi-sidebar .nav-section.kpi-nav-shire { background: var(--shire-deep); border-top: 3px solid var(--shire-magenta); padding-bottom: 6px; margin-top: 8px; }
+.kpi-sidebar .kpi-nav-shire .nav-section-heading { color: var(--sidebar-fg); }
+.kpi-sidebar .kpi-nav-shire .nav-item:hover { background: var(--sidebar-hover); }
+.kpi-sidebar .kpi-nav-shire .kpi-navrow.kpi-navrow-on { background: var(--shire-magenta); }
+/* a Shire report listed elsewhere (Favourites): a magenta edge says it's Shire's */
+.kpi-sidebar .nav-section:not(.kpi-nav-shire) .kpi-navrow-shire:not(.kpi-navrow-on) { box-shadow: inset 3px 0 0 var(--shire-magenta); }
 
 /* ---- Settings > Users: the report ticks ------------------------------------------------------------------------ */
 .set-reports { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px 4px; max-height: 340px; overflow-y: auto; margin-bottom: 14px; }
 .set-reports .acc-check { margin: 0 0 7px; }
 .set-reports-all { font-weight: 600; color: var(--text) !important; }
 .set-reports-head { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-3); margin: 8px 0 6px; }
+.set-reports-hint { margin: -2px 0 6px; font-size: 12px; }
 
 /* ---- Settings on a phone: the tabs fit without their icons; the user list reads as cards ---------------------- */
 @media (max-width: 599px) {

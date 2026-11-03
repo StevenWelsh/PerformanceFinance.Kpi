@@ -297,7 +297,7 @@ else
 
     private bool Has(string? s) => s?.Contains(_filter.Trim(), StringComparison.OrdinalIgnoreCase) == true;
 
-    private static string ReportLabel(string slug) => KpiReports.All.FirstOrDefault(r => r.Slug == slug)?.Label ?? slug;
+    private static string ReportLabel(string slug) => KpiReports.NameOf(slug);
 
     private static int Pct(int n, int max) => max <= 0 ? 0 : Math.Max(4, n * 100 / max);
 

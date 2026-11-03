@@ -46,6 +46,7 @@
     [Parameter] public string Period { get; set; } = "Year";       // Year | Quarter | Month
     [Parameter] public int DivisionId { get; set; } = -1;          // -1 = all divisions
     [Parameter] public int SalespersonId { get; set; } = -1;       // -1 = not filtered by person
+    [Parameter] public int? SalesOfficeId { get; set; }            // KPI site: the Sales Office filter, null = every office
     [Parameter] public string Title { get; set; } = "All";
 
     private bool _loading = true;
@@ -68,7 +69,7 @@
         _ => "Year to date"
     };
 
-    private string ScopeKey => Period + "|" + DivisionId + "|" + SalespersonId;
+    private string ScopeKey => Period + "|" + DivisionId + "|" + SalespersonId + "|" + SalesOfficeId;
 
     // Whether the phone view is showing (KpiMobile): the card loads only then, so a desktop - where this
     // view is hidden - never runs its queries.
@@ -89,7 +90,7 @@
 
     private async Task Load()
     {
-        var (period, divisionId, salespersonId) = (Period, DivisionId, SalespersonId);
+        var (period, divisionId, salespersonId, salesOfficeId) = (Period, DivisionId, SalespersonId, SalesOfficeId);
         _shownKey = ScopeKey;
         var version = ++_version;
         _loading = true; _error = null;
@@ -99,8 +100,8 @@
             // the SAME cache entry as the desktop panel (SalesSummaryCells, KPI site 18 Oct 2026) - before, a phone
             // fetched every figure twice under two names
             var entry = await KpiCache.GetOrLoad(
-                Kpi.Web.Data.Kpis.SalesSummaryCells.Key(KpiCache, period, divisionId, salespersonId),
-                Kpi.Web.Data.Kpis.SalesSummaryCells.Loader(SessionFactory, period, divisionId, salespersonId));
+                Kpi.Web.Data.Kpis.SalesSummaryCells.Key(KpiCache, period, divisionId, salespersonId, salesOfficeId),
+                Kpi.Web.Data.Kpis.SalesSummaryCells.Loader(SessionFactory, period, divisionId, salespersonId, salesOfficeId));
             if (version != _version) return;
             _now = entry.Data.Now;
             _prev = entry.Data.Prev;
@@ -138,12 +139,12 @@
         return $"{newPct}% / {100 - newPct}%";
     }
 
-    // the change on last year: blue up, amber down, blank when last year is nothing
+    // the change on last year: blue up, amber down, a dash when last year is nothing (KPI site, 3 Nov 2026, Steve)
     private RenderFragment Delta(decimal prev, decimal now) => __builder =>
     {
         if (prev == 0m)
         {
-            <td></td>
+            <td class="kpim-ss-delta">–</td>
             return;
         }
         var pct = (now - prev) / Math.Abs(prev) * 100m;

@@ -5,6 +5,7 @@
 @inject Kpi.Web.Data.Kpis.KpiScripts Scripts
 @inject IJSRuntime JS
 @inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
 @implements IAsyncDisposable
 @using System.Globalization
 @using Kpi.Web.Reports
@@ -29,6 +30,7 @@
                   RefreshRequested="OnRefreshRequested">
           <div class="kpi-ma">
             <div class="kpi-filters">
+                <KpiOfficeField Changed="OnOffice" />
                 <KpiField Caption="Division" Value="@_divisionId.ToString(CultureInfo.InvariantCulture)"
                           ValueChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" Options="DivisionOptions" />
                 <KpiField Caption="Run over last" Value="@_days.ToString(CultureInfo.InvariantCulture)"
@@ -177,13 +179,13 @@
     <ChildContent>
         <MarginAnalysisMobile Years="_years" Months="_months" DaysRow="_days_row" Divisions="_divisions"
                               DivisionId="_divisionId" Days="_days" AsAt="_asOf" Loading="_loading" Error="@_error"
-                              DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))"
+                              DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" OfficeChanged="OnOffice"
                               DaysChanged="@(v => OnDays(new ChangeEventArgs { Value = v }))" />
     </ChildContent>
     <Landscape>
         <MarginAnalysisMobileLandscape Years="_years" Divisions="_divisions" DivisionId="_divisionId"
                                        Loading="_loading" Error="@_error"
-                                       DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" />
+                                       DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" OfficeChanged="OnOffice" />
     </Landscape>
 </KpiMobile>
 
@@ -257,7 +259,7 @@
             // tab-flick, one DB hit the first time. GetOrLoad is single-flight, so concurrent
             // viewers load once. A param change is a different key => a correct cold load.
             var entry = await KpiCache.GetOrLoad(
-                KpiCache.Key("MarginAnalysis", _divisionId, _days, _rolling),
+                KpiCache.Key("MarginAnalysis", _divisionId, _days, _rolling, Office.OfficeId),
                 LoadPayload);
             Apply(entry.Data);
             _asOf = entry.AsAt;
@@ -283,9 +285,10 @@
         using var cms = await SessionFactory.BeginAsync();
         var asAt = cms.Db.ReportDate();
         var svc = new MarginAnalysisService(cms.Db);
-        var years = svc.GetByYear(_divisionId);
-        var months = svc.GetByMonth(_divisionId, _rolling);
-        var daysRow = svc.GetByDays(_days, _divisionId);
+        var office = Office.OfficeId;   // KPI site: the Sales Office filter
+        var years = svc.GetByYear(_divisionId, office);
+        var months = svc.GetByMonth(_divisionId, _rolling, office);
+        var daysRow = svc.GetByDays(_days, _divisionId, office);
         return (new Payload(years, months, daysRow), asAt);
     }
 
@@ -306,7 +309,7 @@
         try
         {
             var (entry, changed) = await KpiCache.RefreshAsync(
-                KpiCache.Key("MarginAnalysis", _divisionId, _days, _rolling),
+                KpiCache.Key("MarginAnalysis", _divisionId, _days, _rolling, Office.OfficeId),
                 LoadPayload);
             _refreshedOn = entry.LoadedAtUtc;
             if (changed)
@@ -322,6 +325,8 @@
 
     private async Task OnDivision(ChangeEventArgs e)
     { _divisionId = int.TryParse(e.Value?.ToString(), out var v) ? v : -1; await Load(); }
+    // KPI site: the Sales Office (full view or phone) - KpiOfficeState holds it, the load reads it
+    private Task OnOffice() => Load();
     private async Task OnDays(ChangeEventArgs e)
     { _days = int.TryParse(e.Value?.ToString(), out var v) ? v : 15; await Load(); }
     private async Task OnRolling(ChangeEventArgs e)

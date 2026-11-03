@@ -1,13 +1,12 @@
 @using System.Globalization
 @using Kpi.Web.Components.Shared.Kpis.Mobile
-@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
 
 @* Year on Year on a phone, from the page's own rows, filters and load. Portrait: the year-to-date summary,
    then the periods and the total for the page's current filters (the filters are in landscape).
    Landscape: the Sales Office and the five filters, folding away, then the table as the full view builds
    it - the periods, Total OB and Total Brokered, the grand total, the year-on-year % row and the YTD
-   column - its header fixed while the rows scroll under it. Both show the last four years. A sales office with no
-   figures shows KpiOfficeEmpty in their place (portrait has no filters and follows the choice). *@
+   column - its header fixed while the rows scroll under it. Both show the last four years, for the chosen Sales
+   Office (portrait has no filters and follows the choice). *@
 
 @if (Landscape)
 {
@@ -25,11 +24,7 @@
         </KpiMobileFilters>
     </div>
 
-    @if (!Office.ShowsData)
-    {
-        <KpiOfficeEmpty />
-    }
-    else if (Error is not null)
+    @if (Error is not null)
     {
         <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
     }
@@ -92,11 +87,7 @@
 }
 else
 {
-    @if (!Office.ShowsData)
-    {
-        <KpiOfficeEmpty />
-    }
-    else if (Error is not null)
+    @if (Error is not null)
     {
         <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
     }

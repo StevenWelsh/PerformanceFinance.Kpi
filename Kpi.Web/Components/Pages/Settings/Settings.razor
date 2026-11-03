@@ -33,6 +33,7 @@
                 {
                     case "integrations": <SettingsIntegrations />; break;
                     case "sync": <SettingsSync />; break;
+                    case "shire-sync": <Kpi.Web.Components.Shire.SettingsShireSync />; break;
                     case "links": <SettingsPublishedLinks />; break;
         case "audit": <SettingsAudit />; break;
                     default: <SettingsUsers />; break;
@@ -52,6 +53,7 @@
         new("users", "Users", "bi-people"),
         new("integrations", "Integrations", "bi-plug"),
         new("sync", "Data sync", "bi-arrow-repeat"),
+        new("shire-sync", "Shire sync", "bi-cloud-arrow-down"),   // Shire's Salesforce (3 Nov 2026, Steve)
         new("links", "Published links", "bi-link-45deg"),
         new("audit", "Audit", "bi-journal-text")
     };

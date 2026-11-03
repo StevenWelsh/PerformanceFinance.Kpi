@@ -78,6 +78,9 @@ else
     [Parameter] public string Measure { get; set; } = "TFI";
     [Parameter] public int Year { get; set; }
 
+    /// <summary>False for a report with no targets (Shire Sales Performance): the tooltip doesn't say "No target set".</summary>
+    [Parameter] public bool Targets { get; set; } = true;
+
     // the full view's chart rules (SalesPerformance.razor)
     [Parameter, EditorRequired] public Func<double, string> AxisLabel { get; set; } = default!;
     [Parameter, EditorRequired] public Func<double, int, double> NiceStep { get; set; } = default!;
@@ -147,7 +150,7 @@ else
             if (b.Ytd > 0) lines.Add($"YTD target: {Cur(b.Ytd)} ({(b.Actual / b.Ytd * 100m):0}%)");
             lines.Add($"Year target: {Cur(b.Year)} ({(b.Actual / b.Year * 100m):0}%)");
         }
-        else
+        else if (Targets)
         {
             lines.Add("No target set");
         }

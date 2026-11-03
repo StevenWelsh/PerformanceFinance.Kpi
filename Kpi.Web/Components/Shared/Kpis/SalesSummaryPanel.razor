@@ -44,6 +44,7 @@
 @code {
     [Parameter] public int DivisionId { get; set; } = -1;
     [Parameter] public int SalespersonId { get; set; } = -1;   // -1 = not filtered by person
+    [Parameter] public int? SalesOfficeId { get; set; }        // KPI site: the Sales Office filter, null = every office
     [Parameter] public string Title { get; set; } = "All";
     [Parameter] public string Period { get; set; } = "Year";
     [Parameter] public bool Minimal { get; set; }   // short labels for narrow panels (AF, New / Exist)
@@ -76,8 +77,8 @@
             // re-running every cell's proc. GetOrLoad is single-flight, so the grid's cells that share
             // a key (they don't here — each cell is a distinct combination) would load once.
             var entry = await KpiCache.GetOrLoad(
-                Kpi.Web.Data.Kpis.SalesSummaryCells.Key(KpiCache, Period, DivisionId, SalespersonId),
-                Kpi.Web.Data.Kpis.SalesSummaryCells.Loader(SessionFactory, Period, DivisionId, SalespersonId));
+                Kpi.Web.Data.Kpis.SalesSummaryCells.Key(KpiCache, Period, DivisionId, SalespersonId, SalesOfficeId),
+                Kpi.Web.Data.Kpis.SalesSummaryCells.Loader(SessionFactory, Period, DivisionId, SalespersonId, SalesOfficeId));
             _now = entry.Data.Now;
             _prev = entry.Data.Prev;
         }
@@ -112,7 +113,9 @@
     private RenderFragment Delta(decimal prev, decimal now) => builder =>
     {
         builder.OpenElement(0, "td");
-        if (prev != 0m)
+        if (prev == 0m)
+            builder.AddContent(3, "–");   // KPI site (3 Nov 2026, Steve): nothing last year - no percentage, a dash
+        else
         {
             var pct = (now - prev) / Math.Abs(prev) * 100m;
             var up = pct >= 0;

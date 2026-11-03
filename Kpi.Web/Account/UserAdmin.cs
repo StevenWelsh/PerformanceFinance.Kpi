@@ -226,11 +226,17 @@ public sealed class UserAdmin(IServiceScopeFactory scopes, Mailer mailer, Accoun
 
     private static IReadOnlyList<string> Split(string? reports) => (reports ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries);
 
-    private static string Describe(string role, bool allReports, string? reports) =>
-        role == KpiRoles.SystemAdmin || allReports ? "every report"
-        : Split(reports) is { Count: > 0 } list
-            ? string.Join(", ", list.Select(slug => KpiReports.All.FirstOrDefault(r => r.Slug == slug)?.Label ?? slug))
-            : "no reports";
+    private static string Describe(string role, bool allReports, string? reports)
+    {
+        var list = Split(reports);
+        if (role == KpiRoles.SystemAdmin || allReports)
+        {
+            // "every report" leaves the tick-only ones out: name the ones they have
+            var tickOnly = list.Where(KpiReports.IsTickOnly).Select(KpiReports.NameOf).ToList();
+            return tickOnly.Count == 0 ? "every report except Shire's" : "every report, and " + string.Join(", ", tickOnly);
+        }
+        return list.Count > 0 ? string.Join(", ", list.Select(KpiReports.NameOf)) : "no reports";
+    }
 
     private static async Task KeepOneSystemAdmin(Session s, KpiUser leaving)
     {

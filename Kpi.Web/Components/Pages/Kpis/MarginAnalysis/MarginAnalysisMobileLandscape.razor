@@ -1,7 +1,7 @@
 @using System.Globalization
 @using Kpi.Web.Components.Shared.Kpis.Mobile
 
-@* Margin Analysis on a phone, landscape: Division, a Chart / Table switch, and the Annual to Date chart or table.
+@* Margin Analysis on a phone, landscape: Sales Office and Division, a Chart / Table switch, and the Annual to Date chart or table.
    The chart is drawn as the
    full view's chart draws it (MarginAnalysis.razor.js) - Margin as bars, Buy and Sell Rate as lines with
    dots, 0 up to a nice ceiling with five gridlines - in markup: the plot box keeps the full view's paddings
@@ -10,7 +10,8 @@
 
 <div class="kpim-compact kpim-ma-lbar">
     <KpiMobileFilters Compact="true">
-        <div class="kpim-filters" style="--kpim-cols:1">
+        <div class="kpim-filters" style="--kpim-cols:2">
+            <KpiOfficeField Changed="OfficeChanged" />
             <KpiField Caption="Division" Value="@DivisionId.ToString(CultureInfo.InvariantCulture)"
                       ValueChanged="DivisionChanged" Options="DivisionOptions" />
         </div>
@@ -144,6 +145,9 @@ else
     [Parameter] public bool Loading { get; set; }
     [Parameter] public string? Error { get; set; }
     [Parameter] public EventCallback<string> DivisionChanged { get; set; }
+
+    /// <summary>The Sales Office was changed here - the page's handler, which reloads for it (KPI site).</summary>
+    [Parameter] public EventCallback OfficeChanged { get; set; }
 
     private IReadOnlyList<KpiOption> DivisionOptions =>
         new[] { new KpiOption("-1", "All") }

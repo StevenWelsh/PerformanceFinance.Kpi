@@ -12,8 +12,7 @@
    AF/TFI. Total / Total OB / Total Brokered rows, a grand total, a per-year YoY %
    row and a per-period current-vs-prior YTD column. Nine years at a time (the latest
    nine first, with Earlier / Later years in the card header when there are more).
-   The Sales Office is the first filter; an office with no figures shows KpiOfficeEmpty
-   in place of the card. UNVERIFIED beyond spot totals. *@
+   The Sales Office is the first filter (Rpt.spYearOnYear's @SalesOfficeId). UNVERIFIED beyond spot totals. *@
 
 <PageTitle>Year on Year — KPIs</PageTitle>
 
@@ -25,7 +24,7 @@
                   RefreshRequested="OnRefreshRequested">
         <div class="yoy-body">
             <div class="kpi-filters kpi-yoy-filters">
-                <KpiOfficeField Changed="StateHasChanged" />
+                <KpiOfficeField Changed="Load" />
                 <KpiField Caption="Division" Value="@_divisionId.ToString(Inv)" Options="_divisionOptions"
                           ValueChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))" />
                 <KpiField Caption="Salesperson" Value="@_salespersonId.ToString(Inv)" Options="_salespersonOptions"
@@ -38,12 +37,6 @@
                           ValueChanged="@(v => OnArrangement(new ChangeEventArgs { Value = v }))" />
             </div>
 
-            @if (!Office.ShowsData)
-            {
-                <KpiOfficeEmpty />
-            }
-            else
-            {
             <div class="ss-card yoy-card">
                 <div class="ss-card-head kpi-yoy-head">
                     <span class="kpi-yoy-title">Year on Year Comparison — @_measure</span>
@@ -122,7 +115,6 @@
                     </div>
                 }
             </div>
-            }
         </div>
         </KpiPanel>
     </main>
@@ -135,7 +127,7 @@
     </ChildContent>
     <Landscape>
         <YearOnYearMobile Landscape="true" Measure="@_measure" Rows="_rows" Years="_years" Periods="_periods"
-                          Loading="_loading" Error="@_error" OfficeChanged="StateHasChanged"
+                          Loading="_loading" Error="@_error" OfficeChanged="Load"
                           DivisionId="_divisionId" SalespersonId="_salespersonId" Interval="@_interval" Arrangement="@_arrangement"
                           Divisions="_divisions" Salespeople="_salespeople" Arrangements="_arrangements"
                           DivisionChanged="@(v => OnDivision(new ChangeEventArgs { Value = v }))"
@@ -223,11 +215,11 @@
         await Task.Yield();   // let the spinner paint before the blocking EF6 query
         try
         {
-            // Cached per (measure + interval + division + salesperson + arrangement + report date):
+            // Cached per (measure + interval + division + salesperson + arrangement + office + report date):
             // instant on a repeat open / tab-flick or filter round-trip, one DB hit the first time.
             // GetOrLoad is single-flight, so concurrent viewers load once.
             var entry = await KpiCache.GetOrLoad(
-                KpiCache.Key("YearOnYear", _measure, _interval, _divisionId, _salespersonId, _arrangement),
+                KpiCache.Key("YearOnYear", _measure, _interval, _divisionId, _salespersonId, _arrangement, Office.OfficeId),
                 LoadPayload);
             Apply(entry.Data);
             _asOf = entry.AsAt;
@@ -253,7 +245,7 @@
         var asAt = cms.Db.ReportDate();
 
         var rows = new YearOnYearService(cms.Db)
-            .GetYearOnYear(_measure, _interval, _divisionId, _salespersonId, _arrangement);
+            .GetYearOnYear(_measure, _interval, _divisionId, _salespersonId, _arrangement, Office.OfficeId);
         var years = rows.Select(r => r.Year).Distinct().OrderBy(y => y).ToList();
         var periods = Enumerable.Range(1, _interval == "Quarter" ? 4 : 12).ToList();
 
@@ -294,7 +286,7 @@
         try
         {
             var (entry, changed) = await KpiCache.RefreshAsync(
-                KpiCache.Key("YearOnYear", _measure, _interval, _divisionId, _salespersonId, _arrangement),
+                KpiCache.Key("YearOnYear", _measure, _interval, _divisionId, _salespersonId, _arrangement, Office.OfficeId),
                 LoadPayload);
             _refreshedOn = entry.LoadedAtUtc;
             if (changed)

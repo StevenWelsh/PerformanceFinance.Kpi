@@ -1,0 +1,129 @@
+@using System.Globalization
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+@using Kpi.Web.Components.Pages.Kpis.SalesPerformance
+@using Kpi.Web.Shire
+
+@* Shire Sales Performance on a phone, as PF's SalesPerformanceMobile from the page's own league (loaded per measure, Proposed
+   to PF and year): one year at a time - today's year unless another is chosen, from 2021. Portrait: Measure, Proposed to PF
+   and Year, then the Sales League Table. Landscape: the same fields and a switch between the league table and the chart -
+   PF's phone league and chart, every salesperson ranked and no target lines (no timelapse). The fields fold away. *@
+
+<KpiMobile Title="Shire Sales Performance" Active="shire-sales-performance" AsAt="AsAt" IsShire="true" Hint="KpiMobileHint.LandscapeOnly">
+    <ChildContent>
+        <KpiMobileFilters>
+            <div class="kpim-filters" style="--kpim-cols:3">
+                @Fields
+            </div>
+        </KpiMobileFilters>
+        @if (Loading)
+        {
+            <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+        }
+        else if (Error is not null)
+        {
+            <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+        }
+        else
+        {
+            <section class="kpim-card" aria-label="@Year - Sales League Table">
+                <h2 class="kpim-card-head">@Year - Sales League Table</h2>
+                <SalesPerformanceMobileLeague Rows="YearRows" Measure="@MeasureText" Year="Year" />
+            </section>
+        }
+    </ChildContent>
+    <Landscape>
+        <div class="kpim-sp-bar">
+            <KpiMobileFilters Compact="true">
+                <div class="kpim-filters kpim-compact" style="--kpim-cols:3">
+                    @Fields
+                </div>
+            </KpiMobileFilters>
+            <div class="kpim-sp-seg">
+                <KpiSegmented Label="View" Compact="true" Value="@_view" ValueChanged="@(v => _view = v)" Options="ViewOptions" />
+            </div>
+        </div>
+        @if (Loading)
+        {
+            <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+        }
+        else if (Error is not null)
+        {
+            <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+        }
+        else
+        {
+            var chart = _view == "chart";
+            <section class="kpim-card kpim-fill kpim-sp-card">
+                <div class="kpim-sp-head">
+                    <h2>@Year - @(chart ? "Sales by Salesperson" : "Sales League Table")</h2>
+                </div>
+                @if (chart)
+                {
+                    <SalesPerformanceMobileChart Bars="ChartBars()" Measure="@MeasureText" Year="Year" Targets="false"
+                                                 AxisLabel="AxisLabel" NiceStep="NiceStep" FirstName="FirstName" />
+                }
+                else
+                {
+                    <div class="kpim-sp-scroll">
+                        <SalesPerformanceMobileLeague Rows="YearRows" Measure="@MeasureText" Year="Year" Compact="true" />
+                    </div>
+                }
+            </section>
+        }
+    </Landscape>
+</KpiMobile>
+
+@code {
+    [Parameter] public DateTime? AsAt { get; set; }
+
+    [Parameter] public string Measure { get; set; } = "AF";
+    [Parameter] public EventCallback<string> MeasureChanged { get; set; }
+
+    [Parameter] public string ProposedToPF { get; set; } = "";
+    [Parameter] public EventCallback<string> ProposedToPFChanged { get; set; }
+
+    [Parameter] public IReadOnlyList<int> Years { get; set; } = Array.Empty<int>();
+    [Parameter] public int Year { get; set; }
+    [Parameter] public EventCallback<int> YearChanged { get; set; }
+
+    [Parameter] public IReadOnlyDictionary<int, List<ShireLeagueRow>> League { get; set; } = new Dictionary<int, List<ShireLeagueRow>>();
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+    [Parameter, EditorRequired] public Func<double, string> AxisLabel { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<double, int, double> NiceStep { get; set; } = default!;
+    [Parameter, EditorRequired] public Func<string, string> FirstName { get; set; } = default!;
+
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    private static readonly KpiOption[] ViewOptions =
+    {
+        new("league", "League table", "bi-list-ul"),
+        new("chart", "Chart", "bi-bar-chart")
+    };
+
+    private string _view = "league";
+
+    private string MeasureText => Measure == "Income" ? "Income" : "AF";
+
+    // PF's phone league takes SalesLeagueRow: every Shire salesperson is ranked (IsCore), so it shows no "Other"
+    private IReadOnlyList<SalesLeagueRow> YearRows
+        => (League.TryGetValue(Year, out var rows) ? rows : new())
+           .Select((r, i) => new SalesLeagueRow { Yr = r.Yr, SalesId = i + 1, Salesperson = r.Salesperson, MeasureValue = r.MeasureValue, IsCore = true })
+           .ToList();
+
+    private RenderFragment Fields => __builder =>
+    {
+        <KpiField Caption="Measure" Value="@Measure" ValueChanged="MeasureChanged" Options="ShireReports.MeasureOptions" />
+        <KpiField Caption="Proposed to PF" Value="@ProposedToPF" ValueChanged="ProposedToPFChanged" Options="ShireReports.ProposedToPFOptions" />
+        <KpiField Caption="Year" Value="@Year.ToString(Inv)" ValueChanged="OnYear" Enabled="Years.Count > 0"
+                  Options="@(Years.Select(y => new KpiOption(y.ToString(Inv), y.ToString(Inv))).ToList())" />
+    };
+
+    private Task OnYear(string value)
+        => int.TryParse(value, NumberStyles.Integer, Inv, out var y) ? YearChanged.InvokeAsync(y) : Task.CompletedTask;
+
+    // the year's salespeople in league order, no targets (0)
+    private List<(string Name, decimal Actual, decimal Year, decimal Ytd)> ChartBars()
+        => (League.TryGetValue(Year, out var rows) ? rows : new()).Select(p => (p.Salesperson, p.MeasureValue, 0m, 0m)).ToList();
+}

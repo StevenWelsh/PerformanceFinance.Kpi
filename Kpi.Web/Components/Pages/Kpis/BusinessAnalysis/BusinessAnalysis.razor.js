@@ -19,7 +19,19 @@ function polar(cx, cy, r, deg) {
     return [cx + r * Math.cos(a), cy + r * Math.sin(a)];
 }
 
+const FULL_TURN = 359.99;
+
 function arcPath(cx, cy, rOuter, rInner, startDeg, endDeg) {
+    // One slice of 100% (Shire's Facility, all Loan - 3 Nov 2026): an arc whose two ends meet draws nothing, so the
+    // whole ring is two half-circles round the outside and two back round the inside (the hole).
+    if (endDeg - startDeg >= FULL_TURN) {
+        const [ta, tb] = polar(cx, cy, rOuter, 0), [ba, bb] = polar(cx, cy, rOuter, 180);
+        const [ti, tj] = polar(cx, cy, rInner, 0), [bi, bj] = polar(cx, cy, rInner, 180);
+        return `M${ta.toFixed(2)},${tb.toFixed(2)} A${rOuter},${rOuter} 0 1 1 ${ba.toFixed(2)},${bb.toFixed(2)} `
+             + `A${rOuter},${rOuter} 0 1 1 ${ta.toFixed(2)},${tb.toFixed(2)} Z `
+             + `M${ti.toFixed(2)},${tj.toFixed(2)} A${rInner},${rInner} 0 1 0 ${bi.toFixed(2)},${bj.toFixed(2)} `
+             + `A${rInner},${rInner} 0 1 0 ${ti.toFixed(2)},${tj.toFixed(2)} Z`;
+    }
     const large = endDeg - startDeg > 180 ? 1 : 0;
     const [x1, y1] = polar(cx, cy, rOuter, startDeg);
     const [x2, y2] = polar(cx, cy, rOuter, endDeg);
@@ -66,7 +78,7 @@ export function render(container, slices, totalText) {
 
         // offset vector for the "pop out" (towards the slice's mid-angle) — stored on
         // the element so both pie-hover and table-hover use the same translate.
-        const [ox, oy] = polar(0, 0, explode, mid);
+        const [ox, oy] = sweep >= FULL_TURN ? [0, 0] : polar(0, 0, explode, mid);   // a whole ring doesn't pop out
         path.dataset.tx = ox.toFixed(2);
         path.dataset.ty = oy.toFixed(2);
 

@@ -7,8 +7,10 @@
 
    Colours: the Performance Finance phone palette, as tokens - never a literal colour below :root. */
 :root {
-    --kpim-crimson: #d20d43;            /* PF crimson: top bar, menu, the selected segment */
-    --kpim-crimson-dark: #a00a33;       /* values in filter fields, pressed / highlighted marks */
+    --pf-crimson: #d20d43;              /* PF crimson, kept apart so the reports menu can have it back over a Shire page */
+    --pf-crimson-dark: #a00a33;
+    --kpim-crimson: var(--pf-crimson);  /* top bar, menu, the selected segment */
+    --kpim-crimson-dark: var(--pf-crimson-dark);   /* values in filter fields, pressed / highlighted marks */
     --kpim-on-crimson: #ffffff;
     --kpim-on-crimson-wash: rgba(255, 255, 255, 0.18);   /* buttons and the active row on crimson */
     --kpim-on-crimson-active: rgba(255, 255, 255, 0.22);
@@ -1325,5 +1327,57 @@ button.kpim-hm-row { cursor: pointer; }
 .kpi-shell .hm-legend .band { font-size: 12.5px; color: var(--kpim-text-2); }
 .kpi-shell .hm-legend .band:hover { background: var(--kpim-hm-sel-row); }
 .kpi-shell .hm-legend .cnt, .kpi-shell .hm-legend .hint { color: var(--kpim-text-3); }
+
+/* ---- Shire - Salesforce (3 Nov 2026, Steve): Shire's own colours on its menu section and its two reports, so they're
+   easy to tell from PF's crimson. Sampled from Shire Professional Funding's banner: lavender (its background), deep
+   purple (its swoosh) and magenta (its button / logo accent). A Shire page carries kpi-shire (the full view's .kpi-shell
+   and the phone's .kpim), which turns the phone palette's crimson into Shire's purple. ---- */
+:root {
+    --shire-purple: #8061a3;            /* Shire's lavender: chart columns */
+    --shire-deep: #62368b;              /* Shire's deep purple: the menu section, the phone bar, titles */
+    --shire-deep-dark: #4a2869;         /* pressed / highlighted, on purple */
+    --shire-magenta: #b93491;           /* Shire's magenta: the open report, the rule over a Shire page */
+    --shire-tint: #efe9f6;              /* the current year's column, card header bands */
+    --shire-tint-head: #dccdec;         /* ...and the current year's heading */
+    --shire-lilac: #cdb9e3;             /* Business Analysis on a phone: the fourth series, the part-way trend bar */
+}
+/* the desktop sidebar's Shire section is in account.css: the sidebar is on Settings and My Account too, where this file
+   isn't loaded */
+.kpim-menu-section.kpim-menu-shire { background: var(--shire-deep); border-top: 3px solid var(--shire-magenta); border-radius: 6px; padding-bottom: 4px; }
+.kpim-menu-shire .kpim-menu-row.kpim-on { background: var(--shire-magenta); }
+.kpim-menu-section:not(.kpim-menu-shire) .kpim-menu-row-shire { box-shadow: inset 3px 0 0 var(--shire-magenta); }
+/* Shire Sales Performance's chart fills its card (the shapes stretch, the labels are text over them) */
+.kpi-shell .shire-chart { position: relative; flex: 1 1 auto; min-height: 240px; margin: 10px 14px 34px; }
+.kpi-shell .shire-chart-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.kpi-shell .shire-chart-ax { position: absolute; left: 0; transform: translateY(-50%); text-align: right; font-size: 12px;
+    color: var(--kpim-sp-axis); white-space: nowrap; pointer-events: none; }
+.kpi-shell .shire-chart-val { position: absolute; transform: translateY(calc(-100% - 3px)); text-align: center; font-size: 13px;
+    font-weight: 700; color: var(--kpim-text); white-space: nowrap; pointer-events: none; }
+.kpi-shell .shire-chart-name { position: absolute; padding-top: 6px; text-align: center; font-size: 13px; color: var(--kpim-sp-name);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.kpi-shire {
+    --kpim-crimson: var(--shire-deep);
+    --kpim-crimson-dark: var(--shire-deep-dark);
+    --kpim-now: var(--shire-tint);
+    --kpim-now-head: var(--shire-tint-head);
+    --kpim-yoy-cur: var(--shire-tint);
+    --kpim-yoy-cur-head: var(--shire-tint-head);
+    --kpim-sp-col: var(--shire-purple);
+    --kpim-sp-col-on: var(--shire-deep);
+    /* Shire Business Analysis on a phone: Shire's purples where PF's has crimsons (the greys stay) */
+    --kpim-ba-s1: var(--shire-deep);
+    --kpim-ba-s2: var(--shire-magenta);
+    --kpim-ba-s3: var(--shire-purple);
+    --kpim-ba-s4: var(--shire-lilac);
+    --kpim-ba-part: var(--shire-lilac);
+}
+/* the reports menu lists every section, so over a Shire page (the phone drawer is inside it) it stays PF crimson;
+   the bar above a Shire report stays purple (Steve liked it) */
+.kpi-shire .kpim-menu { --kpim-crimson: var(--pf-crimson); --kpim-crimson-dark: var(--pf-crimson-dark); }
+.kpi-shell.kpi-shire .kpi-topbar { box-shadow: inset 0 4px 0 var(--shire-magenta); }
+.kpi-shell.kpi-shire .kpi-topbar h1 { color: var(--shire-deep); }
+.kpi-shell.kpi-shire .ss-card-head { background: var(--shire-tint); color: var(--shire-deep); }
+.kpi-shell.kpi-shire .slt-col { fill: var(--shire-purple); }
+.kpi-shell.kpi-shire .slt-col:hover { fill: var(--shire-deep); }
 
 /* ---- report sections: add yours above this line, one section per report, classes prefixed kpim-<report>- ---- */

@@ -354,6 +354,49 @@ NAT gateway can't move and is recreated:
   unencrypted, the login the CMS desktop also uses - a separate fix (own read-only login for Klipfolio, encryption,
   then a new Fendra password with a desktop update) for Steve and PCS, not part of the KPI site.
 
+## Shire Salesforce (built 3 Nov 2026, Steve - on the STAGING slot, not yet live)
+
+**Who sees them: tick-only** (`KpiReport.TickOnly`) - only people ticked by name in Settings > Users (Steve, Stuart, Andy);
+System Admin and "All reports" do NOT include them (claim "*,shire-..." - `KpiReportAccess.ClaimFor` / `CanSee`).
+
+Shire Professional Funding (bought by PF) works in Salesforce. Three reports for it, under their own menu section **SHIRE -
+SALESFORCE** in Shire's purple and magenta (`KpiReports.Shire`, kpi.css "Shire - Salesforce", pages carry `kpi-shire`):
+**Shire Year on Year** and **Shire Sales Performance**, desktop and phone - copies of PF's two pages (title says Shire; no
+Sales Office or Division; Salesperson = Shire's opportunity owners; Measure = Amount Financed / Income; Proposed to PF All /
+Yes / No; one Total row; every salesperson ranked, no targets, no timelapse) - and **Shire Business Analysis** (PF's, no
+Sales Office; Dimension Profession = `Account.Sector__c`, Facility = `Finance_Product__c` in PF's groups HP / Loan / Lease /
+Rental (Title Fee, Invoice Finance = Other), Purpose = `Loan_Purpose__c`, Lender = the `Funder1__c` picklist (four year cards,
+PF's `BusinessAnalysisLenderService.Build`); blanks = "Not set" so every dimension adds up to Year on Year; phone view = PF's
+`BusinessAnalysisMobile` with its Shire parameters; `002_ShireBusinessAnalysis.sql`). Everything lives apart, for review (Steve):
+`Kpi.Web/Shire/` (README there), `Kpi.Web/Components/Shire/`, schema **`Shire`** in CMS_KPI from
+`Kpi.Data/Shire/001_ShireSalesforce.sql` (embedded; migration `ShireSalesforce` runs it batch by batch - never edit an
+applied file, add a numbered one).
+
+- **The figures MIRROR Shire's own Salesforce reports** (Steve: "figures should match"): Closed Won (`IsWon`) by `CloseDate`,
+  Amount / `Income__c`. Checked 3 Nov 2026 against "Current Month Opportunities by Stage" (228 = 228 per stage) and "Closed
+  Won last Q by Salesperson" (which is the CURRENT quarter despite its name: 813 deals, £14,447,575.16, income £352,550.11 -
+  to the penny). No "unwound" in Shire: a deal that falls through is moved off Closed Won (104 of 5,547 ever), so it drops
+  out of the next copy as from their reports.
+- **Only data the reports use is copied** (Steve): won opportunities' Id, Close Date, Amount, Income, owner, Proposed to PF
+  (= `Funder__r.Name` 'Performance Finance'; Shire keeps ONE opportunity PER FUNDER; PF only since Oct 2026). ~5,400 rows.
+- **The copy (`ShirePull`, in the BackgroundWork block):** every 15 minutes (Settings > **Shire sync**: 5-60, pause, Copy now -
+  `ShireCopyControl`, provider `ShireCopySchedule`) one SOQL call - opportunity count + MAX(SystemModstamp); when that moved,
+  the won deals in full -> `Shire.StageSale` (bulk copy, app lock `ShireCopy`) -> `Shire.spPublish`. Logged in
+  `Shire.LoadRun`, NOT Ref.LoadRun (CMS's Data sync is unchanged). A Shire copy raises `ShireFiguresSignal`, whose
+  `Generation` is in every Shire cache key (so a copy obsoletes all cached Shire figures at once); Shire pages pass `IsShire` to KpiPanel / KpiMobile for their "As at"
+  (`Shire.spDataStatus`: stale after 45 minutes without a successful check in office hours). No email alerts yet.
+- **Salesforce side (Shire's org, 3 Nov 2026):** integration user `pf.integration@shirepf.co.uk` (Salesforce Integration
+  licence, API only, permission set "PF Integration - Read Only": Read + View All on Opportunity, Account, Contact,
+  Opportunity Shareholder), External Client App **PF Integration** (client credentials, Run As pf.integration, admin-approved
+  users only). Its key and secret go in **Settings > Integrations > Salesforce (Shire)** (`ShireSalesforce`, provider
+  `ShireSalesforce`, both encrypted). Token URL is the My Domain (`https://shireprofessionalfunding.my.salesforce.com`).
+- **Staging (3 Nov 2026):** the staging slot (`pf-kpi-staging.azurewebsites.net`, `Kpi:BackgroundWork` = false) runs ONLY
+  the Shire copy, by slot setting **`Shire__Copy` = true** (Program.cs: `Shire:Copy`, absent = follows BackgroundWork).
+  **When the live site gets the Shire reports, delete `Shire__Copy` from staging** - otherwise both slots copy (harmless:
+  the app lock takes turns, but twice the Salesforce calls). The Salesforce card's settings and secret are in the shared
+  CMS_KPI (`Cfg.Integration`), so entering them on staging serves live too.
+- **Not yet:** the live site; IP-locking pf.integration to 20.90.27.132; email alerts for the Shire copy.
+
 ## Gotchas met building it
 
 - **EF Core creates the history table's schema (`Ref`) BEFORE the first migration runs**, so `CREATE SCHEMA Ref` in the

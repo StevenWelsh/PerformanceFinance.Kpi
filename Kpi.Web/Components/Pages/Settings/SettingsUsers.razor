@@ -116,27 +116,31 @@ else
                 <option value="@KpiRoles.User">User - the reports ticked below</option>
                 <option value="@KpiRoles.SystemAdmin">System Admin - every report, and Settings</option>
             </select>
-            @if (_role == KpiRoles.User)
-            {
-                <div class="set-reports">
+            @* the tick-only reports (Shire's) are ticked by name for everyone, System Admins and "All reports" too *@
+            <div class="set-reports">
+                @if (_role == KpiRoles.User)
+                {
                     <label class="acc-check set-reports-all"><input type="checkbox" @bind="_allReports" /> All reports, including new ones</label>
-                    @if (!_allReports)
-                    {
-                        @foreach (var section in KpiReports.Sections)
+                }
+                @foreach (var section in KpiReports.Sections)
+                {
+                    var reports = KpiReports.All.Where(r => r.Section == section && (r.TickOnly || (_role == KpiRoles.User && !_allReports))).ToList();
+                    if (reports.Count == 0) continue;
+                    <div class="set-reports-section">
+                        <div class="set-reports-head">@section</div>
+                        @if (reports.Any(r => r.TickOnly))
                         {
-                            <div class="set-reports-section">
-                                <div class="set-reports-head">@section</div>
-                                @foreach (var r in KpiReports.All.Where(r => r.Section == section))
-                                {
-                                    <label class="acc-check">
-                                        <input type="checkbox" checked="@_reports.Contains(r.Slug)" @onchange="e => Tick(r.Slug, e)" /> @r.Label
-                                    </label>
-                                }
-                            </div>
+                            <p class="acc-hint set-reports-hint">Only the people ticked here - System Admin and All reports don't include these.</p>
                         }
-                    }
-                </div>
-            }
+                        @foreach (var r in reports)
+                        {
+                            <label class="acc-check">
+                                <input type="checkbox" checked="@_reports.Contains(r.Slug)" @onchange="e => Tick(r.Slug, e)" /> @r.Label
+                            </label>
+                        }
+                    </div>
+                }
+            </div>
             @if (_editingSelf)
             {
                 <p class="acc-hint">You can't change your own role.</p>
@@ -349,14 +353,21 @@ else
         catch (JSException) { }
     }
 
-    private static string ReportsText(UserAdmin.UserRow u) =>
-        u.Role == KpiRoles.SystemAdmin || u.AllReports ? "All"
-        : u.Reports.Count == 0 ? "None" : $"{u.Reports.Count} of {KpiReports.All.Length}";
+    // "every report" leaves out the tick-only (Shire) reports, so "All" says whether they have those too
+    private static string ReportsText(UserAdmin.UserRow u)
+    {
+        if (u.Role != KpiRoles.SystemAdmin && !u.AllReports)
+            return u.Reports.Count == 0 ? "None" : $"{u.Reports.Count} of {KpiReports.All.Length}";
+        var ticked = u.Reports.Count(KpiReports.IsTickOnly);
+        return ticked == 0 ? "All except Shire" : ticked == KpiReports.All.Count(r => r.TickOnly) ? "All" : $"All + {ticked} Shire";
+    }
 
     // the reports themselves, on hover
-    private static string? ReportsTitle(UserAdmin.UserRow u) =>
-        u.Role == KpiRoles.SystemAdmin || u.AllReports || u.Reports.Count == 0 ? null
-        : string.Join(", ", u.Reports.Select(slug => KpiReports.All.FirstOrDefault(r => r.Slug == slug)?.Label ?? slug));
+    private static string? ReportsTitle(UserAdmin.UserRow u)
+    {
+        var shown = u.Role == KpiRoles.SystemAdmin || u.AllReports ? u.Reports.Where(KpiReports.IsTickOnly) : u.Reports;
+        return shown.Any() ? string.Join(", ", shown.Select(KpiReports.NameOf)) : null;
+    }
 
     private static string LinkMessage(MailOutcome mail) => mail switch
     {

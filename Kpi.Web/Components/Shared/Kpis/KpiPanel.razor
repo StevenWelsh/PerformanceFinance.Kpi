@@ -23,9 +23,10 @@
     <div class="kpi-dateline">
         @if (AsAt is not null)
         {
-            @* the business date, and the time the figures were copied from CMS - amber when that copy has stopped *@
-            var status = DataStatus.Get();
-            var stale = Kpi.Web.Data.Kpis.KpiDataStatus.StaleNote(status);
+            @* the business date, and the time the figures were copied from CMS - amber when that copy has stopped (a Shire
+               report: when Shire's Salesforce was last checked, 3 Nov 2026) *@
+            var status = IsShire ? ShireStatus.Get() : DataStatus.Get();
+            var stale = IsShire ? Kpi.Web.Shire.ShireDataStatus.StaleNote(status) : Kpi.Web.Data.Kpis.KpiDataStatus.StaleNote(status);
             <div class="kpi-asof @(stale is null ? "" : "kpi-stale")" title="@stale">
                 @if (stale is not null) { <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> }
                 As at @Kpi.Web.Data.Kpis.KpiDataStatus.AsAtText(AsAt.Value, status)
@@ -59,6 +60,12 @@
     [Parameter] public DateTime? RefreshedOn { get; set; }    // wall-clock of last fetch (UTC)
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
+    /// <summary>A Shire report (Kpi.Web/Shire): its "As at" is the Shire copy's, and a Shire copy landing refreshes it.</summary>
+    [Parameter] public bool IsShire { get; set; }
+
+    [Inject] private Kpi.Web.Shire.ShireDataStatus ShireStatus { get; set; } = default!;
+    [Inject] private Kpi.Web.Shire.ShireFiguresSignal ShireFigures { get; set; } = default!;
+
     /// <summary>
     /// KpiPanel calls this on the timer / return-to-view. The page re-runs its load
     /// through KpiCache, updates its bound data + timestamps, and calls back
@@ -91,7 +98,7 @@
     protected override void OnInitialized()
     {
         _intervalSeconds = Config.GetValue("Kpi:RefreshSeconds", 600);
-        Figures.Landed += OnFiguresLanded;
+        if (IsShire) ShireFigures.Landed += OnFiguresLanded; else Figures.Landed += OnFiguresLanded;
     }
 
     private void OnFiguresLanded() => _ = InvokeAsync(async () =>
@@ -304,6 +311,7 @@
               ((int)(closedUtc - _openedUtc).TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture),
               null, (int)Math.Min(int.MaxValue, _visibleFor.TotalMilliseconds), closedUtc);
         Figures.Landed -= OnFiguresLanded;
+        ShireFigures.Landed -= OnFiguresLanded;
         StopTimer();
         try
         {

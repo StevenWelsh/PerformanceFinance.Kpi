@@ -1,5 +1,6 @@
 using Kpi.Data.Auth;
 using Kpi.Data.Cfg;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -11,9 +12,11 @@ namespace Kpi.Data;
 /// <summary>
 /// The KPI database, CMS_KPI. The report figures are read through the Rpt procedures, never through EF, so the
 /// model maps only what the site itself owns: sign-in (ASP.NET Identity, as DavidsonHR, in the Auth schema), the
-/// audit trail, the integrations and the published links. Everything else is created by the migrations as SQL.
+/// audit trail, the integrations, the published links and the site's key ring (Auth.DataProtectionKeys - on the
+/// live site, shared by both deployment slots). Everything else is created by the migrations as SQL.
 /// </summary>
-public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options) : IdentityDbContext<KpiUser>(options)
+public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options)
+    : IdentityDbContext<KpiUser>(options), IDataProtectionKeyContext
 {
     /// <summary>CMS_Live's collation: every join between copied text and seeded text depends on it.</summary>
     public const string Collation = "Latin1_General_CI_AS";
@@ -23,6 +26,7 @@ public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options) : Ident
     public DbSet<ReportEvent> ReportEvents => Set<ReportEvent>();
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<PublishedLink> PublishedLinks => Set<PublishedLink>();
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,6 +64,9 @@ public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options) : Ident
             e.Property(v => v.Source).HasMaxLength(20).IsUnicode(false);
             e.HasIndex(v => v.OpenedUtc);
         });
+
+        // the key ring (3 Nov 2026, deployment slots): one XML row per key, each wrapped by Key Vault on the live site
+        modelBuilder.Entity<DataProtectionKey>(e => e.ToTable("DataProtectionKeys", "Auth"));
 
         modelBuilder.Entity<ReportEvent>(e =>
         {

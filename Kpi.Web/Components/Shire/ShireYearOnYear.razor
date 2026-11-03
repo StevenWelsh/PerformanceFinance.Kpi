@@ -1,0 +1,305 @@
+@page "/kpis/shire-year-on-year"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@inject Kpi.Web.Shire.ShireFiguresSignal Figures
+@using System.Globalization
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+@using Kpi.Web.Shire
+
+@* Shire Year on Year (3 Nov 2026, Steve): PF's Year on Year (Components/Pages/Kpis/YearOnYear) over Shire's Salesforce -
+   months (or quarters) down, years across, the current year compared TO THE SAME DATE last year, nine years at a time.
+   Figures mirror Shire's own Salesforce reports: Closed Won by Close Date (Shire.spYearOnYear). Changed from PF's: the title
+   says Shire; no Sales Office or Division; Salesperson = Shire's (opportunity owners); Measure = Amount Financed / Income
+   (not AF / TFI); Arrangement became Proposed to PF (All / Yes / No); one Total row (Shire has no own book / brokered
+   split). In Shire's colours (kpi-shire). *@
+
+<PageTitle>Shire Year on Year — KPIs</PageTitle>
+
+<div class="kpi-shell kpi-shire">
+    <KpiSidebar Active="shire-year-on-year" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Shire Year on Year" AsAt="_asOf" RefreshedOn="_refreshedOn" IsShire="true"
+                  RefreshRequested="OnRefreshRequested">
+        <div class="yoy-body">
+            <div class="kpi-filters kpi-yoy-filters">
+                <KpiField Caption="Salesperson" Value="@(_ownerId ?? "")" Options="_salespersonOptions"
+                          ValueChanged="@(v => OnSalesperson(new ChangeEventArgs { Value = v }))" />
+                <KpiField Caption="Measure" Value="@_measure" Options="ShireReports.MeasureOptions"
+                          ValueChanged="@(v => OnMeasure(new ChangeEventArgs { Value = v }))" />
+                <KpiField Caption="Interval" Value="@_interval" Options="IntervalOptions"
+                          ValueChanged="@(v => OnInterval(new ChangeEventArgs { Value = v }))" />
+                <KpiField Caption="Proposed to PF" Value="@_pf" Options="ShireReports.ProposedToPFOptions"
+                          ValueChanged="@(v => OnProposedToPF(new ChangeEventArgs { Value = v }))" />
+            </div>
+
+            <div class="ss-card yoy-card">
+                <div class="ss-card-head kpi-yoy-head">
+                    <span class="kpi-yoy-title">Shire Year on Year Comparison — @ShireReports.MeasureLabel(_measure)</span>
+                    @if (MaxBack > 0)
+                    {
+                        <span class="kpi-yoy-steps">
+                            <button type="button" class="kpi-btn" title="Show an earlier year"
+                                    disabled="@(_back >= MaxBack)" @onclick="Earlier"><i class="bi bi-chevron-left" aria-hidden="true"></i>Earlier years</button>
+                            <button type="button" class="kpi-btn" title="Show a later year"
+                                    disabled="@(_back <= 0)" @onclick="Later">Later years<i class="bi bi-chevron-right" aria-hidden="true"></i></button>
+                        </span>
+                    }
+                </div>
+
+                @if (_error is not null)
+                {
+                    <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+                }
+                else if (_years.Count == 0 && _loading)
+                {
+                    <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+                }
+                else if (_years.Count == 0)
+                {
+                    <div class="ss-loading">No Shire sales for these filters yet@(_anyCopy ? "" : " - nothing has been copied from Shire's Salesforce (Settings > Shire sync)").</div>
+                }
+                else
+                {
+                    var curYear = _years.Max();
+                    <div class="yoy-scroll @(_loading ? "yoy-refreshing" : "")">
+                        @if (_loading)
+                        {
+                            <div class="yoy-overlay"><span class="ss-spinner"></span> Loading…</div>
+                        }
+                        <table class="yoy-table">
+                            <thead>
+                                <tr>
+                                    <th class="yoy-rowlabel">@(_interval == "Quarter" ? "Quarter" : "Month")</th>
+                                    @foreach (var y in _shown)
+                                    {
+                                        <th class="@(y == curYear ? "yoy-cur" : "")">@y</th>
+                                    }
+                                    <th>@curYear vs @(curYear - 1) YTD</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var p in _periods)
+                                {
+                                    <tr>
+                                        <td class="yoy-rowlabel">@PeriodName(p)</td>
+                                        @foreach (var y in _shown)
+                                        {
+                                            <td class="@(y == curYear ? "yoy-cur" : "")">@Cur(Cell(y, p))</td>
+                                        }
+                                        <td>@YtdDelta(p, curYear)</td>
+                                    </tr>
+                                }
+                                <tr class="yoy-grand">
+                                    <td class="yoy-rowlabel">Total</td>
+                                    @foreach (var y in _shown)
+                                    {
+                                        <td class="@(y == curYear ? "yoy-cur" : "")">@Cur(YearTotal(y))</td>
+                                    }
+                                    <td>@GrandYtdDelta(curYear)</td>
+                                </tr>
+                                @* each year against the one before it - for the leftmost, a year outside the window *@
+                                <tr class="yoy-yoy">
+                                    <td class="yoy-rowlabel"></td>
+                                    @foreach (var y in _shown)
+                                    {
+                                        <td class="@(y == curYear ? "yoy-cur" : "")">@YearDelta(y, curYear)</td>
+                                    }
+                                    <td></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Shire Year on Year" Active="shire-year-on-year" AsAt="_asOf" IsShire="true" Hint="KpiMobileHint.LandscapeOnly">
+    <ChildContent>
+        <ShireYearOnYearMobile Measure="@_measure" Rows="_rows" Years="_years" Periods="_periods"
+                               Loading="_loading" Error="@_error" />
+    </ChildContent>
+    <Landscape>
+        <ShireYearOnYearMobile Landscape="true" Measure="@_measure" Rows="_rows" Years="_years" Periods="_periods"
+                               Loading="_loading" Error="@_error"
+                               OwnerId="@_ownerId" Interval="@_interval" ProposedToPF="@_pf" SalespersonOptions="_salespersonOptions"
+                               SalespersonChanged="@(v => OnSalesperson(new ChangeEventArgs { Value = v }))"
+                               MeasureChanged="@(v => OnMeasure(new ChangeEventArgs { Value = v }))"
+                               IntervalChanged="@(v => OnInterval(new ChangeEventArgs { Value = v }))"
+                               ProposedToPFChanged="@(v => OnProposedToPF(new ChangeEventArgs { Value = v }))" />
+    </Landscape>
+</KpiMobile>
+
+@code {
+    private string _measure = "AF";
+    private string _interval = "Month";
+    private string? _ownerId;          // null = every salesperson
+    private string _pf = "";           // "" = all, "1" = proposed to PF, "0" = not
+
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private bool _anyCopy = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    private sealed record Payload(List<ShireYearOnYearRow> Rows, List<int> Years, List<int> Periods);
+
+    private List<ShireYearOnYearRow> _rows = new();
+    private List<int> _years = new();     // every year the procedure returns (the last ten), oldest first
+    private List<int> _periods = new();
+    private List<int> _shown = new();     // the nine the full view shows
+    private int _back;                    // years the window has stepped back from the latest
+
+    private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
+    private static readonly KpiOption[] IntervalOptions = { new("Month", "Month"), new("Quarter", "Quarter") };
+    private List<KpiOption> _salespersonOptions = new() { new("", "All") };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await LoadFilters();
+        await Load();
+    }
+
+    // the Salesperson list: Shire's opportunity owners with a sale in the last ten years
+    private async Task LoadFilters()
+    {
+        try
+        {
+            using var cms = await SessionFactory.BeginAsync();
+            var people = new ShireReports(cms.Db).Salespeople();
+            _anyCopy = people.Count > 0;
+            _salespersonOptions = people.Select(s => new KpiOption(s.Id, s.Name)).Prepend(new KpiOption("", "All")).ToList();
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    // the Shire copy's generation is part of the key: a copy makes every cached Shire figure obsolete (ShireFiguresSignal)
+    private string CacheKey => KpiCache.Key("ShireYearOnYear", Figures.Generation, _measure, _interval, _ownerId, _pf);
+
+    private async Task Load()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            var entry = await KpiCache.GetOrLoad(CacheKey, LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        var (measure, interval, owner, pf) = (_measure, _interval, _ownerId, ShireReports.ProposedToPF(_pf));
+        using var cms = await SessionFactory.BeginAsync();
+        var reports = new ShireReports(cms.Db);
+        var asAt = reports.ReportDate();
+        var rows = reports.GetYearOnYear(measure, interval, owner, pf);
+        var years = rows.Select(r => r.Year).Distinct().OrderBy(y => y).ToList();
+        var periods = Enumerable.Range(1, interval == "Quarter" ? 4 : 12).ToList();
+        return (new Payload(rows, years, periods), asAt);
+    }
+
+    private void Apply(Payload p)
+    {
+        _rows = p.Rows;
+        _years = p.Years;
+        _periods = p.Periods;
+        ShowWindow();
+    }
+
+    private const int YearsShown = 9;
+
+    private int MaxBack => Math.Max(0, _years.Count - YearsShown);
+
+    private void ShowWindow()
+    {
+        _back = Math.Clamp(_back, 0, MaxBack);
+        var end = _years.Count - _back;
+        var start = Math.Max(0, end - YearsShown);
+        _shown = _years.Skip(start).Take(end - start).ToList();
+    }
+
+    private void Earlier() { _back++; ShowWindow(); }
+    private void Later() { _back--; ShowWindow(); }
+
+    // KpiPanel calls this on its 10-min timer, return-to-view, and when a Shire copy lands
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(CacheKey, LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    private async Task OnSalesperson(ChangeEventArgs e)  { var s = e.Value?.ToString(); _ownerId = string.IsNullOrEmpty(s) ? null : s; await Load(); }
+    private async Task OnMeasure(ChangeEventArgs e)      { _measure = e.Value?.ToString() == "Income" ? "Income" : "AF"; await Load(); }
+    private async Task OnInterval(ChangeEventArgs e)     { _interval = e.Value?.ToString() == "Quarter" ? "Quarter" : "Month"; await Load(); }
+    private async Task OnProposedToPF(ChangeEventArgs e) { _pf = e.Value?.ToString() ?? ""; await Load(); }
+
+    // --- lookups over the loaded rows (as PF's Year on Year) ---
+    private decimal Cell(int year, int period)
+        => _rows.FirstOrDefault(r => r.Year == year && r.Period == period)?.Total ?? 0m;
+
+    private decimal YearTotal(int year) => _rows.Where(r => r.Year == year).Sum(r => r.Total);
+
+    // TO THE SAME DATE, as PF's: the current year against the prior year's TotalToDate
+    private decimal PriorToDate(int curYear, int? period = null) =>
+        _rows.Where(r => r.Year == curYear - 1 && (period is null || r.Period == period)).Sum(r => r.TotalToDate);
+
+    private RenderFragment YtdDelta(int period, int curYear) => DeltaCell(PriorToDate(curYear, period), Cell(curYear, period));
+
+    private RenderFragment GrandYtdDelta(int curYear) => DeltaCell(PriorToDate(curYear), YearTotal(curYear));
+
+    private RenderFragment YearDelta(int year, int curYear) =>
+        year == curYear ? DeltaCell(PriorToDate(curYear), YearTotal(year)) : DeltaCell(YearTotal(year - 1), YearTotal(year));
+
+    // ▲ up / ▼ down; dash where there's no basis. Emits a <span> (the caller supplies the <td>).
+    private RenderFragment DeltaCell(decimal prior, decimal now) => builder =>
+    {
+        if (prior == 0m || now == 0m)
+        {
+            builder.AddContent(0, "–");
+        }
+        else
+        {
+            var pct = (now - prior) / Math.Abs(prior) * 100m;
+            var up = pct >= 0;
+            builder.OpenElement(1, "span");
+            builder.AddAttribute(2, "class", up ? "ss-up" : "ss-down");
+            builder.AddContent(3, pct.ToString("N2") + "% " + (up ? "▲" : "▼"));
+            builder.CloseElement();
+        }
+    };
+
+    private static readonly string[] Months =
+        { "January","February","March","April","May","June","July","August","September","October","November","December" };
+    private string PeriodName(int p) => _interval == "Quarter" ? $"Q{p}" : Months[p - 1];
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+}

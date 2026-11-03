@@ -4,7 +4,8 @@
 @* Sales Performance on a phone, from the page's own league and targets (loaded per measure and year).
    The phone shows one year at a time - the report year unless another is chosen, from 2020 on - and the
    page holds that choice (it loads the year), so portrait and landscape share it. Measure is the page's own
-   and reloads as the full view's field does. Portrait: Measure and Year, then the Sales League Table.
+   and reloads as the full view's field does, as does the Sales Office (first, KPI site). Portrait: Sales Office,
+   Measure and Year, then the Sales League Table.
    Landscape: the same fields and a switch between the league table, the Sales Target Performance chart and
    the timelapse (the full view's race, SalesPerformanceMobileRace). The fields fold away
    (KpiMobileFilters) in both. *@
@@ -12,7 +13,7 @@
 <KpiMobile Title="Sales Performance" Active="sales-performance" AsAt="AsAt" Hint="KpiMobileHint.LandscapeOnly">
     <ChildContent>
         <KpiMobileFilters>
-            <div class="kpim-filters" style="--kpim-cols:2">
+            <div class="kpim-filters" style="--kpim-cols:3">
                 @Fields
             </div>
         </KpiMobileFilters>
@@ -35,7 +36,7 @@
     <Landscape>
         <div class="kpim-sp-bar">
             <KpiMobileFilters Compact="true">
-                <div class="kpim-filters kpim-compact" style="--kpim-cols:2">
+                <div class="kpim-filters kpim-compact" style="--kpim-cols:3">
                     @Fields
                 </div>
             </KpiMobileFilters>
@@ -101,6 +102,9 @@
     [Parameter] public string Measure { get; set; } = "TFI";
     [Parameter] public EventCallback<string> MeasureChanged { get; set; }
 
+    /// <summary>The Sales Office was changed here - the page's handler, which reloads for it (KPI site).</summary>
+    [Parameter] public EventCallback OfficeChanged { get; set; }
+
     /// <summary>The years on offer (2020 to the report year, oldest first).</summary>
     [Parameter] public IReadOnlyList<int> Years { get; set; } = Array.Empty<int>();
 
@@ -140,6 +144,7 @@
 
     private RenderFragment Fields => __builder =>
     {
+        <KpiOfficeField Changed="OfficeChanged" />
         <KpiField Caption="Measure" Value="@Measure" ValueChanged="MeasureChanged" Options="MeasureOptions" />
         <KpiField Caption="Year" Value="@ShownYear.ToString(Inv)" ValueChanged="OnYear" Enabled="Years.Count > 0"
                         Options="@(Years.Select(y => new KpiOption(y.ToString(Inv), y.ToString(Inv))).ToList())" />

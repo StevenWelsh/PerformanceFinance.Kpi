@@ -1,9 +1,8 @@
 @using System.Globalization
 @using Kpi.Web.Components.Shared.Kpis.Mobile
-@inject Kpi.Web.Data.Kpis.KpiOfficeState Office
 
 @* Business Analysis on a phone (portrait only): Sales Office (on a row of its own), Dimension, Measure, Year
-   and Quarter, then - KpiOfficeEmpty in their place for an office with no figures -
+   and Quarter, then
    • a dimension: the year's donut (each value's full total, as the full view's pie) with its change
      against the year before to date, and one row per value - amount, share, change - that opens to
      its 8-year trend;
@@ -11,25 +10,27 @@
      with a bar and the change, Others and the total.
    Sales Office, Dimension, Measure, Quarter and the dimension Year call the page's own handlers, so they
    reload exactly as the full view's fields do; the lender Year only picks which loaded card shows. Donut
-   and bars are drawn here (SVG / sized markup) - BusinessAnalysis.razor.js is the full view's. *@
+   and bars are drawn here (SVG / sized markup) - BusinessAnalysis.razor.js is the full view's.
+   Shire Business Analysis (3 Nov 2026) uses it too: its own dimensions and measures, no Sales Office, and Proposed to PF
+   (DimensionChoices, MeasureChoices, MeasureText, ShowOffice, MoreFilters) - PF's page sets none of them. *@
 
 <KpiMobileFilters>
     <div class="kpim-filters" style="--kpim-cols:2">
-        <div class="kpim-ba-office"><KpiOfficeField Changed="OfficeChanged" /></div>
-        <KpiField Caption="Dimension" Value="@Dimension" ValueChanged="PickDimension" Options="DimensionOptions" />
-        <KpiField Caption="Measure" Value="@Measure" ValueChanged="MeasureChanged" Options="MeasureOptions" />
+        @if (ShowOffice)
+        {
+            <div class="kpim-ba-office"><KpiOfficeField Changed="OfficeChanged" /></div>
+        }
+        <KpiField Caption="Dimension" Value="@Dimension" ValueChanged="PickDimension" Options="DimensionChoices ?? DimensionOptions" />
+        <KpiField Caption="Measure" Value="@Measure" ValueChanged="MeasureChanged" Options="MeasureChoices ?? MeasureOptions" />
         @* one Year field for both views, so it keeps its place in the folded summary *@
         <KpiField Caption="Year" Value="@ShownYear.ToString()" ValueChanged="PickYear"
                   Options="@(IsLender ? LenderYearOptions : YearOptions)" Text="@(ShownYear > 0 ? null : "")" />
         <KpiField Caption="Quarter" Value="@Quarter.ToString()" ValueChanged="QuarterChanged" Options="QuarterOptions" />
+        @MoreFilters
     </div>
 </KpiMobileFilters>
 
-@if (!Office.ShowsData)
-{
-    <KpiOfficeEmpty />
-}
-else if (Loading)
+@if (Loading)
 {
     <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
 }
@@ -48,7 +49,7 @@ else if (IsLender)
     {
         <section class="kpim-card kpim-ba-lenders">
             <div class="kpim-ba-lhead">
-                <h2>@Measure by lender · @l.YearLabel</h2>
+                <h2>@(MeasureText ?? Measure) by lender · @l.YearLabel</h2>
                 <span>@l.Vs</span>
             </div>
             @foreach (var r in l.Top)
@@ -104,7 +105,7 @@ else
                 </div>
             </div>
             <div class="kpim-ba-sumtext">
-                <span class="kpim-ba-caption">@Measure by @Dimension.ToLowerInvariant()</span>
+                <span class="kpim-ba-caption">@(MeasureText ?? Measure) by @Dimension.ToLowerInvariant()</span>
                 <span class="kpim-ba-against">@d.Against</span>
                 @Pill(d.Change, "kpim-ba-big", 10)
             </div>
@@ -174,13 +175,26 @@ else
     /// <summary>The business date the figures run to (WebKPI.fnReportDate).</summary>
     [Parameter] public DateTime? ReportDate { get; set; }
 
-    /// <summary>The Sales Office was changed here - the page's handler, so the page re-renders too.</summary>
+    /// <summary>The Sales Office was changed here - the page's handler, which reloads for it.</summary>
     [Parameter] public EventCallback OfficeChanged { get; set; }
 
     [Parameter] public EventCallback<string> DimensionChanged { get; set; }
     [Parameter] public EventCallback<string> MeasureChanged { get; set; }
     [Parameter] public EventCallback<string> YearChanged { get; set; }
     [Parameter] public EventCallback<string> QuarterChanged { get; set; }
+
+    /// <summary>Another page's dimensions and measures (Shire's); null = PF's.</summary>
+    [Parameter] public IReadOnlyList<KpiOption>? DimensionChoices { get; set; }
+    [Parameter] public IReadOnlyList<KpiOption>? MeasureChoices { get; set; }
+
+    /// <summary>The measure in the captions ("Income by profession"); null = its value (PF's "AF").</summary>
+    [Parameter] public string? MeasureText { get; set; }
+
+    /// <summary>The Sales Office field (PF's); Shire has no offices.</summary>
+    [Parameter] public bool ShowOffice { get; set; } = true;
+
+    /// <summary>Fields after Quarter (Shire's Proposed to PF).</summary>
+    [Parameter] public RenderFragment? MoreFilters { get; set; }
 
     private string? _open;      // the dimension row opened to its trend: null = the first, "" = none
     private int? _lenderYear;   // the lender card shown: null = the latest

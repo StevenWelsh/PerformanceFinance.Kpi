@@ -26,16 +26,10 @@ else if (Divisions is not null)
         </div>
     </KpiMobileFilters>
 
-    @if (!Office.ShowsData)
+    @foreach (var period in Periods)
     {
-        <KpiOfficeEmpty />
-    }
-    else
-    {
-        @foreach (var period in Periods)
-        {
-            <SalesSummaryMobileCard @key="period" Period="@period" DivisionId="division.Id" Title="@division.Title" />
-        }
+        <SalesSummaryMobileCard @key="period" Period="@period" DivisionId="division.Id" Title="@division.Title"
+                                SalesOfficeId="Office.OfficeId" />
     }
 }
 
