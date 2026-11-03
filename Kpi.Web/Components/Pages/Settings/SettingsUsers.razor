@@ -57,7 +57,7 @@ else
                 {
                     @* data-label: on a phone each row is a card, labelled by these *@
                     <tr>
-                        <td data-label="Name"><div class="set-strong">@u.Name@(u.IsMe ? " (you)" : "")@AlertIcon(u.Id)</div><div class="set-sub">@u.Email</div></td>
+                        <td data-label="Name"><div class="set-strong">@u.Name@(u.IsMe ? " (you)" : "")@AlertIcon(u.Email)</div><div class="set-sub">@u.Email</div></td>
                         <td data-label="Role">@KpiRoles.Label(u.Role)</td>
                         <td data-label="Reports" title="@ReportsTitle(u)">@ReportsText(u)</td>
                         <td data-label="Status"><span class="set-pill set-pill-@(u.Status.Replace(" ", "").ToLowerInvariant())">@u.Status</span></td>
@@ -210,22 +210,31 @@ else
         Alerts.Changed -= OnAlertsChanged;
     }
 
-    // the envelope: this person gets data sync alerts (chosen in Settings > Data sync), and when one was last sent to them
+    // the envelope: this person's address gets the alerts (Settings > Scheduled tasks - all the System Admins when none are
+    // set there), and when one was last sent to them
     private Kpi.Web.Data.SyncAlertSettings? _alertSettings;
+    private HashSet<string> _alertAddresses = new(StringComparer.OrdinalIgnoreCase);
 
     private async Task LoadAlertSettings()
     {
-        try { _alertSettings = await Alerts.GetAsync(); } catch { /* only an icon */ }
+        try
+        {
+            _alertSettings = await Alerts.GetAsync();
+            var to = await Alerts.AddressesAsync();
+            if (to.Count == 0) to = await Alerts.SystemAdminAddressesAsync();
+            _alertAddresses = new(to, StringComparer.OrdinalIgnoreCase);
+        }
+        catch { /* only an icon */ }
     }
 
     private void OnAlertsChanged() => _ = InvokeAsync(async () => { await LoadAlertSettings(); StateHasChanged(); });
 
-    private RenderFragment AlertIcon(string userId) => __builder =>
+    private RenderFragment AlertIcon(string? email) => __builder =>
     {
-        if (_alertSettings is null || !_alertSettings.RecipientIds.Contains(userId)) return;
-        var title = _alertSettings.LastSentUtc.TryGetValue(userId, out var sent)
-            ? $"Gets data sync alerts - last sent {Kpi.Web.Data.UkTime.Show(sent, "HH:mm 'on' dd MMM")}"
-            : "Gets data sync alerts (none sent yet)";
+        if (_alertSettings is null || email is null || !_alertAddresses.Contains(email)) return;
+        var title = _alertSettings.LastSentUtc.TryGetValue(email.ToLowerInvariant(), out var sent)
+            ? $"Gets alerts - last sent {Kpi.Web.Data.UkTime.Show(sent, "HH:mm 'on' dd MMM")}"
+            : "Gets alerts (none sent yet)";
         <i class="bi bi-envelope set-alert-icon" title="@title" aria-label="@title"></i>
     };
 

@@ -27,6 +27,8 @@ public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options)
     public DbSet<Integration> Integrations => Set<Integration>();
     public DbSet<PublishedLink> PublishedLinks => Set<PublishedLink>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+    public DbSet<ScheduledTask> ScheduledTasks => Set<ScheduledTask>();
+    public DbSet<ScheduledTaskRun> ScheduledTaskRuns => Set<ScheduledTaskRun>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -111,6 +113,25 @@ public sealed class KpiDbContext(DbContextOptions<KpiDbContext> options)
             e.Property(i => i.RowVersion).IsRowVersion();
         });
 
+        // Settings > Scheduled tasks (3 Nov 2026): each task's schedule and latest state, and every run
+        modelBuilder.Entity<ScheduledTask>(e =>
+        {
+            e.ToTable("ScheduledTask", "Cfg");
+            e.HasKey(t => t.Key);
+            e.Property(t => t.Key).HasMaxLength(60).IsUnicode(false);
+            e.Property(t => t.LastMessage).HasMaxLength(1000);
+            e.Property(t => t.LeaseOwner).HasMaxLength(120);
+            e.Property(t => t.UpdatedByUserId).HasMaxLength(450);
+        });
+        modelBuilder.Entity<ScheduledTaskRun>(e =>
+        {
+            e.ToTable("ScheduledTaskRun", "Cfg");
+            e.Property(r => r.TaskKey).HasMaxLength(60).IsUnicode(false);
+            e.Property(r => r.TriggeredBy).HasMaxLength(200);
+            e.Property(r => r.Message).HasMaxLength(1000);
+            e.Property(r => r.Instance).HasMaxLength(120);
+            e.HasIndex(r => new { r.TaskKey, r.StartedUtc });
+        });
         modelBuilder.Entity<PublishedLink>(e =>
         {
             e.ToTable("PublishedLink", "Cfg");

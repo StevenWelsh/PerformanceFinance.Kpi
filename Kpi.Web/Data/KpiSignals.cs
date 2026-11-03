@@ -3,7 +3,7 @@ namespace Kpi.Web.Data;
 /// <summary>
 /// New figures have landed and the cache holds them (19 Oct 2026, Steve: "will these pages refresh when new data
 /// lands?"). Raised by <see cref="Kpis.KpiWarmer"/> once it has re-run the cached reports after a copy; every open report
-/// (KpiPanel - the published / embedded view too) and Settings > Data sync listen, so they update within seconds instead
+/// (KpiPanel - the published / embedded view too) and Settings > Scheduled tasks listen, so they update within seconds instead
 /// of at their next 10-minute check.
 /// </summary>
 public sealed class KpiFiguresSignal

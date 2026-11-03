@@ -1,0 +1,393 @@
+@using Kpi.Data.Auth
+@using Kpi.Data.Cfg
+@using Kpi.Web.Data
+@using Kpi.Web.Scheduling
+@inject ScheduledTaskService Tasks
+@inject SchedulerRunner Runner
+@inject SyncAlerts Alerts
+@inject OfficeJobsStore Office
+@inject IServiceScopeFactory Scopes
+@implements IDisposable
+
+@* Settings > Scheduled tasks (3 Nov 2026, Steve - SHS-Web's System settings > Scheduled tasks, copied; it replaced Data sync
+   and Shire sync). Every task the site runs on a clock: its schedule, whether it is paused, its last run, its next, Run now,
+   and its History. Kept short (Steve: "less is more"). Times are UK time. *@
+
+<div class="set-head">
+    <div><h2>Scheduled tasks</h2></div>
+</div>
+@if (_error is not null) { <div class="login-error" role="alert"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div> }
+
+<div class="tsk-alerts">
+    <label for="alert-to"><b>Tell these people when a task keeps failing</b></label>
+    <div class="tsk-alerts-row">
+        <input id="alert-to" @bind="_alertsTo" @bind:event="oninput" placeholder="All the System Admins" />
+        <button type="button" class="acc-btn-secondary tsk-btn" disabled="@_busy" @onclick="SaveAlertsAsync">Save</button>
+        @if (_alertsSaved) { <span class="set-sub" role="status">Saved</span> }
+    </div>
+    @if (_alertsError is not null) { <div class="set-error-cell" role="alert">@_alertsError</div> }
+    <div class="set-sub">Emailed when a task keeps failing or the figures stop arriving, and again when it's fixed.</div>
+</div>
+
+@* One table (Steve): first the office's two jobs, READ ONLY - SQL Server Agent runs them on PF-APP1; their status and
+   schedules come from the jobs themselves (KpiCopy.JobStatus / JobSchedule), read at every check by "Collect figures from
+   the office" - then the site's own tasks by group *@
+@if (_rows is null)
+{
+    <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+}
+else
+{
+    <div class="set-table-wrap">
+        <table class="set-table tsk-table">
+            <thead><tr><th class="tsk-task">Task</th><th class="tsk-sched">Schedule</th><th class="tsk-last">Last run</th><th class="tsk-next">Next run</th><th></th></tr></thead>
+            <tbody>
+                <tr class="tsk-group"><th colspan="5" scope="rowgroup">On the office SQL Server <span class="tsk-readonly">Read only</span>@if (_office is not null) { <span class="tsk-checked">checked @When(_office.CheckedUtc)</span> }</th></tr>
+                @if (_office?.Jobs is not { } office)
+                {
+                    <tr><td colspan="5" class="set-sub">@(_office is null ? "Not checked yet." : "The office's KPI_Export doesn't report its jobs yet: it needs the version 4 script.")</td></tr>
+                }
+                else
+                {
+                    @foreach (var (name, title, description) in OfficeJobsStore.Known)
+                    {
+                        var j = office.Jobs.FirstOrDefault(x => x.Job == name);
+                        var (schedule, next) = OfficeJobsStore.Describe(office.Schedules.Where(x => x.Job == name));
+                        var stuck = j?.LastOutcome == "Running" && DateTime.UtcNow - j.LastStartedUtc > OfficeJobsStore.StuckAfter;
+                        <tr class="@(j?.Enabled == false ? "tsk-paused" : "")">
+                            <td><b title="SQL Agent job: @name">@title</b>@if (j?.LastOutcome == "Failed") { <span class="tsk-failed"> - last run failed</span> }
+                                <div class="set-sub">@description</div>
+    </td>
+                            <td>@schedule</td>
+                            <td>
+                                @if (j?.LastStartedUtc is not { } started) { <span class="set-sub">Not run yet</span> }
+                                else if (j.LastOutcome == "Running") { <span class="@(stuck ? "tsk-msg-bad" : "")">Running since @When(started)</span> }
+                                else
+                                {
+                                    <span>@(j.LastOutcome == "Failed" ? "Failed" : "Worked")</span>
+                                    <span class="set-sub"> · @When(started)@(j.LastFinishedUtc is { } done ? $" · {Took((int)(done - started).TotalMilliseconds)}" : "")</span>
+                                    @if (j.LastError is { Length: > 0 } err) { <div class="tsk-msg-bad">@err</div> }
+                                }
+                            </td>
+                            <td>@(j?.Enabled == false ? "Disabled" : next is { } n ? Due(n) : "-")</td>
+                            <td></td>
+                        </tr>
+                    }
+                }
+                @foreach (var group in _rows.GroupBy(r => r.Job.Group))
+                {
+                    <tr class="tsk-group"><th colspan="5" scope="rowgroup">@group.Key</th></tr>
+                    @foreach (var r in group)
+                    {
+                        var t = r.Task;
+                        var running = Runner.IsRunning(r.Job.Key) || t.LeaseUntilUtc > DateTime.UtcNow;
+                        var failed = t.LastOutcome == ScheduledRunOutcome.Failed;
+                        <tr class="@(t.Enabled ? "" : "tsk-paused")">
+                            <td><b>@r.Job.Name</b>@if (failed) { <span class="tsk-failed"> - last run failed</span> }
+                                <div class="set-sub">@r.Job.Description</div></td>
+                            <td>@TaskSchedule.Of(t).Describe()</td>
+                            <td>
+                                @if (running) { <span>Running now…</span> }
+                                else if (t.LastStartedUtc is { } last)
+                                {
+                                    <span>@(failed ? "Failed" : "Worked")</span><span class="set-sub"> · @When(last)@(t.LastDurationMs is { } ms ? $" · {Took(ms)}" : "")</span>
+                                    @if (failed && t.ConsecutiveFailures > 1) { <div class="set-sub">Failed @t.ConsecutiveFailures times in a row</div> }
+                                    @if (!string.IsNullOrWhiteSpace(t.LastMessage)) { <div class="@(failed ? "tsk-msg-bad" : "set-sub tsk-msg")" title="@t.LastMessage">@t.LastMessage</div> }
+                                }
+                                else { <span class="set-sub">Not run yet</span> }
+                                @if (_rowProblems.TryGetValue(r.Job.Key, out var problem)) { <div class="tsk-msg-bad" role="alert">@problem</div> }
+                            </td>
+                            <td>
+                                @if (!t.Enabled) { <span>Paused</span> }
+                                else if (Runner.PausedHere(r.Job)) { <span class="set-sub" title="Kpi:BackgroundWork is off here: the live site runs it">Not here</span> }
+                                else if (t.NextDueUtc is { } next) { <span>@Due(next)</span> }
+                                else { <span class="set-sub">-</span> }
+                            </td>
+                            <td class="tsk-actions">
+                                <button type="button" class="acc-btn-secondary tsk-btn tsk-run" disabled="@(_busy || running)" @onclick="() => RunNowAsync(r.Job)">Run now</button>
+                                <button type="button" class="acc-btn-secondary tsk-btn" disabled="@_busy" @onclick="() => OpenSchedule(r)">Schedule</button>
+                                <button type="button" class="acc-btn-secondary tsk-btn" disabled="@_busy" @onclick="() => SetPausedAsync(r.Job, t.Enabled)">@(t.Enabled ? "Pause" : "Resume")</button>
+                                <button type="button" class="acc-btn-secondary tsk-btn" @onclick="() => OpenHistoryAsync(r.Job)">History</button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+    <p class="set-sub">Times are UK time.</p>
+}
+
+@if (_edit is { } e && _editJob is { } job)
+{
+    <div class="set-backdrop" @onclick="() => _edit = null"></div>
+    <div class="set-dialog tsk-dialog" role="dialog" aria-modal="true" aria-labelledby="tsk-sched-title">
+        <h3 id="tsk-sched-title">Schedule - @job.Name</h3>
+        <div class="tsk-field">
+            <div class="set-sub">Days</div>
+            <div class="tsk-inline" role="radiogroup" aria-label="Which days">
+                <label><input type="radio" name="tsk-days" checked="@(e.DaysMode == "all")" @onchange="@(() => SetDaysMode("all"))" /> Every day</label>
+                <label><input type="radio" name="tsk-days" checked="@(e.DaysMode == "work")" @onchange="@(() => SetDaysMode("work"))" /> Mon–Fri</label>
+                <label><input type="radio" name="tsk-days" checked="@(e.DaysMode == "chosen")" @onchange="@(() => SetDaysMode("chosen"))" /> Chosen days</label>
+            </div>
+            @if (e.DaysMode == "chosen")
+            {
+                <div class="tsk-inline tsk-days" role="group" aria-label="Chosen days">
+                    @foreach (var d in TaskSchedule.WeekOrder)
+                    {
+                        var on = (e.DaysMask & TaskSchedule.Bit(d)) != 0;
+                        <button type="button" class="tsk-btn @(on ? "acc-btn" : "acc-btn-secondary")" aria-pressed="@(on ? "true" : "false")"
+                                @onclick="() => e.DaysMask ^= TaskSchedule.Bit(d)">@d.ToString()[..3]</button>
+                    }
+                </div>
+            }
+        </div>
+        <div class="tsk-field tsk-inline">
+            <label>Start at <input id="tsk-start" type="time" step="300" @bind="e.Start" /></label>
+            <label><input type="checkbox" checked="@e.Repeat" @onchange="@(x => e.Repeat = x.Value is true)" /> Repeat every</label>
+            <select disabled="@(!e.Repeat)" @bind="e.RepeatEvery" aria-label="Repeat every">
+                @foreach (var m in ScheduledTaskService.RepeatChoices.Where(m => m >= job.MinimumRepeat.TotalMinutes))
+                {
+                    <option value="@m">@TaskSchedule.EveryText(m)</option>
+                }
+            </select>
+            @if (e.Repeat)
+            {
+                <label>until <input type="time" step="300" @bind="e.Until" aria-label="Repeat until" /></label>
+            }
+        </div>
+        <div class="tsk-field">
+            <label><input type="checkbox" @bind="e.RunMissed" /> Catch up a missed run when the site is back</label>
+        </div>
+        <div class="tsk-field tsk-inline">
+            If a run fails, try again after
+            <select @bind="e.RetryAfter" disabled="@(e.RetryCount == 0)" aria-label="Wait before trying again">
+                @foreach (var m in ScheduledTaskService.RetryChoices) { <option value="@m">@m minutes</option> }
+            </select>
+            up to
+            <select @bind="e.RetryCount" aria-label="How many times to try again">
+                <option value="0">no times</option>
+                @for (var n = 1; n <= 5; n++) { <option value="@n">@n time@(n == 1 ? "" : "s")</option> }
+            </select>
+        </div>
+        @{ var preview = e.ToSchedule(); }
+        <div class="tsk-preview">
+            <b>@preview.Describe()</b>
+            @if (preview.Problem(job.MinimumRepeat) is { } p) { <div class="tsk-msg-bad">@p</div> }
+            else { <div class="set-sub">Next: @string.Join(" · ", preview.NextRunsUtc(DateTime.UtcNow, 4).Select(When))</div> }
+        </div>
+        @if (_editError is not null) { <div class="tsk-msg-bad" role="alert">@_editError</div> }
+        <div class="set-dialog-buttons">
+            <button type="button" class="acc-btn-secondary tsk-default" disabled="@_busy" @onclick="ResetToDefault">Use the default</button>
+            <button type="button" class="acc-btn-secondary" disabled="@_busy" @onclick="() => _edit = null">Cancel</button>
+            <button type="button" class="acc-btn" disabled="@_busy" @onclick="SaveScheduleAsync">Save schedule</button>
+        </div>
+    </div>
+}
+
+@if (_historyJob is { } hj)
+{
+    <div class="set-backdrop" @onclick="() => _historyJob = null"></div>
+    <div class="set-dialog tsk-history" role="dialog" aria-modal="true" aria-labelledby="tsk-hist-title">
+        <h3 id="tsk-hist-title">History - @hj.Name</h3>
+        @if (_history is null) { <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div> }
+        else if (_history.Count == 0) { <p class="set-sub">It hasn't run yet.</p> }
+        else
+        {
+            <div class="set-table-wrap">
+                <table class="set-table">
+                    <thead><tr><th>Started</th><th>Started by</th><th>Outcome</th><th>Took</th><th>What happened</th></tr></thead>
+                    <tbody>
+                        @foreach (var run in _history)
+                        {
+                            <tr>
+                                <td class="set-nowrap">@When(run.StartedUtc)</td>
+                                <td>@(run.Trigger switch { ScheduledRunTrigger.Schedule => "Schedule", ScheduledRunTrigger.Retry => "Retry", _ => $"Run now - {run.TriggeredBy}" })</td>
+                                <td>@(run.Outcome == ScheduledRunOutcome.Succeeded ? "Worked" : "Failed")</td>
+                                <td class="set-nowrap">@Took(run.DurationMs)</td>
+                                <td class="@(run.Outcome == ScheduledRunOutcome.Failed ? "tsk-msg-bad" : "")">@run.Message</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <div class="set-dialog-buttons">
+            <button type="button" class="acc-btn-secondary" @onclick="() => _historyJob = null">Close</button>
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<ScheduledTaskService.Row>? _rows;
+    private OfficeJobsSnapshot? _office;
+    private string? _error, _alertsError, _alertsTo;
+    private bool _busy, _alertsSaved;
+    private readonly Dictionary<string, string> _rowProblems = new();
+    private Timer? _refresh;
+
+    private IScheduledJob? _historyJob;
+    private List<ScheduledTaskRun>? _history;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Tasks.Changed += OnChanged;
+        await ReloadAsync();
+        try { _alertsTo = string.Join(", ", await Alerts.AddressesAsync()); } catch (Exception ex) { _error = ex.Message; }
+        // keeps "Next run" honest while the screen stays open
+        _refresh = new Timer(_ => OnChanged(), null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+    }
+
+    private void OnChanged() => _ = InvokeAsync(async () => { if (!_busy && _edit is null) { await ReloadAsync(); StateHasChanged(); } });
+
+    public void Dispose()
+    {
+        Tasks.Changed -= OnChanged;
+        _refresh?.Dispose();
+    }
+
+    private async Task ReloadAsync()
+    {
+        try { _rows = await Tasks.ListAsync(Runner.Jobs); }
+        catch (Exception ex) { _error = ex.Message; _rows ??= new(); }
+        try { _office = await Office.GetAsync(); } catch { /* the office section says "Not checked yet" */ }
+    }
+
+    private async Task<KpiUser> ActorAsync() => await SettingsActor.GetAsync(AuthState, Scopes);
+
+    private async Task SaveAlertsAsync()
+    {
+        _alertsError = null; _alertsSaved = false; _busy = true;
+        try { _alertsTo = await Alerts.SaveAddressesAsync(await ActorAsync(), _alertsTo); _alertsSaved = true; }
+        catch (Exception ex) { _alertsError = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task SetPausedAsync(IScheduledJob job, bool pause)
+    {
+        _rowProblems.Remove(job.Key); _busy = true;
+        try { await Tasks.SetPausedAsync(await ActorAsync(), job, pause); }
+        catch (Exception ex) { _rowProblems[job.Key] = ex.Message; }
+        finally { _busy = false; }
+        await ReloadAsync();
+    }
+
+    private async Task RunNowAsync(IScheduledJob job)
+    {
+        _rowProblems.Remove(job.Key);
+        try
+        {
+            var actor = await ActorAsync();
+            var run = Runner.RunNowAsync(job.Key, actor);
+            await Task.Delay(100);   // let the row show "Running now…"
+            await ReloadAsync(); StateHasChanged();
+            await run;
+        }
+        catch (Exception ex) { _rowProblems[job.Key] = ex.Message; }
+        await ReloadAsync();
+        if (_historyJob?.Key == job.Key) await LoadHistoryAsync(job);
+    }
+
+    // ---- the schedule editor (SHS-Web's, cut down) ----
+
+    private sealed class ScheduleEdit
+    {
+        public string DaysMode { get; set; } = "all";
+        public int DaysMask { get; set; } = TaskSchedule.AllDays;
+        public TimeOnly Start { get; set; }
+        public bool Repeat { get; set; }
+        public int RepeatEvery { get; set; } = 15;
+        public TimeOnly? Until { get; set; }
+        public bool RunMissed { get; set; }
+        public int RetryAfter { get; set; } = 15;
+        public int RetryCount { get; set; }
+
+        public TaskSchedule ToSchedule() => new(
+            DaysMode switch { "all" => TaskSchedule.AllDays, "work" => TaskSchedule.WorkingDays, _ => DaysMask },
+            Start, Repeat ? RepeatEvery : null, Repeat ? Until : null);
+
+        public static ScheduleEdit From(TaskSchedule s, bool runMissed, int? retryAfter, int retryCount) => new()
+        {
+            DaysMode = s.DaysMask switch { TaskSchedule.AllDays => "all", TaskSchedule.WorkingDays => "work", _ => "chosen" },
+            DaysMask = s.DaysMask,
+            Start = s.Start,
+            Repeat = s.RepeatEveryMinutes is not null,
+            RepeatEvery = s.RepeatEveryMinutes ?? 15,
+            Until = s.RepeatUntil,
+            RunMissed = runMissed,
+            RetryAfter = retryAfter ?? 15,
+            RetryCount = retryCount,
+        };
+    }
+
+    private ScheduleEdit? _edit;
+    private IScheduledJob? _editJob;
+    private string? _editError;
+
+    private void OpenSchedule(ScheduledTaskService.Row r)
+    {
+        _editJob = r.Job; _editError = null;
+        _edit = ScheduleEdit.From(TaskSchedule.Of(r.Task), r.Task.RunMissed, r.Task.RetryAfterMinutes, r.Task.RetryCount);
+    }
+
+    private void SetDaysMode(string mode)
+    {
+        if (_edit is null) return;
+        if (mode == "chosen" && _edit.DaysMode != "chosen") _edit.DaysMask = _edit.ToSchedule().DaysMask;
+        _edit.DaysMode = mode;
+    }
+
+    private void ResetToDefault()
+    {
+        if (_editJob is null) return;
+        _edit = ScheduleEdit.From(_editJob.DefaultSchedule, _editJob.DefaultSchedule.RepeatEveryMinutes is null, null, 0);
+        _editError = null;
+    }
+
+    private async Task SaveScheduleAsync()
+    {
+        if (_edit is not { } e || _editJob is not { } job) return;
+        _editError = null; _busy = true;
+        try
+        {
+            await Tasks.SaveScheduleAsync(await ActorAsync(), job, e.ToSchedule(), e.RunMissed, e.RetryAfter, e.RetryCount);
+            _edit = null;
+        }
+        catch (Exception ex) { _editError = ex.Message; }
+        finally { _busy = false; }
+        await ReloadAsync();
+    }
+
+    // ---- history ----
+
+    private async Task OpenHistoryAsync(IScheduledJob job) { _historyJob = job; await LoadHistoryAsync(job); }
+
+    private async Task LoadHistoryAsync(IScheduledJob job)
+    {
+        _history = null;
+        try { _history = await Tasks.GetRunsAsync(job.Key); }
+        catch (Exception ex) { _error = ex.Message; _historyJob = null; }
+    }
+
+    private static string When(DateTime utc)
+    {
+        var uk = UkTime.FromUtc(utc);
+        var today = UkTime.FromUtc(DateTime.UtcNow).Date;
+        return uk.Date == today ? $"Today {uk:HH:mm}"
+            : uk.Date == today.AddDays(1) ? $"Tomorrow {uk:HH:mm}"
+            : uk.Date == today.AddDays(-1) ? $"Yesterday {uk:HH:mm}"
+            : uk.ToString("ddd d MMM HH:mm");
+    }
+
+    private static string Due(DateTime utc)
+    {
+        var left = utc - DateTime.UtcNow;
+        if (left <= TimeSpan.FromSeconds(30)) return "Now";
+        if (left < TimeSpan.FromHours(1)) return $"In {Math.Ceiling(left.TotalMinutes):0} min";
+        return When(utc);
+    }
+
+    private static string Took(int ms) => ms < 1000 ? $"{ms} ms" : ms < 60_000 ? $"{ms / 1000.0:0.#} s" : $"{ms / 60_000.0:0.#} min";
+}

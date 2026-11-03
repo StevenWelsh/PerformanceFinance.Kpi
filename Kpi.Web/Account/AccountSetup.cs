@@ -142,26 +142,3 @@ public sealed class AccountLinks(IDataProtectionProvider protection)
 
     public static string NewNonce() => AccountSetup.Base64Url(RandomNumberGenerator.GetBytes(18));
 }
-
-/// <summary>
-/// Every 15 minutes: closes setup windows nobody finished. Its first run, as the site starts, is also the site's first
-/// database connection - the slow one in Azure (Kpi.Data.KpiRetryStrategy) - so it is rarely a person signing in who pays.
-/// </summary>
-public sealed class ExpireSetupsTask(IServiceScopeFactory scopes, ILogger<ExpireSetupsTask> log) : BackgroundService
-{
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(15));
-        do
-        {
-            try
-            {
-                await using var scope = scopes.CreateAsyncScope();
-                var n = await new AccountSetup(scope.ServiceProvider.GetRequiredService<KpiDbContext>(),
-                    scope.ServiceProvider.GetRequiredService<UserManager<KpiUser>>()).ExpireUnfinishedAsync();
-                if (n > 0) log.LogInformation("Closed {Count} unfinished mobile registration(s)", n);
-            }
-            catch (Exception ex) { log.LogError(ex, "Closing unfinished mobile registrations failed"); }
-        } while (await timer.WaitForNextTickAsync(stoppingToken));
-    }
-}

@@ -37,21 +37,31 @@ else if (_tab == "activity")
 {
     @* Report activity (29 Oct 2026, Steve): what people do ON the reports - filters, views, buttons (the timelapse with
        its year), time spent, and load times - from Auth.ReportEvent *@
-    @if (_act is not null)
+    <div class="aud-stats-bar">
+        <button type="button" class="acc-btn-secondary" disabled="@(_act is null)" @onclick="() => _statsOpen = true">
+            <i class="bi bi-bar-chart" aria-hidden="true"></i> Statistics
+        </button>
+    </div>
+    @* Statistics (3 Nov 2026, Steve): the last 30 days in a pop-up, so the list is the first thing on the tab; "N people"
+       opens who they were *@
+    @if (_statsOpen && _act is not null)
     {
-        <div class="aud-summary">
-            <div class="aud-summary-head">Last 30 days</div>
+        <div class="set-backdrop" @onclick="() => _statsOpen = false"></div>
+        <div class="set-dialog aud-stats" role="dialog" aria-modal="true" aria-labelledby="aud-stats-title">
+            <h3 id="aud-stats-title">Statistics - last 30 days</h3>
             <div class="aud-summary-grid aud-summary-grid-wide">
                 <div>
                     <div class="aud-summary-title">Choices made</div>
                     @if (_act.Choices.Count == 0) { <div class="set-sub">None yet.</div> }
                     @foreach (var c in _act.Choices)
                     {
+                        var key = $"c|{c.Report}|{c.Label}|{c.Value}";
                         <div class="aud-bar-row aud-bar-row-wide">
                             <span class="aud-bar-label" title="@ReportLabel(c.Report) · @c.Label: @c.Value">@ReportLabel(c.Report) · @c.Label: <b>@c.Value</b></span>
                             <span class="aud-bar"><span style="width:@(Pct(c.Count, _act.Choices[0].Count))%"></span></span>
-                            <span class="aud-bar-n">@c.Count <span class="set-sub">· @c.People @(c.People == 1 ? "person" : "people")</span></span>
+                            <span class="aud-bar-n">@c.Count · @People(key, c.People, () => WhoAsync(key, e => (e.Kind == ReportEventKinds.Filter || e.Kind == ReportEventKinds.View) && e.Report == c.Report && e.Label == c.Label && e.Value == c.Value))</span>
                         </div>
+                        @Who(key)
                     }
                 </div>
                 <div>
@@ -59,11 +69,13 @@ else if (_tab == "activity")
                     @if (_act.Buttons.Count == 0) { <div class="set-sub">None yet.</div> }
                     @foreach (var b in _act.Buttons)
                     {
+                        var key = $"b|{b.Report}|{b.Label}";
                         <div class="aud-bar-row aud-bar-row-wide">
                             <span class="aud-bar-label" title="@ReportLabel(b.Report) · @b.Label">@ReportLabel(b.Report) · @b.Label</span>
                             <span class="aud-bar"><span style="width:@(Pct(b.Count, _act.Buttons[0].Count))%"></span></span>
-                            <span class="aud-bar-n">@b.Count <span class="set-sub">· @b.People @(b.People == 1 ? "person" : "people")</span></span>
+                            <span class="aud-bar-n">@b.Count · @People(key, b.People, () => WhoAsync(key, e => e.Kind == ReportEventKinds.Button && e.Report == b.Report && e.Label == b.Label))</span>
                         </div>
+                        @Who(key)
                     }
                 </div>
                 <div>
@@ -90,6 +102,9 @@ else if (_tab == "activity")
                         </div>
                     }
                 </div>
+            </div>
+            <div class="set-dialog-buttons">
+                <button type="button" class="acc-btn-secondary" @onclick="() => _statsOpen = false">Close</button>
             </div>
         </div>
     }
@@ -120,20 +135,28 @@ else if (_tab == "activity")
 }
 else if (_tab == "views")
 {
-    @if (_viewSummary is { Count: > 0 })
+    <div class="aud-stats-bar">
+        <button type="button" class="acc-btn-secondary" disabled="@(_viewSummary is not { Count: > 0 })" @onclick="() => _statsOpen = true">
+            <i class="bi bi-bar-chart" aria-hidden="true"></i> Statistics
+        </button>
+    </div>
+    @if (_statsOpen && _viewSummary is { Count: > 0 })
     {
-        <div class="aud-summary">
-            <div class="aud-summary-head">Last 30 days</div>
+        <div class="set-backdrop" @onclick="() => _statsOpen = false"></div>
+        <div class="set-dialog aud-stats" role="dialog" aria-modal="true" aria-labelledby="aud-views-title">
+            <h3 id="aud-views-title">Statistics - last 30 days</h3>
             <div class="aud-summary-grid">
                 <div>
                     <div class="aud-summary-title">Most opened reports</div>
                     @foreach (var s in _viewSummary.Take(8))
                     {
+                        var key = $"r|{s.Report}";
                         <div class="aud-bar-row">
                             <span class="aud-bar-label">@ReportLabel(s.Report)</span>
                             <span class="aud-bar"><span style="width:@(Pct(s.Opens, _viewSummary[0].Opens))%"></span></span>
-                            <span class="aud-bar-n">@s.Opens <span class="set-sub">· @s.People @(s.People == 1 ? "person" : "people")</span></span>
+                            <span class="aud-bar-n">@s.Opens · @People(key, s.People, () => WhoViewsAsync(key, v => v.Report == s.Report))</span>
                         </div>
+                        @Who(key)
                     }
                 </div>
                 <div>
@@ -151,13 +174,18 @@ else if (_tab == "views")
                     <div class="aud-summary-title">How opened</div>
                     @foreach (var h in _howSummary!)
                     {
+                        var key = $"h|{h.Report}";
                         <div class="aud-bar-row">
                             <span class="aud-bar-label">@HowLabel(h.Report)</span>
                             <span class="aud-bar"><span style="width:@(Pct(h.Opens, _howSummary![0].Opens))%"></span></span>
-                            <span class="aud-bar-n">@h.Opens <span class="set-sub">· @h.People @(h.People == 1 ? "person" : "people")</span></span>
+                            <span class="aud-bar-n">@h.Opens · @People(key, h.People, () => WhoViewsAsync(key, v => v.Source == h.Report))</span>
                         </div>
+                        @Who(key)
                     }
                 </div>
+            </div>
+            <div class="set-dialog-buttons">
+                <button type="button" class="acc-btn-secondary" @onclick="() => _statsOpen = false">Close</button>
             </div>
         </div>
     }
@@ -258,6 +286,46 @@ else
 
     private List<ReportEvent> _events = new();
     private ActivitySummary? _act;
+    private bool _statsOpen;
+    // Statistics' "N people", opened: who, and how many times each (by the row's key)
+    private readonly Dictionary<string, List<(string Name, int Count)>?> _who = new();
+
+    // "1 person" / "3 people" as a button that shows (or hides) who they were
+    private RenderFragment People(string key, int people, Func<Task> load) => __builder =>
+    {
+        <button type="button" class="aud-people" aria-expanded="@(_who.ContainsKey(key) ? "true" : "false")"
+                @onclick="async () => { if (!_who.Remove(key)) { _who[key] = null; await load(); } }">@people @(people == 1 ? "person" : "people")</button>
+    };
+
+    private RenderFragment Who(string key) => __builder =>
+    {
+        if (!_who.TryGetValue(key, out var list)) return;
+        <div class="aud-who">
+            @if (list is null) { <span class="set-sub">Loading…</span> }
+            else { @string.Join(" · ", list.Select(p => $"{p.Name} ({p.Count})")) }
+        </div>
+    };
+
+    private async Task WhoAsync(string key, System.Linq.Expressions.Expression<Func<ReportEvent, bool>> match)
+    {
+        var since = DateTime.UtcNow.AddDays(-30);
+        await using var db = await Dbs.CreateDbContextAsync();
+        var people = await db.ReportEvents.AsNoTracking().Where(e => e.OccurredUtc >= since).Where(match)
+            .GroupBy(e => e.UserName).Select(g => new { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(p => p.Count).ToListAsync();
+        if (_who.ContainsKey(key)) _who[key] = people.Select(p => (p.Name ?? "-", p.Count)).ToList();
+    }
+
+    // the same for Report views' Statistics: who opened a report, or opened reports that way
+    private async Task WhoViewsAsync(string key, System.Linq.Expressions.Expression<Func<ReportView, bool>> match)
+    {
+        var since = DateTime.UtcNow.AddDays(-30);
+        await using var db = await Dbs.CreateDbContextAsync();
+        var people = await db.ReportViews.AsNoTracking().Where(v => v.OpenedUtc >= since).Where(match)
+            .GroupBy(v => v.UserName).Select(g => new { Name = g.Key, Count = g.Count() })
+            .OrderByDescending(p => p.Count).ToListAsync();
+        if (_who.ContainsKey(key)) _who[key] = people.Select(p => (p.Name ?? "-", p.Count)).ToList();
+    }
 
     private IEnumerable<ReportEvent> ShownEvents => string.IsNullOrWhiteSpace(_filter) ? _events : _events.Where(e =>
         Has(e.UserName) || Has(ReportLabel(e.Report)) || Has(e.Label) || Has(e.Value) || Has(e.Filters) || Has(e.Kind) || Has(HowLabel(e.Source)));
@@ -317,6 +385,8 @@ else
     {
         if (tab == _tab) return;
         _tab = tab;
+        _statsOpen = false;
+        _who.Clear();
         await Load();
     }
 

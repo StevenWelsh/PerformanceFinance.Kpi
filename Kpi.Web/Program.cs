@@ -7,6 +7,7 @@ using Kpi.Web.Components;
 using Kpi.Web.Data;
 using Kpi.Web.Data.Kpis;
 using Kpi.Web.Integrations;
+using Kpi.Web.Scheduling;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.DataProtection;
@@ -114,33 +115,22 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<ReportActivity>())
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, OnlineTracker>();
 builder.Services.AddScoped<ReportCircuit>();   // a report's connection dropping / returning (Report activity's time looked at)
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler>(sp => sp.GetRequiredService<ReportCircuit>());
-builder.Services.AddHostedService<ExpireSetupsTask>();
 // the pre-load: one instance, also told by the copy (KpiPull) when a new dataset is published
-builder.Services.AddSingleton<KpiFiguresSignal>();   // new figures landed: open pages update (KpiPanel, Data sync)
+builder.Services.AddSingleton<KpiFiguresSignal>();   // new figures landed: open pages update (KpiPanel)
 builder.Services.AddSingleton<KpiPullHealth>();      // how the copy is doing, for the alerts
 builder.Services.AddSingleton<Kpi.Web.Data.Kpis.KpiWarmer>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Kpi.Web.Data.Kpis.KpiWarmer>());
-builder.Services.AddSingleton<SyncAlerts>();         // emails the chosen people when the figures stop arriving
-builder.Services.AddSingleton<KpiCopyControl>();     // Data sync's pause, check interval and Copy now
-// The work that must run ONCE, not in every copy of the site (3 Nov 2026, deployment slots): the copy, the alerts and
-// the nightly pruning. Kpi:BackgroundWork = false on the staging slot (a slot setting, so it stays with the slot when
-// they swap); absent = on. A copy without it still shows every report, from the same database.
-var backgroundWork = builder.Configuration.GetValue("Kpi:BackgroundWork", true);
-if (backgroundWork)
-{
-    builder.Services.AddHostedService(sp => sp.GetRequiredService<SyncAlerts>());
-    builder.Services.AddHostedService<HistoryPruner>();  // keeps the audit trail, report views and activity to 3 months
-    builder.Services.AddHostedService<Kpi.Web.Data.KpiPull>();      // the KPI copy from the office (KPI_Export), every 2 minutes unless changed
-}
-// The Shire copy from Shire's Salesforce, every 15 minutes unless changed: with the rest, unless Shire:Copy says
-// otherwise. Shire:Copy = true on the staging slot (a slot setting) while the Shire reports are tried there before the
-// live site has them (3 Nov 2026, Steve) - delete it once live has them, or both copies run (harmless, but twice).
-if (builder.Configuration.GetValue("Shire:Copy", backgroundWork))
-    builder.Services.AddHostedService<Kpi.Web.Shire.ShirePull>();
+builder.Services.AddSingleton<SyncAlerts>();         // the alerts task: failing tasks and stale figures, emailed
+builder.Services.AddSingleton<Kpi.Web.Data.KpiPull>();   // the copy from the office (KPI_Export)
+// Everything the site runs on a clock: Settings > Scheduled tasks (3 Nov 2026, Steve - SHS-Web's scheduler). The tasks
+// share one table, so only one copy of the site runs each at a time; Kpi:BackgroundWork = false on the staging slot (a slot
+// setting, so it stays with the slot when they swap; absent = on) stops them running on their schedule there, and
+// Shire:Copy does the same for the Shire copy alone. Run now works in either.
+builder.Services.AddScheduledTasks();
 
 // ---- Shire's Salesforce (3 Nov 2026, Steve): the Shire reports, their copy and its controls - all in Kpi.Web/Shire --
 builder.Services.AddSingleton<Kpi.Web.Shire.ShireSalesforce>();      // Settings > Integrations > Salesforce, and the copy's client
-builder.Services.AddSingleton<Kpi.Web.Shire.ShireCopyControl>();     // Settings > Shire sync's pause, check interval and Copy now
+builder.Services.AddSingleton<Kpi.Web.Shire.ShirePull>();            // the copy from Salesforce
 builder.Services.AddSingleton<Kpi.Web.Shire.ShireDataStatus>();      // the Shire reports' "As at"
 builder.Services.AddSingleton<Kpi.Web.Shire.ShireFiguresSignal>();   // a Shire copy landed: open Shire reports update
 builder.Services.AddHttpClient(Kpi.Web.Shire.ShireSalesforce.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(60));

@@ -41,35 +41,9 @@ public sealed class ReportViews(IDbContextFactory<KpiDbContext> dbs, ILogger<Rep
     }
 }
 
-/// <summary>
-/// Keeps the audit trail and report views to <see cref="Months"/> months (19 Oct 2026, Steve: "3 months"): runs
-/// Auth.spPruneHistory a few minutes after start-up and then every night at about 02:30 UK.
-/// </summary>
-public sealed class HistoryPruner(IDbContextFactory<KpiDbContext> dbs, ILogger<HistoryPruner> log) : BackgroundService
+/// <summary>How long the audit trail, report views and report activity are kept (19 Oct 2026, Steve: "3 months"); the task
+/// "Tidy old history" on Settings > Scheduled tasks removes older ones (Scheduling/Jobs.cs).</summary>
+public static class HistoryPruner
 {
     public const int Months = 3;
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        try { await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken); } catch (OperationCanceledException) { return; }
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await using var db = await dbs.CreateDbContextAsync(stoppingToken);
-                await db.Database.ExecuteSqlRawAsync("EXEC Auth.spPruneHistory @Months = {0}", [Months], stoppingToken);
-                log.LogInformation("Audit trail and report views older than {Months} months removed", Months);
-            }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                log.LogWarning(ex, "History tidy-up failed; trying again tomorrow");
-            }
-
-            // next 02:30 UK
-            var ukNow = Kpi.Web.Data.UkTime.FromUtc(DateTime.UtcNow);
-            var next = ukNow.Date.AddHours(2.5);
-            if (next <= ukNow) next = next.AddDays(1);
-            try { await Task.Delay(next - ukNow, stoppingToken); } catch (OperationCanceledException) { return; }
-        }
-    }
 }

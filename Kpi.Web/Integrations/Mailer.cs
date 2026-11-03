@@ -65,9 +65,9 @@ public sealed class Mailer(IntegrationStore store, IHttpClientFactory http, IWeb
             },
             null, null);
 
-    /// <summary>A data sync alert (SyncAlerts): the figures stopped arriving, a reminder, or back to normal.</summary>
+    /// <summary>An alert (SyncAlerts): a task failing, the figures stopped arriving, a reminder, or back to normal.</summary>
     public Task<MailOutcome> SyncAlertAsync(string to, string name, string subject, string[] lines, string link) =>
-        SendAsync(to, subject, $"Hello {name},", lines, "Open Data sync", link);
+        SendAsync(to, subject, $"Hello {name},", lines, "Open Scheduled tasks", link);
 
     /// <summary>Sends a test email to the given address through the saved settings.</summary>
     public Task<MailOutcome> TestAsync(string to) =>

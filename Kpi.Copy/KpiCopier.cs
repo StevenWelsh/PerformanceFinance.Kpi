@@ -7,6 +7,16 @@ namespace Kpi.Copy;
 /// <summary>Where KPI_Export's copies stand: refreshed when, as at which business date, Bad Debt / Exposure prepared when.</summary>
 public sealed record ExportState(DateTime RefreshedUtc, DateTime ReportDate, DateTime? SnapshotsUtc);
 
+/// <summary>The office's Agent jobs and their schedules, as KPI_Export holds them (KpiCopy.JobStatus / JobSchedule).</summary>
+public sealed record OfficeJobs(List<OfficeJob> Jobs, List<OfficeSchedule> Schedules);
+
+/// <summary>One Agent job's last run, as it recorded it. <c>LastOutcome</c>: Running, Worked or Failed.</summary>
+public sealed record OfficeJob(string Job, bool? Enabled, DateTime? LastStartedUtc, DateTime? LastFinishedUtc, string? LastOutcome, string? LastError);
+
+/// <summary>One of a job's schedules, as msdb.dbo.sysschedules holds it (times are hhmmss, the server's UK time).</summary>
+public sealed record OfficeSchedule(string Job, string Name, bool Enabled, int FreqType, int FreqInterval, int SubdayType,
+                                    int SubdayInterval, int StartTime, int EndTime);
+
 /// <summary>What a copy did. <c>Published</c> false means nothing changed in CMS_KPI, and <c>Reason</c> says why.</summary>
 public sealed record CopyOutcome(bool Published, string Scope, int Tables, long Rows, DateTime ReportDate, TimeSpan Elapsed, string? Reason = null);
 
@@ -52,7 +62,7 @@ public static class KpiCopier
             "IF OBJECT_ID(N'KpiCopy.Version') IS NULL SELECT 0 ELSE SELECT ISNULL(MAX(Version), 0) FROM KpiCopy.Version", source))
         {
             var version = (int)(await v.ExecuteScalarAsync(ct))!;
-            if (version != ExportVersion.Current)
+            if (version < ExportVersion.Oldest || version > ExportVersion.Current)
                 throw new InvalidOperationException(
                     $"KPI_Export is at version {version}; this copy needs version {ExportVersion.Current}. " +
                     "Apply the script that came with it:  Kpi.Tools export-apply --cms <CMS database>");
@@ -63,6 +73,36 @@ public static class KpiCopier
         await using var r = await cmd.ExecuteReaderAsync(ct);
         if (!await r.ReadAsync(ct)) return null;
         return new ExportState(r.GetDateTime(0), r.GetDateTime(1), r.IsDBNull(2) ? null : r.GetDateTime(2));
+    }
+
+    /// <summary>
+    /// The office's two Agent jobs as they report themselves (KpiCopy.JobStatus / JobSchedule, version 4): null on a
+    /// version 3 KPI_Export, which doesn't have them.
+    /// </summary>
+    public static async Task<OfficeJobs?> ReadJobsAsync(SqlConnection source, CancellationToken ct = default)
+    {
+        await using var cmd = new SqlCommand("""
+            IF OBJECT_ID(N'KpiCopy.JobStatus') IS NOT NULL AND OBJECT_ID(N'KpiCopy.JobSchedule') IS NOT NULL
+            BEGIN
+                SELECT Job, Enabled, LastStartedUtc, LastFinishedUtc, LastOutcome, LastError FROM KpiCopy.JobStatus;
+                SELECT Job, ScheduleName, Enabled, FreqType, FreqInterval, SubdayType, SubdayInterval, StartTime, EndTime
+                FROM KpiCopy.JobSchedule ORDER BY Job, ScheduleName;
+            END
+            """, source);
+        await using var r = await cmd.ExecuteReaderAsync(ct);
+        if (r.FieldCount == 0) return null;
+        var jobs = new List<OfficeJob>();
+        while (await r.ReadAsync(ct))
+            jobs.Add(new OfficeJob(r.GetString(0), r.IsDBNull(1) ? null : r.GetBoolean(1), Time(r, 2), Time(r, 3),
+                                   r.IsDBNull(4) ? null : r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5)));
+        var schedules = new List<OfficeSchedule>();
+        if (await r.NextResultAsync(ct))
+            while (await r.ReadAsync(ct))
+                schedules.Add(new OfficeSchedule(r.GetString(0), r.GetString(1), r.GetBoolean(2), r.GetInt32(3), r.GetInt32(4),
+                                                 r.GetInt32(5), r.GetInt32(6), r.GetInt32(7), r.GetInt32(8)));
+        return new OfficeJobs(jobs, schedules);
+
+        static DateTime? Time(SqlDataReader r, int i) => r.IsDBNull(i) ? null : DateTime.SpecifyKind(r.GetDateTime(i), DateTimeKind.Utc);
     }
 
     /// <summary>

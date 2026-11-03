@@ -8,68 +8,40 @@ namespace Kpi.Web.Shire;
 
 /// <summary>
 /// The Shire copy (3 Nov 2026, Steve): Shire's Salesforce -> schema Shire in CMS_KPI, as <see cref="Data.KpiPull"/> brings
-/// CMS's figures. Every few minutes (15 unless changed on Settings > Shire sync) ONE cheap call asks Salesforce how many
-/// opportunities there are and when any last changed (<see cref="ShireQueries.Changes"/>); only when that has moved since
-/// the last copy does it copy the won deals (<see cref="ShireQueries.WonSales"/>, ~5,500 rows) in full - into
-/// Shire.StageSale, then Shire.spPublish swaps them into Shire.Sale in one transaction. In full rather than only the changes:
-/// a deal deleted, re-opened or lost drops out without any special handling, and it costs a few API calls. Copy now copies
-/// whatever the check says. Off while Salesforce (Shire) isn't connected in Settings > Integrations, or is switched off.
-/// Writes through the site's usual CmsKpi connection (its identity is in kpi_push).
+/// CMS's figures - the task "Copy Shire from Salesforce" on Settings > Scheduled tasks (Scheduling/Jobs.cs), every 15
+/// minutes unless changed there. ONE cheap call asks Salesforce how many opportunities there are and when any last changed
+/// (<see cref="ShireQueries.Changes"/>); only when that has moved since the last copy does it copy the won deals
+/// (<see cref="ShireQueries.WonSales"/>, ~5,500 rows) in full - into Shire.StageSale, then Shire.spPublish swaps them into
+/// Shire.Sale in one transaction. In full rather than only the changes: a deal deleted, re-opened or lost drops out without
+/// any special handling, and it costs a few API calls. Run now always copies. Off while Salesforce (Shire) isn't connected in
+/// Settings > Integrations, or is switched off. Writes through the site's usual CmsKpi connection (its identity is in kpi_push).
 /// </summary>
-public sealed class ShirePull(IConfiguration config, ShireSalesforce salesforce, IntegrationStore store, ShireCopyControl control,
+public sealed class ShirePull(IConfiguration config, ShireSalesforce salesforce, IntegrationStore store,
                               ShireFiguresSignal figures, ILogger<ShirePull> log)
-    : BackgroundService
 {
-    // a failure goes to Shire sync's list once when it starts and then hourly while it lasts (every one is in the site's log)
-    private static readonly TimeSpan RecordFailureEvery = TimeSpan.FromHours(1);
-    private DateTime? _failingSinceUtc, _lastRecordedUtc;
     // what Salesforce said at the last publish: nothing new while it says the same (memory: a restart copies once)
     private (int Count, DateTime? Changed)? _published;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    /// <summary>One run: what happened, in a line for the task's History. Throws when the copy failed.</summary>
+    public async Task<string> RunAsync(bool force, CancellationToken ct)
     {
         var kpi = config.GetConnectionString("CmsKpi")!;   // Program.cs refuses to start without it
-        try
-        {
-            await Task.Delay(TimeSpan.FromSeconds(45), stoppingToken);   // let the site (and the CMS copy) start first
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                var schedule = await control.GetAsync();
-                var requestedBy = control.TakeRequest();
-                if (!schedule.Paused || requestedBy is not null) await CheckAsync(kpi, requestedBy, stoppingToken);
-                await control.WaitAsync(TimeSpan.FromMinutes(schedule.EveryMinutes), stoppingToken);
-            }
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
-    }
-
-    private async Task CheckAsync(string kpi, string? requestedBy, CancellationToken ct)
-    {
-        var manual = requestedBy is not null;
         var startedUtc = DateTime.UtcNow;
         DateTime? sourceChanged = null;
-        control.Started();
         try
         {
             var connection = await salesforce.CopyConnectionAsync();
-            if (connection is null)
-            {
-                control.Finished(manual, false, "Nothing copied: Salesforce (Shire) isn't connected, or copying is switched off (Settings > Integrations).");
-                return;
-            }
+            if (connection is null) return "Off: Salesforce (Shire) isn't connected, or copying is switched off (Settings > Integrations).";
             var (settings, secrets) = connection.Value;
-            if (manual) log.LogInformation("Shire copy now, asked for by {Who}", requestedBy);
 
             var token = await salesforce.SignInAsync(settings.Domain, secrets, ct);
             var (check, _) = await salesforce.QueryAsync(token, ShireQueries.Changes, ct: ct);
             var seen = (Count: check[0].GetProperty("n").GetInt32(), Changed: ReadTime(check[0], "changed"));
             sourceChanged = seen.Changed;
-            if (!manual && _published is { } last && last.Count == seen.Count && last.Changed == seen.Changed)
+            if (!force && _published is { } last && last.Count == seen.Count && last.Changed == seen.Changed)
             {
                 await ExecAsync(kpi, "Shire.spChecked", null, ct);
-                Recovered();
-                control.Finished(false, true, "Nothing new in Salesforce.");
-                return;
+                return $"Nothing changed in Salesforce since {Data.UkTime.ShowShort(seen.Changed)}.";
             }
 
             var clock = System.Diagnostics.Stopwatch.StartNew();
@@ -80,35 +52,17 @@ public sealed class ShirePull(IConfiguration config, ShireSalesforce salesforce,
 
             await store.RecordCallAsync(ShireSalesforce.Provider, null);   // the card's "Last worked"
             figures.Raise();   // a new generation: the Shire reports' cached figures are obsolete, and open ones reload now
-            Recovered();
             log.LogInformation("Shire copy published {Rows:N0} won deals in {Seconds:0.0} s", table.Rows.Count, clock.Elapsed.TotalSeconds);
-            control.Finished(manual, true, $"Copied and published {table.Rows.Count:N0} won deals in {clock.Elapsed.TotalSeconds:0.0} s.");
+            return $"{table.Rows.Count:N0} won deals copied in {clock.Elapsed.TotalSeconds:0.0} s.";
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            _failingSinceUtc ??= startedUtc;
-            log.LogWarning(ex, "Shire copy failed; trying again at the next check");
             // Shire.spPublish logs its own failure; anything before it (Salesforce, the bulk copy) is logged here
-            if (ex is not ShirePublishFailedException
-                && (manual || _lastRecordedUtc is null || DateTime.UtcNow - _lastRecordedUtc > RecordFailureEvery))
-            {
+            if (ex is not ShirePublishFailedException)
                 try { await RecordFailureAsync(kpi, startedUtc, ex.Message, sourceChanged, ct); } catch { /* CMS_KPI unreachable too */ }
-                _lastRecordedUtc = DateTime.UtcNow;
-            }
             try { await store.RecordCallAsync(ShireSalesforce.Provider, ex.Message); } catch { /* the card's "Last problem" */ }
-            control.Finished(manual, false, ex.Message);
-        }
-        catch (OperationCanceledException)
-        {
-            control.Finished(manual, false, "Stopped: the site is shutting down.");
             throw;
         }
-    }
-
-    private void Recovered()
-    {
-        if (_failingSinceUtc is not null) log.LogInformation("Shire copy is working again (failing since {Since:u})", _failingSinceUtc);
-        _failingSinceUtc = _lastRecordedUtc = null;
     }
 
     // The won deals as Shire.StageSale's rows. Proposed to PF = the funder is Performance Finance (ShireQueries).

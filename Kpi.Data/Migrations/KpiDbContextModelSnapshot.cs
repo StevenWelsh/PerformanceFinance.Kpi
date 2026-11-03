@@ -452,6 +452,129 @@ namespace Kpi.Data.Migrations
                     b.ToTable("PublishedLink", "Cfg");
                 });
 
+            modelBuilder.Entity("Kpi.Data.Cfg.ScheduledTask", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(60)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<int>("ConsecutiveFailures")
+                        .HasColumnType("int");
+
+                    b.Property<int>("DaysMask")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("LastDurationMs")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastFinishedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("LastOutcome")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastStartedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("LastSucceededUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LeaseOwner")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTime?>("LeaseUntilUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("NextDueUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RepeatEveryMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<TimeOnly?>("RepeatUntil")
+                        .HasColumnType("time");
+
+                    b.Property<int?>("RetryAfterMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("RunMissed")
+                        .HasColumnType("bit");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time");
+
+                    b.Property<string>("UpdatedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("UpdatedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("ScheduledTask", "Cfg");
+                });
+
+            modelBuilder.Entity("Kpi.Data.Cfg.ScheduledTaskRun", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("DurationMs")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FinishedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Instance")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("StartedUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("TaskKey")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(60)");
+
+                    b.Property<int>("Trigger")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TriggeredBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskKey", "StartedUtc");
+
+                    b.ToTable("ScheduledTaskRun", "Cfg");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")

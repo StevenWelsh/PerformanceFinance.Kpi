@@ -118,8 +118,8 @@ Do the parts in order. Part B's password is shown once and typed into the site i
 3. **Close the PowerShell window on PF-APP1** (the password is now saved, encrypted, in the site). Optionally, in the
    card's **Try a query** box, run `SELECT * FROM KpiCopy.Refresh` to see the office's refresh times, or
    `SELECT TOP (1) * FROM CMS_Live.Lead.Lead` to see CMS refused.
-4. **Wait about 3 minutes**, then check in the site: **Settings > Data sync**. The newest entry should be a
-   successful load from a minute or two ago, and every report's **As at** today's date and a recent time. The figures
+4. **Wait about 3 minutes**, then check in the site: **Settings > Scheduled tasks**. "Collect figures from the office"
+   should show Worked, a minute or two ago (its History has every run), and every report's **As at** today's date and a recent time. The figures
    are now CMS_Live's.
 
    If nothing has appeared after 5 minutes, see **If something's wrong** below.
@@ -154,18 +154,19 @@ Only once Part C works. In your terminal on your PC:
 ## If something's wrong
 
 Start with the card: Settings > Integrations > **CMS data source** shows **Last worked** and **Last problem**, and
-**Test connection** tries it there and then. Settings > Data sync shows a failed copy once when it starts and then
-hourly; the site's own log has every attempt (category `KpiPull`).
+**Test connection** tries it there and then. Settings > Scheduled tasks shows every copy's outcome in "Collect figures
+from the office" and its History, and the two office jobs' own status (read only, version 4 script); the site's own log
+has every attempt (category `KpiPull`).
 
 | What you see | Likely cause | What to do |
 |---|---|---|
 | A network error / timeout connecting to 51.148.118.225 | The port-forward rule isn't in place, uses another port, or doesn't admit 20.90.27.132 | Check the port on the card; ask PCS to check the rule |
 | `Login failed for user 'kpi_site_azure'` | Wrong password | Run Part B step 7 again for a new password, then the card's **Change** with it |
-| `KPI_Export is at version 2; this copy needs version 3` (or any mismatch) | The script on PF-APP1 is older than the site | Part A (fresh build) and Part B steps 2–5 again |
+| `KPI_Export is at version 2; this copy needs version 4` (or any mismatch) | The script on PF-APP1 is older than the site | Part A (fresh build) and Part B steps 2–5 again |
 | `CMS_Live has no KpiExport schema yet` (from export-apply) | The CMS migration `mgKpiExport` isn't on CMS_Live | Wait for (or run) the CMS release that contains it, then Part B step 4 again |
 | `[CMS_Live].KpiExport is version N; KPI_Export expects M` (Agent job history) | A CMS release changed the views' version without the KPI side | Apply the KPI repo's matching script (Part A, Part B steps 2–5) |
-| Data sync shows nothing new, no errors | The jobs aren't refreshing | SSMS > SQL Server Agent > Jobs > right-click a job > **View History**; check the Agent service is running |
-| "Overdue" on the reports in office hours | No successful copy for 30 minutes | Both of the above |
+| Nothing new, no errors | The jobs aren't refreshing | Scheduled tasks' office rows (Failed / Disabled / Running too long); then SSMS > SQL Server Agent > Jobs > right-click a job > **View History**; check the Agent service is running |
+| "Overdue" on the reports in office hours | No successful copy for 45 minutes | Both of the above |
 
 ## Later
 

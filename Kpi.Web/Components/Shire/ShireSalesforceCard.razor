@@ -41,7 +41,7 @@
                 <dt>Address</dt><dd>@(_settings?.Domain ?? "-")</dd>
                 <dt>Consumer Key</dt><dd>@(_row.SecretsCipher is null ? "-" : $"{_settings?.KeyHint} (saved {Kpi.Web.Data.UkTime.Show(_row.SecretsUpdatedUtc)})")</dd>
                 <dt>Consumer Secret</dt><dd>@(_row.SecretsCipher is null ? "-" : "saved")</dd>
-                <dt>Copying</dt><dd>@(_row.Enabled ? "On - see Settings > Shire sync" : "Switched off")</dd>
+                <dt>Copying</dt><dd>@(_row.Enabled ? "On - see Settings > Scheduled tasks" : "Switched off")</dd>
                 <dt>Last worked</dt><dd>@Kpi.Web.Data.UkTime.Show(_row.LastOkUtc)</dd>
                 @if (_row.LastErrorUtc is not null && (_row.LastOkUtc is null || _row.LastErrorUtc > _row.LastOkUtc))
                 {
@@ -187,7 +187,7 @@
             _key = ""; _secret = "";
             await Load();
             _editing = false;
-            Say(true, answer + (_enabled ? " Saved: the site copies from it within a minute or two (Settings > Shire sync)." : " Saved, with copying switched off."));
+            Say(true, answer + (_enabled ? " Saved: the site copies from it within a minute or two (Settings > Scheduled tasks)." : " Saved, with copying switched off."));
         }
         catch (Exception ex) when (ex is SalesforceException or HttpRequestException or TaskCanceledException
                                          or InvalidOperationException or IntegrationSecretsUnreadableException)

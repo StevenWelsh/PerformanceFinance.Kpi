@@ -10,6 +10,8 @@
       KpiCopy.Refresh      one row: when the copies were refreshed, as at which business date, snapshots prepared when
       KpiCopy.spRefresh    rebuilds every copy in ONE transaction (SQL Server Agent, every 10 minutes)
       KpiCopy.spNightly    runs <CMS>.KpiExport.spPrepareSnapshots, then spRefresh (Agent, 00:15)
+      KpiCopy.JobStatus    the two Agent jobs as they report themselves - last run, outcome, error - and their
+      KpiCopy.JobSchedule  schedules as SQL Agent holds them: the KPI site shows both, read only (version 4)
       kpi_pull             the KPI site's login reads KpiCopy and nothing else - it has no user in the CMS database
     The jobs run as sa, which reads the CMS database; the site's login never does.
 
@@ -188,10 +190,94 @@ END
 GO
 
 -- ================================================================================================
+-- THE JOBS REPORTING ON THEMSELVES (version 4, 3 Nov 2026, Steve: "we check that too" - the KPI site's Settings >
+-- Scheduled tasks shows the two Agent jobs READ ONLY, without hard-coding their schedules). Each job's step runs
+-- KpiCopy.spRunJob, which records the run here (started, finished, worked or failed, the error) around the real work,
+-- and first copies BOTH jobs' schedules and on/off from msdb (the job runs as sa; the site's login never reads msdb).
+-- The site reads these two tables at every check. A job stopped mid-run (a server restart) stays "Running": the site
+-- flags one running for over an hour.
+-- ================================================================================================
+CREATE TABLE KpiCopy.JobStatus
+(
+    Job              nvarchar(128)   COLLATE DATABASE_DEFAULT NOT NULL PRIMARY KEY,
+    Enabled          bit             NULL,
+    LastStartedUtc   datetime2(0)    NULL,
+    LastFinishedUtc  datetime2(0)    NULL,
+    LastOutcome      nvarchar(10)    COLLATE DATABASE_DEFAULT NULL,   -- Running / Worked / Failed
+    LastError        nvarchar(2000)  COLLATE DATABASE_DEFAULT NULL
+);
+CREATE TABLE KpiCopy.JobSchedule
+(
+    Job              nvarchar(128)   COLLATE DATABASE_DEFAULT NOT NULL,
+    ScheduleName     nvarchar(128)   COLLATE DATABASE_DEFAULT NOT NULL,
+    Enabled          bit             NOT NULL,
+    FreqType         int             NOT NULL,   -- msdb.dbo.sysschedules: 4 daily, 8 weekly, others shown as they are
+    FreqInterval     int             NOT NULL,   -- weekly: Sun 1, Mon 2, Tue 4 ... Sat 64
+    SubdayType       int             NOT NULL,   -- 1 once at StartTime, 2 seconds, 4 minutes, 8 hours
+    SubdayInterval   int             NOT NULL,
+    StartTime        int             NOT NULL,   -- hhmmss, the server's own (UK) time
+    EndTime          int             NOT NULL
+);
+GO
+
+-- the two jobs' schedules and on/off, from msdb (nothing on SQL Express, which has no Agent)
+CREATE PROCEDURE KpiCopy.spRecordSchedules
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @jobs TABLE (Job nvarchar(128) COLLATE DATABASE_DEFAULT);
+    INSERT @jobs VALUES (N'KPI_Export - refresh'), (N'KPI_Export - nightly');
+
+    MERGE KpiCopy.JobStatus T
+    USING (SELECT J.Job, CAST(S.enabled AS bit) AS Enabled
+           FROM @jobs J LEFT JOIN msdb.dbo.sysjobs S ON S.name COLLATE DATABASE_DEFAULT = J.Job) X
+       ON T.Job = X.Job
+    WHEN MATCHED THEN UPDATE SET Enabled = X.Enabled
+    WHEN NOT MATCHED THEN INSERT (Job, Enabled) VALUES (X.Job, X.Enabled);
+
+    DELETE KpiCopy.JobSchedule;
+    INSERT KpiCopy.JobSchedule (Job, ScheduleName, Enabled, FreqType, FreqInterval, SubdayType, SubdayInterval, StartTime, EndTime)
+    SELECT J.name, S.name, S.enabled, S.freq_type, S.freq_interval, S.freq_subday_type, S.freq_subday_interval,
+           S.active_start_time, S.active_end_time
+    FROM   msdb.dbo.sysjobs J
+           JOIN msdb.dbo.sysjobschedules JS ON JS.job_id = J.job_id
+           JOIN msdb.dbo.sysschedules S ON S.schedule_id = JS.schedule_id
+    WHERE  J.name COLLATE DATABASE_DEFAULT IN (SELECT Job FROM @jobs);
+END
+GO
+
+-- a job's step (@Job = 'refresh' or 'nightly'): records the run around the work; a failure is recorded, then raised, so
+-- SQL Agent's own history shows it too
+CREATE PROCEDURE KpiCopy.spRunJob @Job nvarchar(20)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @name nvarchar(128) = CASE @Job WHEN N'refresh' THEN N'KPI_Export - refresh' WHEN N'nightly' THEN N'KPI_Export - nightly' END;
+    IF @name IS NULL THROW 50003, 'spRunJob: @Job is refresh or nightly.', 1;
+
+    BEGIN TRY EXEC KpiCopy.spRecordSchedules; END TRY BEGIN CATCH END CATCH;   -- never stops the work
+    UPDATE KpiCopy.JobStatus SET LastStartedUtc = SYSUTCDATETIME(), LastFinishedUtc = NULL, LastOutcome = N'Running', LastError = NULL
+    WHERE  Job = @name;
+    IF @@ROWCOUNT = 0 INSERT KpiCopy.JobStatus (Job, LastStartedUtc, LastOutcome) VALUES (@name, SYSUTCDATETIME(), N'Running');
+
+    BEGIN TRY
+        IF @Job = N'refresh' EXEC KpiCopy.spRefresh; ELSE EXEC KpiCopy.spNightly;
+        UPDATE KpiCopy.JobStatus SET LastFinishedUtc = SYSUTCDATETIME(), LastOutcome = N'Worked' WHERE Job = @name;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK;
+        UPDATE KpiCopy.JobStatus SET LastFinishedUtc = SYSUTCDATETIME(), LastOutcome = N'Failed', LastError = LEFT(ERROR_MESSAGE(), 2000)
+        WHERE  Job = @name;
+        THROW;
+    END CATCH
+END
+GO
+
+-- ================================================================================================
 -- the version: the KPI site and Kpi.Push copy only from the KPI_Export they were built for (ExportVersion.Current)
 -- ================================================================================================
 CREATE TABLE KpiCopy.Version (Version int NOT NULL, AppliedUtc datetime2(0) NOT NULL);
-INSERT KpiCopy.Version (Version, AppliedUtc) VALUES (3, SYSUTCDATETIME());
+INSERT KpiCopy.Version (Version, AppliedUtc) VALUES (4, SYSUTCDATETIME());
 GO
 
 -- ================================================================================================
@@ -205,7 +291,7 @@ GO
 -- ================================================================================================
 -- the SQL Server Agent jobs (not on SQL Express, which has no Agent: there run EXEC KPI_Export.KpiCopy.spRefresh or
 -- spNightly by hand, or let Kpi.Push do it). Created when MISSING, so a schedule changed in SSMS survives running this
--- again; an existing job's step is pointed at this version's procedure.
+-- again; an existing job's step is pointed at this version's procedure (KpiCopy.spRunJob since version 4).
 --   KPI_Export - refresh   every 10 minutes, 07:00-20:00, Monday to Saturday
 --   KPI_Export - nightly   00:15 daily: Bad Debt and Exposure (a few minutes), then a refresh
 -- Owned by sa (whatever it is called here), so the steps can read the CMS database; no program, no password.
@@ -221,7 +307,7 @@ BEGIN
         EXEC msdb.dbo.sp_add_job @job_name = N'KPI_Export - refresh', @owner_login_name = @owner,
              @description = N'Refreshes KPI_Export''s copies of the CMS database''s KpiExport views for the KPI website, which collects them within two minutes. From the PerformanceFinance.Kpi repo (Kpi.Copy/Export/KPI_Export.sql).';
         EXEC msdb.dbo.sp_add_jobstep @job_name = N'KPI_Export - refresh', @step_name = N'Refresh the copies',
-             @subsystem = N'TSQL', @database_name = N'KPI_Export', @command = N'EXEC KpiCopy.spRefresh;';
+             @subsystem = N'TSQL', @database_name = N'KPI_Export', @command = N'EXEC KpiCopy.spRunJob N''refresh'';';
         EXEC msdb.dbo.sp_add_jobschedule @job_name = N'KPI_Export - refresh', @name = N'Every 10 minutes, 07:00-20:00, Mon-Sat',
              @freq_type = 8, @freq_interval = 126, @freq_recurrence_factor = 1,    -- weekly: Mon+Tue+Wed+Thu+Fri+Sat
              @freq_subday_type = 4, @freq_subday_interval = 10,                  -- every 10 minutes
@@ -231,7 +317,7 @@ BEGIN
     END
     ELSE
     BEGIN
-        EXEC msdb.dbo.sp_update_jobstep @job_name = N'KPI_Export - refresh', @step_id = 1, @command = N'EXEC KpiCopy.spRefresh;';
+        EXEC msdb.dbo.sp_update_jobstep @job_name = N'KPI_Export - refresh', @step_id = 1, @command = N'EXEC KpiCopy.spRunJob N''refresh'';';
         PRINT 'The job KPI_Export - refresh already exists: its schedule is left as it is.';
     END
 
@@ -240,7 +326,7 @@ BEGIN
         EXEC msdb.dbo.sp_add_job @job_name = N'KPI_Export - nightly', @owner_login_name = @owner,
              @description = N'Prepares the Bad Debt and Exposure snapshots in the CMS database for the KPI website, then refreshes KPI_Export''s copies. From the PerformanceFinance.Kpi repo (Kpi.Copy/Export/KPI_Export.sql).';
         EXEC msdb.dbo.sp_add_jobstep @job_name = N'KPI_Export - nightly', @step_name = N'Bad Debt and Exposure, then the copies',
-             @subsystem = N'TSQL', @database_name = N'KPI_Export', @command = N'EXEC KpiCopy.spNightly;';
+             @subsystem = N'TSQL', @database_name = N'KPI_Export', @command = N'EXEC KpiCopy.spRunJob N''nightly'';';
         EXEC msdb.dbo.sp_add_jobschedule @job_name = N'KPI_Export - nightly', @name = N'Daily at 00:15',
              @freq_type = 4, @freq_interval = 1, @active_start_time = 1500;
         EXEC msdb.dbo.sp_add_jobserver @job_name = N'KPI_Export - nightly', @server_name = N'(local)';
@@ -253,7 +339,7 @@ BEGIN
                    WHERE J.name = N'KPI_Export - nightly' AND S.step_id = 2)
             EXEC msdb.dbo.sp_delete_jobstep @job_name = N'KPI_Export - nightly', @step_id = 2;
         EXEC msdb.dbo.sp_update_jobstep @job_name = N'KPI_Export - nightly', @step_id = 1,
-             @step_name = N'Bad Debt and Exposure, then the copies', @command = N'EXEC KpiCopy.spNightly;',
+             @step_name = N'Bad Debt and Exposure, then the copies', @command = N'EXEC KpiCopy.spRunJob N''nightly'';',
              @on_success_action = 1;
         PRINT 'The job KPI_Export - nightly already exists: its schedule is left as it is.';
     END

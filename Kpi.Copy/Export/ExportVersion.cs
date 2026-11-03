@@ -9,7 +9,12 @@ namespace Kpi.Copy;
 public static class ExportVersion
 {
     /// <summary>KPI_Export's own script (KpiCopy.Version, near the end of Export/KPI_Export.sql). Raise them together.</summary>
-    public const int Current = 3;
+    public const int Current = 4;
+
+    /// <summary>The oldest KPI_Export the copy still reads. Version 4 (3 Nov 2026) only added the jobs' own status
+    /// (KpiCopy.JobStatus / JobSchedule, read when they are there), so a version 3 still copies - the site and the
+    /// office's script can be updated in either order.</summary>
+    public const int Oldest = 3;
 
     /// <summary>
     /// The CMS database's KpiExport schema - the views and snapshots, defined in the CMS repo (migration mgKpiExport,

@@ -38,7 +38,8 @@ try
         // as the office's Agent jobs do: nightly prepares Bad Debt and Exposure in CMS first (a few minutes)
         Console.WriteLine(nightly ? "Preparing Bad Debt and Exposure in CMS, then refreshing KPI_Export's copies..."
                                   : "Refreshing KPI_Export's copies...");
-        await Exec(source, nightly ? "EXEC KpiCopy.spNightly" : "EXEC KpiCopy.spRefresh", 3600);
+        // through the jobs' own step, so KpiCopy.JobStatus records the run as the office's would (version 4)
+        await Exec(source, nightly ? "EXEC KpiCopy.spRunJob N'nightly'" : "EXEC KpiCopy.spRunJob N'refresh'", 3600);
     }
 
     var state = await KpiCopier.ReadStateAsync(source)

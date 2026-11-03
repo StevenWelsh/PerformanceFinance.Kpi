@@ -49,7 +49,8 @@ transaction that is always rolled back, 100 rows / 30 s, System Admin only, each
 **A PULL (16 Oct 2026, Steve; it replaced a planned push from the office):** the `KpiExport` views IN THE CMS DATABASE
 (CMS_Live on PF-APP1; CMS_Dev locally) → SQL Server Agent on PF-APP1 copies them into `KpiCopy.*` in the separate
 `KPI_Export` database every 10 minutes, 07:00-20:00 Mon-Sat (`KpiCopy.spRefresh`, one transaction, stamps
-`KpiCopy.Refresh`), and at 00:15 first prepares Bad Debt and Exposure in CMS (`KpiCopy.spNightly`) → the SITE (`KpiPull`, every 2 minutes, through the CMS data source card) reads that one row and, when it is newer than
+`KpiCopy.Refresh`), and (the nightly job) first prepares Bad Debt and Exposure in CMS (`KpiCopy.spNightly`; 00:15, and every 2 hours 06:00-20:00
+from 3 Nov 2026 - set in SQL Agent) → the SITE (`KpiPull`, the scheduled task "Collect figures from the office", every 2 minutes, through the CMS data source card) reads that one row and, when it is newer than
 CMS_KPI's last publish (`Rpt.spDataStatus`), bulk-copies `KpiCopy.*` (+ the snapshots when prepared since the last
 nightly publish) into `Stage.*` in `CMS_KPI` → `Stage.spPublish` swaps everything into `Dim`/`Fact` in ONE transaction
 (read-committed snapshot, so a report never sees half a load; it refuses an empty `Stage.Lead`) → the site runs only
@@ -74,10 +75,10 @@ the tables in full (25k paid leads).
   identity is in it too, to copy), `kpi_reader` (EXECUTE `Rpt`). Logins/users are added by hand per server. In
   KPI_Export: `kpi_pull` (made by the script; members by `grant-pull`).
 - **The copy logs every failure it can:** `Stage.spPublish` logs its own; a copy that fails BEFORE publishing (reading
-  CMS, the bulk copy) calls `Stage.spRecordFailure` if it can still reach CMS_KPI. Settings > Data sync shows
-  `Ref.LoadRun` (`Rpt.spLoadHistory`) and the overdue flags (`Rpt.spDataStatus`). The site records a failing copy
-  once when it starts failing and then hourly (not every 2 minutes); every attempt is in the site's log. A refresh
-  that stops in the office shows as Overdue, with the Agent job's history on PF-APP1.
+  CMS, the bulk copy) closes its run with `Stage.spRecordFailure` when the publish had opened one. Every run of the copy,
+  worked or failed, is in the task's History on Settings > Scheduled tasks (`Cfg.ScheduledTaskRun`); `Ref.LoadRun`
+  still feeds `Rpt.spDataStatus` (the overdue flags). A refresh that stops in the office shows as Overdue, and the office
+  job's own row on Scheduled tasks says Failed / Disabled / stuck Running.
 - **"As at" on every report = the business date AND the time of the last copy** (`KpiDataStatus`, Rpt.spDataStatus,
   cached a minute; full view and phone bar), so a reader sees how fresh the figures are; amber with a warning when the
   copy is overdue. A past year's figures (CMS's current year set back) show the date alone. "Refreshed" is only when
@@ -95,7 +96,18 @@ the tables in full (25k paid leads).
     objects (and v2's empty view/synonym schemas) but keeps the `kpi_pull` role and its members, and creates the two
     Agent jobs ONLY IF MISSING (an existing job's step is repointed; its schedule survives; not on SQL Express). Simple
     recovery. The Agent jobs run as sa and read CMS; the site's login (`kpi_pull`) reads `KpiCopy` only.
-  - **Versions (`Kpi.Copy/Export/ExportVersion.cs`):** `Current` = KPI_Export's `KpiCopy.Version` (3), checked by the copy;
+  - **The jobs report on themselves (version 4, 3 Nov 2026, Steve - "we don't hardcode every 2 hrs, we check that too"):**
+    each job's step is `KpiCopy.spRunJob N'refresh' | N'nightly'`, which records the run in `KpiCopy.JobStatus` (started,
+    finished, Running / Worked / Failed, the error) around the real work, and first copies BOTH jobs' on/off and schedules
+    from `msdb` into `KpiCopy.JobSchedule` (the jobs run as sa; the site's login can't see msdb, and mustn't). The site's
+    copy reads both tables at EVERY check (`KpiCopier.ReadJobsAsync` -> `OfficeJobsStore`, a `Cfg.Integration` row
+    `OfficeJobs`), works out each job's schedule in words and next run from Agent's own fields, and shows them READ ONLY
+    on Settings > Scheduled tasks; the alerts task reports one failed, disabled, or Running over an hour. A schedule
+    changed in SSMS shows after either job's next run. Kpi.Push runs `spRunJob` too, so a developer's machine has status
+    rows (SQL Express has no Agent: no schedules).
+  - **Versions (`Kpi.Copy/Export/ExportVersion.cs`):** `Current` = KPI_Export's `KpiCopy.Version` (4), checked by the copy,
+    which also accepts `Oldest` (3: version 4 only added the jobs' status, so the site and the office's script update in
+    either order);
     `Cms` = the CMS side's `KpiExport.Version` (1), checked by the refresh (and the script's `@CmsVersion`). A view
     whose COLUMNS change: a CMS migration raises `KpiExport.Version`, and this repo raises `Cms` + `@CmsVersion` (and
     `KpiCopier`/Stage if a table's shape changes). `export-check` (read only) reports both versions and runs every CMS
@@ -166,7 +178,7 @@ the tables in full (25k paid leads).
   sent to finish rather than told "no access"), every policy requires `kpi:2fa = on` (covers the live Blazor connection),
   and **a password alone NEVER leads to registering a mobile** — only an emailed link (invitation, reset, re-enrol) or
   My Account's change-mobile form (needs the password inside a signed-in session) opens the ONE-HOUR setup window
-  (`AccountSetup`: random value in a `__Host-` cookie, its hash on the user row; `ExpireSetupsTask` closes stale ones and
+  (`AccountSetup`: random value in a `__Host-` cookie, its hash on the user row; the task "Close expired account setups" closes stale ones and
   clears an unactivated account's password). The page is `/account/mobile`: the number, a code texted to it, the code. The one exception: the account made by `Kpi.Tools seed` (`IsSeeded`), on
   its first sign-in, because a new database has no email yet.
 - **Sign-in pages are STATIC SSR under `/account`** (App.razor picks the render mode by path) posting plain forms to
@@ -189,7 +201,7 @@ the tables in full (25k paid leads).
 - **Settings** (`/settings`, System Admin only): Users (`UserAdmin` — invite, edit role/rights, send again / withdraw,
   reset mobile with "how did you check it was them?", disable, and DELETE - disabled first so every session ends, then removed; the audit keeps their name and history; never yourself or the last System Admin), Integrations (Resend: key encrypted with Data
   Protection, never shown back, blank keeps it; a TEST ADDRESS catches every email, and outside Production nothing is
-  sent without one), Data sync, Audit. When an email can't be sent the invitation / reset link is shown to the System
+  sent without one), Scheduled tasks, Audit. When an email can't be sent the invitation / reset link is shown to the System
   Admin to pass on.
 - **Published links (18 Oct 2026, Steve - to replace the Klipfolio dashboards in CMS's KPI tabs; SWITCHED OFF 19 Oct, see CMS desktop below):** Settings > Published
   links makes a link to ONE report, opened at `/view/{key}` without signing in. The key is 32 random bytes; a link is
@@ -250,27 +262,35 @@ the tables in full (25k paid leads).
   (`SalesSummaryCells` - also the ONE key and loader the desktop panel and the phone card now share; before, a phone
   fetched each figure twice). One run and one query at a time. Bigger fix if first views still bother: one Rpt
   procedure returning a whole page's grid. Caching to be discussed further (Steve).
-- **Data sync, fuller (19 Oct 2026, Steve; migration `LoadRunDetail`):** each run's "Started"/"Took" cover the WHOLE copy
-  (the site passes `@StartedUtc`), "Data from" (`Ref.LoadRun.SourceRefreshedUtc`) is when the office made the data it
-  carried - shown with Bad Debt & Exposure's preparation time on a nightly copy (`SourceSnapshotsUtc`, migration
-  `LoadRunSnapshotTime`) in ONE "Info" column (the last; errors in red under it too - Steve): "New data from 18:20:14, copied" or "Same data as before (...)" - a run left open 15 minutes (a restart mid-publish) is closed as failed by the next publish and shown so by
-  `Rpt.spLoadHistory`, and a copy refused before starting (the lock held) is a FAILURE (`CopyBlockedException`) - recorded
-  once when it starts and hourly, like the rest. A copy refused because the office refreshed mid-copy stays info-only.
+- **SETTINGS > SCHEDULED TASKS (3 Nov 2026, Steve - SHS-Web's System settings > Scheduled tasks copied, `C:\GitRepo\SHS-Web`;
+  it REPLACED Data sync and Shire sync, and "everything that is scheduled belongs in there"):** `Kpi.Web/Scheduling`. The tasks
+  are code (`Jobs.cs`, `IScheduledJob`): Collect figures from the office (`KpiPull`, every 2 min; Run now copies even
+  unchanged data), Copy Shire from Salesforce (`ShirePull`, 15 min), Check for problems and email alerts (`SyncAlerts`,
+  2 min), Tidy old history (`Auth.spPruneHistory`, 02:30), Close expired account setups (15 min). `Cfg.ScheduledTask` (each
+  one's schedule - days, start, repeat every / until, catch up missed, retries - pause, latest run and a LEASE) and
+  `Cfg.ScheduledTaskRun` (every run, its History; 90 days), migration `ScheduledTasks`. `SchedulerRunner` checks every 30 s,
+  claims a due task with one conditional UPDATE (so both deployment slots can share the table - only one runs a task),
+  runs it with a time limit. One table on screen: the office's two Agent jobs first, READ ONLY (above), then the site's tasks
+  by group, each with Run now / Schedule / Pause / History; changes audited (Settings). Kept short (Steve: "less is more").
+  NOT on it: the pre-load (`KpiWarmer`: each copy of the site fills its own memory) and Report activity's writer.
+  `Kpi:BackgroundWork` = false (staging) stops tasks running on their schedule there ("Not here"); `Shire:Copy` the same
+  for the Shire copy alone. The old `CopySchedule` / `ShireCopySchedule` `Cfg.Integration` rows are unused.
 - **New figures are PUSHED (19 Oct 2026, Steve):** after a copy, `KpiWarmer` re-runs the cache and raises `KpiFiguresSignal`;
   every open `KpiPanel` (reports, published/embedded views) refreshes within ~5 s (spread), a hidden one on return to
-  view; Settings > Data sync reloads itself. The 10-minute timer stays as the fallback.
-- **Data sync alerts (19 Oct 2026, Steve):** `SyncAlerts` (hosted, every 2 min) emails the people ticked in Settings > Data
-  sync (a `Cfg.Integration` row, provider `SyncAlerts`: recipients, last sent per person, the open alert - so a restart
-  doesn't re-send) when: the copy has failed for 10+ minutes (`KpiPullHealth`), the copy is switched off (Production
-  only), the figures are overdue (`Rpt.spDataStatus`), or Bad Debt & Exposure are 26+ hours old. Once on a new or worse
-  problem, every 4 hours in office hours while it lasts, once when it's over. Settings > Users shows an envelope for
-  recipients (hover: last sent). Links use `Kpi:SiteUrl` (default the live site). It can't report the site being DOWN -
-  Azure's health alert does.
+  view. The 10-minute timer stays as the fallback.
+- **Alerts (19 Oct 2026, Steve; the task "Check for problems and email alerts" since 3 Nov):** `SyncAlerts` emails the
+  ADDRESSES typed on Settings > Scheduled tasks (empty = every System Admin; a `Cfg.Integration` row, provider `SyncAlerts`:
+  addresses, last sent per address, the open alert - so a restart doesn't re-send) when: a task keeps failing (3 runs in a
+  row if it repeats, the first if daily - SHS-Web's rule), a copy is paused, an office job failed / disabled / stuck, the
+  copy is switched off (Production only), the figures are overdue (`Rpt.spDataStatus`), or Bad Debt & Exposure are 26+
+  hours old. Once on a new or worse problem, every 4 hours in office hours while it lasts, once when it's over. Settings >
+  Users shows an envelope for whoever gets them (hover: last sent). Links use `Kpi:SiteUrl` (default the live site). It
+  can't report the site being DOWN - Azure's health alert does.
 - **Settings > Audit (19 Oct 2026, Steve):** tabs as segmented buttons (All, Sign-ins, Users, Settings, Embedded reports,
   Report views), newest 500 per tab with a filter. **Report views** (`Auth.ReportView`, migration `ReportViews`): one row
   per OPENING (same person + report within 30 min counts once) - recorded by `KpiPanel` for `/kpis/...` (Browser / Phone /
   App) and by `CmsDesktopDoor` for embedded opens (the person the app vouched for); everyone, admins too. **Kept 3
-  months** (`HistoryPruner.Months`): `Auth.spPruneHistory` deletes older audit lines and views nightly ~02:30 UK - it runs
+  months** (`HistoryPruner.Months`): `Auth.spPruneHistory` deletes older audit lines and views nightly (the task "Tidy old history", 02:30 UK) - it runs
   through ownership chaining, so the site's DENY on changing/deleting audit lines still stands for everything newer.
   Report views also has a **How opened** chart (Website / Mobile / Mobile app / CMS (embedded) - 29 Oct 2026).
 - **Report activity (29 Oct 2026, Steve: "how people interact with the reports ... the timelapse button and for what
@@ -284,10 +304,8 @@ the tables in full (25k paid leads).
   `KpiCache.InBackground`). Embedded views record under the CMS user: `CmsDesktopDoor` puts it in `HttpContext.Items`,
   App.razor passes it to `Routes` (a protected root parameter), which cascades `KpiEmbedUser`. `ReportActivity` queues and
   writes in batches every 5 s; never blocks a click.
-- **Data sync's Copying box (29 Oct 2026, Steve):** **Check every** 2/5/10/15/30 min, **Pause / Resume** (optional
-  reason) and **Copy now** (copies even unchanged data; works while paused) - `KpiCopyControl`, a `Cfg.Integration` row
-  provider `CopySchedule`, all audited. While paused the alerts say so (not "overdue"); for 15 min after a resume the
-  day's figures aren't called overdue. No automatic back-off after failures (Steve: not wanted).
+- **Report activity's summary is behind a "Statistics" button** (a pop-up; 3 Nov 2026, Steve - the list comes first); its
+  "N people" open who. Each block's rows share one grid (subgrid) so the bars line up.
 - **Data Protection key ring** encrypts cookies, emailed links and the Resend key: locally the user profile; **in Azure it
   must be a shared persisted ring (storage + Key Vault)** or every restart signs everyone out and the Resend key becomes
   unreadable. Pin `AllowedHosts` in Azure: emailed links are built from the request's host.
@@ -360,7 +378,7 @@ NAT gateway can't move and is recreated:
 first "Shire - Salesforce"); the full view's title is "Mobberley: Year on Year" with "Taken from Salesforce" in small type
 under it (`ShireReports.Title` / `Source`, KpiPanel `Subtitle`); the phone bar shows the report's name alone with
 "Mobberley · Taken from Salesforce" under it (`ShireReports.PhoneSource`, KpiMobile `Subtitle` - the full title didn't fit).
-The code, schema, Settings > Shire sync and the Salesforce (Shire) card keep the Shire name.
+The code, schema, the task "Copy Shire from Salesforce" and the Salesforce (Shire) card keep the Shire name.
 
 **Who sees them: tick-only** (`KpiReport.TickOnly`) - only people ticked by name in Settings > Users (Steve, Stuart, Andy);
 System Admin and "All reports" do NOT include them (claim "*,shire-..." - `KpiReportAccess.ClaimFor` / `CanSee`).
@@ -385,12 +403,12 @@ applied file, add a numbered one).
   out of the next copy as from their reports.
 - **Only data the reports use is copied** (Steve): won opportunities' Id, Close Date, Amount, Income, owner, Proposed to PF
   (= `Funder__r.Name` 'Performance Finance'; Shire keeps ONE opportunity PER FUNDER; PF only since Oct 2026). ~5,400 rows.
-- **The copy (`ShirePull`, in the BackgroundWork block):** every 15 minutes (Settings > **Shire sync**: 5-60, pause, Copy now -
-  `ShireCopyControl`, provider `ShireCopySchedule`) one SOQL call - opportunity count + MAX(SystemModstamp); when that moved,
+- **The copy (`ShirePull`, the task "Copy Shire from Salesforce" on Settings > Scheduled tasks):** every 15 minutes unless
+  changed there, one SOQL call - opportunity count + MAX(SystemModstamp); when that moved (or Run now),
   the won deals in full -> `Shire.StageSale` (bulk copy, app lock `ShireCopy`) -> `Shire.spPublish`. Logged in
-  `Shire.LoadRun`, NOT Ref.LoadRun (CMS's Data sync is unchanged). A Shire copy raises `ShireFiguresSignal`, whose
+  `Shire.LoadRun`, NOT Ref.LoadRun. A Shire copy raises `ShireFiguresSignal`, whose
   `Generation` is in every Shire cache key (so a copy obsoletes all cached Shire figures at once); Shire pages pass `IsShire` to KpiPanel / KpiMobile for their "As at"
-  (`Shire.spDataStatus`: stale after 45 minutes without a successful check in office hours). No email alerts yet.
+  (`Shire.spDataStatus`: stale after 45 minutes without a successful check in office hours). Alerted when its task keeps failing.
 - **Salesforce side (Shire's org, 3 Nov 2026):** integration user `pf.integration@shirepf.co.uk` (Salesforce Integration
   licence, API only, permission set "PF Integration - Read Only": Read + View All on Opportunity, Account, Contact,
   Opportunity Shareholder), External Client App **PF Integration** (client credentials, Run As pf.integration, admin-approved
@@ -428,7 +446,7 @@ applied file, add a numbered one).
   first TLS handshake and the first managed identity token, each fast after), and Azure SQL resets a connection that
   waits that long** - "Connection reset by peer" / "error: 35", the site's "Something went wrong". Ruled out: firewall,
   encryption mode, driver, network. Handled by retrying a dropped connection (`Kpi.Data.KpiRetryStrategy` for EF,
-  `KpiDb.Open` for Dapper); the start-up `ExpireSetupsTask` run takes the slow one.
+  `KpiDb.Open` for Dapper); the scheduler's start-up look at its table takes the slow one.
 - **NO REPORT MAY LOAD FOR EVER (16 Oct 2026).** The night of the .NET 10 upgrade the live site reached its database
   not once for six hours - no connection, no error logged - while every page still opened. Report loads go through
   `KpiCache`'s per-report gate, SHARED by all users, so the first stuck load held every later viewer on "Loading..."
