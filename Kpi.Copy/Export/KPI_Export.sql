@@ -9,7 +9,8 @@
       KpiCopy.X            a copy of <CMS>.KpiExport.vX for every view there, and of the two snapshot tables
       KpiCopy.Refresh      one row: when the copies were refreshed, as at which business date, snapshots prepared when
       KpiCopy.spRefresh    rebuilds every copy in ONE transaction (SQL Server Agent, every 10 minutes)
-      KpiCopy.spNightly    runs <CMS>.KpiExport.spPrepareSnapshots, then spRefresh (Agent, 00:15)
+      KpiCopy.spNightly    runs <CMS>.KpiExport.spPrepareSnapshots, then spRefresh (Agent: 'KPI_Export - Bad Debt and
+                           Exposure', every 2 hours 06:00-20:00 - it was 'KPI_Export - nightly', 00:15, until 3 Nov 2026)
       KpiCopy.JobStatus    the two Agent jobs as they report themselves - last run, outcome, error - and their
       KpiCopy.JobSchedule  schedules as SQL Agent holds them: the KPI site shows both, read only (version 4)
       kpi_pull             the KPI site's login reads KpiCopy and nothing else - it has no user in the CMS database
@@ -174,8 +175,8 @@ END
 GO
 
 -- ================================================================================================
--- KpiCopy.spNightly  (procedure): Bad Debt and Exposure in CMS (a few minutes), then a refresh. The 'KPI_Export -
--- nightly' Agent job.
+-- KpiCopy.spNightly  (procedure): Bad Debt and Exposure in CMS (about a minute), then a refresh. The 'KPI_Export -
+-- Bad Debt and Exposure' Agent job (named '... - nightly' until 3 Nov 2026, when it went to every 2 hours).
 -- ================================================================================================
 CREATE PROCEDURE KpiCopy.spNightly
 AS
@@ -226,7 +227,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     DECLARE @jobs TABLE (Job nvarchar(128) COLLATE DATABASE_DEFAULT);
-    INSERT @jobs VALUES (N'KPI_Export - refresh'), (N'KPI_Export - nightly');
+    INSERT @jobs VALUES (N'KPI_Export - refresh'), (N'KPI_Export - Bad Debt and Exposure');
 
     MERGE KpiCopy.JobStatus T
     USING (SELECT J.Job, CAST(S.enabled AS bit) AS Enabled
@@ -246,13 +247,14 @@ BEGIN
 END
 GO
 
--- a job's step (@Job = 'refresh' or 'nightly'): records the run around the work; a failure is recorded, then raised, so
+-- a job's step (@Job = 'refresh' or 'nightly' - the Bad Debt and Exposure job): records the run around the work; a
+-- failure is recorded, then raised, so
 -- SQL Agent's own history shows it too
 CREATE PROCEDURE KpiCopy.spRunJob @Job nvarchar(20)
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @name nvarchar(128) = CASE @Job WHEN N'refresh' THEN N'KPI_Export - refresh' WHEN N'nightly' THEN N'KPI_Export - nightly' END;
+    DECLARE @name nvarchar(128) = CASE @Job WHEN N'refresh' THEN N'KPI_Export - refresh' WHEN N'nightly' THEN N'KPI_Export - Bad Debt and Exposure' END;
     IF @name IS NULL THROW 50003, 'spRunJob: @Job is refresh or nightly.', 1;
 
     BEGIN TRY EXEC KpiCopy.spRecordSchedules; END TRY BEGIN CATCH END CATCH;   -- never stops the work
@@ -293,7 +295,8 @@ GO
 -- spNightly by hand, or let Kpi.Push do it). Created when MISSING, so a schedule changed in SSMS survives running this
 -- again; an existing job's step is pointed at this version's procedure (KpiCopy.spRunJob since version 4).
 --   KPI_Export - refresh   every 10 minutes, 07:00-20:00, Monday to Saturday
---   KPI_Export - nightly   00:15 daily: Bad Debt and Exposure (a few minutes), then a refresh
+--   KPI_Export - Bad Debt and Exposure   every 2 hours, 06:00-20:00 daily: Bad Debt and Exposure, then a refresh
+--   (it was 'KPI_Export - nightly', 00:15: renamed by this script, its schedules kept)
 -- Owned by sa (whatever it is called here), so the steps can read the CMS database; no program, no password.
 -- ================================================================================================
 IF CAST(SERVERPROPERTY('EngineEdition') AS int) = 4
@@ -321,27 +324,37 @@ BEGIN
         PRINT 'The job KPI_Export - refresh already exists: its schedule is left as it is.';
     END
 
-    IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'KPI_Export - nightly')
+    -- version 4: 'nightly' no longer says when it runs (every 2 hours from 3 Nov 2026) - renamed, schedules kept
+    IF EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'KPI_Export - nightly')
+       AND NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'KPI_Export - Bad Debt and Exposure')
     BEGIN
-        EXEC msdb.dbo.sp_add_job @job_name = N'KPI_Export - nightly', @owner_login_name = @owner,
+        EXEC msdb.dbo.sp_update_job @job_name = N'KPI_Export - nightly', @new_name = N'KPI_Export - Bad Debt and Exposure';
+        PRINT 'Renamed the job KPI_Export - nightly to KPI_Export - Bad Debt and Exposure.';
+    END
+
+    IF NOT EXISTS (SELECT 1 FROM msdb.dbo.sysjobs WHERE name = N'KPI_Export - Bad Debt and Exposure')
+    BEGIN
+        EXEC msdb.dbo.sp_add_job @job_name = N'KPI_Export - Bad Debt and Exposure', @owner_login_name = @owner,
              @description = N'Prepares the Bad Debt and Exposure snapshots in the CMS database for the KPI website, then refreshes KPI_Export''s copies. From the PerformanceFinance.Kpi repo (Kpi.Copy/Export/KPI_Export.sql).';
-        EXEC msdb.dbo.sp_add_jobstep @job_name = N'KPI_Export - nightly', @step_name = N'Bad Debt and Exposure, then the copies',
+        EXEC msdb.dbo.sp_add_jobstep @job_name = N'KPI_Export - Bad Debt and Exposure', @step_name = N'Bad Debt and Exposure, then the copies',
              @subsystem = N'TSQL', @database_name = N'KPI_Export', @command = N'EXEC KpiCopy.spRunJob N''nightly'';';
-        EXEC msdb.dbo.sp_add_jobschedule @job_name = N'KPI_Export - nightly', @name = N'Daily at 00:15',
-             @freq_type = 4, @freq_interval = 1, @active_start_time = 1500;
-        EXEC msdb.dbo.sp_add_jobserver @job_name = N'KPI_Export - nightly', @server_name = N'(local)';
-        PRINT 'Created the job KPI_Export - nightly.';
+        EXEC msdb.dbo.sp_add_jobschedule @job_name = N'KPI_Export - Bad Debt and Exposure', @name = N'Every 2 hours, 06:00-20:00',
+             @freq_type = 4, @freq_interval = 1,                                  -- daily
+             @freq_subday_type = 8, @freq_subday_interval = 2,                    -- every 2 hours
+             @active_start_time = 60000, @active_end_time = 200000;
+        EXEC msdb.dbo.sp_add_jobserver @job_name = N'KPI_Export - Bad Debt and Exposure', @server_name = N'(local)';
+        PRINT 'Created the job KPI_Export - Bad Debt and Exposure.';
     END
     ELSE
     BEGIN
         -- version 2 had two steps; one now does both
         IF EXISTS (SELECT 1 FROM msdb.dbo.sysjobsteps S JOIN msdb.dbo.sysjobs J ON J.job_id = S.job_id
-                   WHERE J.name = N'KPI_Export - nightly' AND S.step_id = 2)
-            EXEC msdb.dbo.sp_delete_jobstep @job_name = N'KPI_Export - nightly', @step_id = 2;
-        EXEC msdb.dbo.sp_update_jobstep @job_name = N'KPI_Export - nightly', @step_id = 1,
+                   WHERE J.name = N'KPI_Export - Bad Debt and Exposure' AND S.step_id = 2)
+            EXEC msdb.dbo.sp_delete_jobstep @job_name = N'KPI_Export - Bad Debt and Exposure', @step_id = 2;
+        EXEC msdb.dbo.sp_update_jobstep @job_name = N'KPI_Export - Bad Debt and Exposure', @step_id = 1,
              @step_name = N'Bad Debt and Exposure, then the copies', @command = N'EXEC KpiCopy.spRunJob N''nightly'';',
              @on_success_action = 1;
-        PRINT 'The job KPI_Export - nightly already exists: its schedule is left as it is.';
+        PRINT 'The job KPI_Export - Bad Debt and Exposure already exists: its schedule is left as it is.';
     END
 END
 GO

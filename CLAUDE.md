@@ -49,8 +49,8 @@ transaction that is always rolled back, 100 rows / 30 s, System Admin only, each
 **A PULL (16 Oct 2026, Steve; it replaced a planned push from the office):** the `KpiExport` views IN THE CMS DATABASE
 (CMS_Live on PF-APP1; CMS_Dev locally) → SQL Server Agent on PF-APP1 copies them into `KpiCopy.*` in the separate
 `KPI_Export` database every 10 minutes, 07:00-20:00 Mon-Sat (`KpiCopy.spRefresh`, one transaction, stamps
-`KpiCopy.Refresh`), and (the nightly job) first prepares Bad Debt and Exposure in CMS (`KpiCopy.spNightly`; 00:15, and every 2 hours 06:00-20:00
-from 3 Nov 2026 - set in SQL Agent) → the SITE (`KpiPull`, the scheduled task "Collect figures from the office", every 2 minutes, through the CMS data source card) reads that one row and, when it is newer than
+`KpiCopy.Refresh`), and the job **KPI_Export - Bad Debt and Exposure** (called "- nightly" until 3 Nov 2026, when it went from 00:15 to
+every 2 hours 06:00-20:00, set in SQL Agent; the version 4 script renames it) first prepares Bad Debt and Exposure in CMS (`KpiCopy.spNightly`) → the SITE (`KpiPull`, the scheduled task "Collect figures from the office", every 2 minutes, through the CMS data source card) reads that one row and, when it is newer than
 CMS_KPI's last publish (`Rpt.spDataStatus`), bulk-copies `KpiCopy.*` (+ the snapshots when prepared since the last
 nightly publish) into `Stage.*` in `CMS_KPI` → `Stage.spPublish` swaps everything into `Dim`/`Fact` in ONE transaction
 (read-committed snapshot, so a report never sees half a load; it refuses an empty `Stage.Lead`) → the site runs only

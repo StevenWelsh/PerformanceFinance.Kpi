@@ -56,7 +56,7 @@ Do the parts in order. Part B's password is shown once and typed into the site i
    ```
    .: applying KPI_Export version 3, reading CMS_Live (… batches)...
      Created the job KPI_Export - refresh.
-     Created the job KPI_Export - nightly.
+     Created the job KPI_Export - Bad Debt and Exposure.
    Done. Check it with:  Kpi.Tools export-check
    ```
    Safe to run again at any time: it rebuilds KPI_Export's objects and leaves existing jobs (and any schedule you've
@@ -68,7 +68,7 @@ Do the parts in order. Part B's password is shown once and typed into the site i
    It must end with **All good.** If it lists problems, stop and send me the output.
 6. **Fill the copies for the first time.** In **SSMS** on PF-APP1:
    1. In Object Explorer, expand **SQL Server Agent** > **Jobs**.
-   2. Right-click **KPI_Export - nightly** > **Start Job at Step...** > select step 1 > **Start**. It takes a few
+   2. Right-click **KPI_Export - Bad Debt and Exposure** (called "- nightly" before version 4) > **Start Job at Step...** > select step 1 > **Start**. It takes a few
       minutes (Bad Debt and Exposure, then the copies). It must finish with **Success**.
    3. Check the result in a new query window:
       ```sql

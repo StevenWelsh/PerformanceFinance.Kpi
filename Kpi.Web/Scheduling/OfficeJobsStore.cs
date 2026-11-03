@@ -25,7 +25,9 @@ public sealed class OfficeJobsStore(IDbContextFactory<KpiDbContext> dbs, Integra
 {
     public const string Provider = "OfficeJobs";
     public const string RefreshJob = "KPI_Export - refresh";
-    public const string NightlyJob = "KPI_Export - nightly";
+    public const string NightlyJob = "KPI_Export - Bad Debt and Exposure";
+    /// <summary>Its name until 3 Nov 2026 (the version 4 script renames it): read as the same job.</summary>
+    private const string NightlyJobBefore = "KPI_Export - nightly";
     /// <summary>A job "Running" longer than this was probably stopped mid-run (a server restart).</summary>
     public static readonly TimeSpan StuckAfter = TimeSpan.FromHours(1);
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
@@ -48,6 +50,9 @@ public sealed class OfficeJobsStore(IDbContextFactory<KpiDbContext> dbs, Integra
             await store.GetAsync(Provider);   // makes the empty row
             row = await db.Integrations.SingleAsync(i => i.Provider == Provider);
         }
+        if (jobs is not null)   // the job's old name, before the script renamed it
+            jobs = new OfficeJobs(jobs.Jobs.Select(j => j.Job == NightlyJobBefore ? j with { Job = NightlyJob } : j).ToList(),
+                                  jobs.Schedules.Select(s => s.Job == NightlyJobBefore ? s with { Job = NightlyJob } : s).ToList());
         row.SettingsJson = JsonSerializer.Serialize(new OfficeJobsSnapshot { CheckedUtc = DateTime.UtcNow, Jobs = jobs }, Json);
         row.UpdatedUtc = DateTime.UtcNow;
         await db.SaveChangesAsync();
