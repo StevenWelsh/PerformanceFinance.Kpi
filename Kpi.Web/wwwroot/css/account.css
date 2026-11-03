@@ -107,12 +107,17 @@
 .acc-btn:disabled, .acc-btn-secondary:disabled { opacity: 0.55; cursor: default; }
 
 /* ---- Settings ------------------------------------------------------------------------------------------------ */
-.set-layout { display: flex; align-items: flex-start; gap: 20px; padding: 20px; }
-.set-nav { flex: 0 0 200px; display: flex; flex-direction: column; gap: 2px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
-.set-nav a { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 5px; color: var(--text); text-decoration: none; font-size: 14px; }
-.set-nav a:hover { background: var(--surface-alt); }
-.set-nav a.set-on { background: var(--brand-tint-2); color: var(--text-strong); font-weight: 600; }
-.set-panel { flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; }
+/* FOLDER TABS across the top (3 Nov 2026, Steve - as SHS-Web's settings): grey tabs over the white panel; the open one is
+   white, drops over the panel's top border to join it, and carries the brand colour along its top edge */
+.set-layout { display: flex; flex-direction: column; padding: 20px; }
+.set-nav { display: flex; gap: 3px; align-items: flex-end; flex-wrap: wrap; }
+.set-nav a { border: 1px solid var(--line-strong); border-bottom: 0; background: var(--panel-head); color: var(--text-2); border-radius: 7px 7px 0 0;
+    padding: 8px 14px; min-width: 76px; text-align: center; font-size: 13.5px; font-weight: 600; text-decoration: none; position: relative; }
+.set-nav a i { display: none; }
+.set-nav a:hover { background: var(--surface-alt); color: var(--text); }
+.set-nav a.set-on { background: var(--surface); color: var(--text-strong); margin-bottom: -1px; padding-bottom: 9px; z-index: 1;
+    box-shadow: inset 0 3px 0 var(--brand); }
+.set-panel { min-width: 0; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 0 6px 6px 6px; padding: 18px 20px; }
 .set-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .set-head h2 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
 .set-head .acc-hint { margin: 0; }
@@ -130,6 +135,10 @@
 .set-act { background: none; border: 0; padding: 2px 6px; color: var(--brand); font: inherit; font-size: 13px; cursor: pointer; }
 .set-act:hover { text-decoration: underline; }
 .set-act-danger { color: var(--error); }
+/* Settings > Users: four buttons in fixed slots on every row (3 Nov 2026) */
+.usr-actions { display: inline-grid; grid-template-columns: 52px 108px 82px 66px; gap: 4px; }
+.usr-btn { height: 28px; padding: 0 6px; font-size: 12.5px; width: 100%; }
+.usr-danger:not(:disabled) { color: var(--error); }
 .set-bad { color: var(--error); }
 
 .set-pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: 12px; font-weight: 600; background: var(--panel-head); color: var(--text-2); white-space: nowrap; }
@@ -313,10 +322,10 @@ code.ed-value, .ed-address code, .ed-how code { font-family: Consolas, "Cascadia
     .acc-card { padding: 14px; }
     .acc-facts { grid-template-columns: 80px 1fr; }
     .acc-form .login-button { width: 100%; }
-    .set-layout { flex-direction: column; padding: 12px; gap: 12px; }
-    .set-nav { flex: none; flex-direction: row; overflow-x: auto; width: 100%; }
-    .set-nav a { flex: 0 0 auto; }
-    .set-panel { width: 100%; padding: 14px; }
+    .set-layout { padding: 12px; }
+    .set-nav { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; }
+    .set-nav a { flex: 0 0 auto; min-width: 0; padding: 8px 10px; }
+    .set-panel { padding: 14px; }
     .set-head { flex-direction: column; }
     .set-filter { width: 100%; }
 }
@@ -385,8 +394,6 @@ code.ed-value, .ed-address code, .ed-how code { font-family: Consolas, "Cascadia
 
 /* ---- Settings on a phone: the tabs fit without their icons; the user list reads as cards ---------------------- */
 @media (max-width: 599px) {
-    .set-nav a i { display: none; }
-    .set-nav a { padding: 8px 10px; }
     .set-cards thead { display: none; }
     .set-cards tr { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; margin-bottom: 10px; }
     .set-cards td { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border: 0; padding: 5px 0; }
@@ -394,6 +401,7 @@ code.ed-value, .ed-address code, .ed-how code { font-family: Consolas, "Cascadia
     .set-cards td[data-label] > * { text-align: right; }
     .set-cards td.set-actions { justify-content: flex-start; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid var(--line); margin-top: 4px; }
     .set-cards .set-act { padding: 6px 8px 6px 0; }
+    .set-cards .usr-actions { grid-template-columns: repeat(4, auto); }
 }
 
 /* An unstarred report's star shows only while the mouse is over the sidebar (Steve); a starred one always shows. Only

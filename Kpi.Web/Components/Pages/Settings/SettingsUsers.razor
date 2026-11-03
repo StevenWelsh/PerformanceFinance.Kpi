@@ -63,27 +63,35 @@ else
                         <td data-label="Status"><span class="set-pill set-pill-@(u.Status.Replace(" ", "").ToLowerInvariant())">@u.Status</span></td>
                         <td data-label="Online">@OnlineCell(u.Id)</td>
                         <td data-label="Last sign-in">@Kpi.Web.Data.UkTime.Show(u.LastSignInUtc)</td>
-                        <td class="set-actions">
-                            <button type="button" class="set-act" @onclick="() => StartEdit(u)">Edit</button>
-                            @if (u.Status is "Invited" or "Invite expired" or "Setting up")
-                            {
-                                <button type="button" class="set-act" @onclick="() => Run(() => Admin.ResendInviteAsync(User, u.Id, Nav.BaseUri))">Send again</button>
-                                <button type="button" class="set-act set-act-danger" @onclick="() => ConfirmWithdraw(u)">Withdraw</button>
+                        @* four buttons on every row, the same place each time - greyed out where they don't apply (3 Nov 2026, Steve) *@
+                        <td class="set-actions"><div class="usr-actions">
+                            @{
+                                var invited = u.Status is "Invited" or "Invite expired" or "Setting up";
+                                var disabled = u.Status == "Disabled";
+                                var notYou = u.IsMe ? "Not on your own account" : null;
                             }
-                            else if (!u.IsMe)
+                            <button type="button" class="acc-btn-secondary usr-btn" @onclick="() => StartEdit(u)">Edit</button>
+                            @if (invited)
                             {
-                                @if (u.Status != "Disabled")
+                                <button type="button" class="acc-btn-secondary usr-btn" @onclick="() => Run(() => Admin.ResendInviteAsync(User, u.Id, Nav.BaseUri))">Send again</button>
+                                <button type="button" class="acc-btn-secondary usr-btn usr-danger" @onclick="() => ConfirmWithdraw(u)">Withdraw</button>
+                                <button type="button" class="acc-btn-secondary usr-btn usr-danger" disabled title="Withdraw removes an invitation">Delete</button>
+                            }
+                            else
+                            {
+                                <button type="button" class="acc-btn-secondary usr-btn" disabled="@(u.IsMe || disabled)"
+                                        title="@(u.IsMe ? "Change your own mobile on My Account" : disabled ? "Enable them first" : null)" @onclick="() => StartReset(u)">Reset mobile</button>
+                                @if (disabled)
                                 {
-                                    <button type="button" class="set-act" @onclick="() => StartReset(u)">Reset mobile</button>
-                                    <button type="button" class="set-act set-act-danger" @onclick="() => ConfirmDisable(u)">Disable</button>
+                                    <button type="button" class="acc-btn-secondary usr-btn" @onclick="() => Run(() => Admin.SetDisabledAsync(User, u.Id, false))">Enable</button>
                                 }
                                 else
                                 {
-                                    <button type="button" class="set-act" @onclick="() => Run(() => Admin.SetDisabledAsync(User, u.Id, false))">Enable</button>
+                                    <button type="button" class="acc-btn-secondary usr-btn usr-danger" disabled="@u.IsMe" title="@notYou" @onclick="() => ConfirmDisable(u)">Disable</button>
                                 }
-                                <button type="button" class="set-act set-act-danger" @onclick="() => ConfirmDelete(u)">Delete</button>
+                                <button type="button" class="acc-btn-secondary usr-btn usr-danger" disabled="@u.IsMe" title="@notYou" @onclick="() => ConfirmDelete(u)">Delete</button>
                             }
-                        </td>
+                        </div></td>
                     </tr>
                 }
             </tbody>
