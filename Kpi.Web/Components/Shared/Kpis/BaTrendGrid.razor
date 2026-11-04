@@ -1,7 +1,7 @@
 @* Business Analysis's 8-year trend as A SMALL CHART PER CATEGORY (KPI site, 4 Nov 2026, Steve and Andy: the grouped
    8-colour bar chart "sometimes tells me nothing at all" - one big category flattened the rest, and the year to date
    stood beside whole years). Each category gets its own card and its OWN SCALE, its figure for the chosen year in
-   large type with the change against the year before to the same date and its share, and its 8 years as one-colour
+   large type with the change against the year before to the same date, and its 8 years as one-colour
    bars. The report year is to date, so its bar is pale and a dashed line marks where the year before was by the same
    date. Plain markup (no script); used by PF's and Mobberley's Business Analysis (not the Lender cards). *@
 
@@ -37,7 +37,6 @@
                         <span class="bat-pill @(pct >= 0 ? "bat-up" : "bat-down")">@(pct >= 0 ? "▲ +" : "▼ ")@pct.ToString("N0")%</span>
                     }
                 </div>
-                <div class="bat-sub">@(IsReportYear ? $"{Year} to date" : $"{Year} to {AsOf:d MMM}") · @Share(now) of all</div>
                 <div class="bat-bars">
                     @for (var i = 0; i < Years.Count; i++)
                     {
@@ -71,12 +70,6 @@
     [Parameter] public DateTime? AsOf { get; set; }
 
     private bool IsReportYear => AsOf?.Year == Year;
-
-    private string Share(decimal v)
-    {
-        var total = Dims.Sum(d => Ytd(Year, d));
-        return total == 0m ? "0%" : Math.Round(100m * v / total).ToString("N0") + "%";
-    }
 
     // bar height as a % of the card's own scale (a sliver for any value above nothing)
     private static string Height(decimal v, decimal max) =>
