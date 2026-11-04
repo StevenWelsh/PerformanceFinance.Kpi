@@ -7,9 +7,10 @@
    Active to highlight its item (KpiHome passes ""). Reuses the main app sidebar
    styling (.app-sidebar / .nav-section-heading / .nav-item) via kpi-sidebar.
 
-   Collapsible: the toggle at the FOOT of the sidebar (KPI site, 19 Oct 2026, Steve - as
-   Standpoint) shrinks it to an icon-only rail and back; collapsed, the logo strip shows the
-   small PF KPI icon. Nav items carry an icon so they still read when collapsed; on hover a
+   Collapsible: the toggle in the LOGO STRIP, right of the logo (KPI site, 4 Nov 2026, Steve and
+   Andy - at the foot, from 19 Oct, its strip pushed the menu into a scrollbar on a laptop) shrinks
+   it to an icon-only rail and back; collapsed, the logo strip shows the small PF KPI icon and the
+   toggle sits just under it. Nav items carry an icon so they still read when collapsed; on hover a
    collapsed item shows its label as a tooltip (title). *@
 
 <aside class="app-sidebar kpi-sidebar @(_collapsed ? "kpi-sidebar-collapsed" : "")">
@@ -18,7 +19,12 @@
             <img src="img/pf-logo.png" alt="Performance Finance" class="sidebar-logo-img" />
             <img src="img/kpi-icon-192.png" alt="Performance Finance KPIs" class="kpi-logo-mini" />
         </a>
+        @if (!_collapsed) { @CollapseButton }
     </div>
+    @if (_collapsed)
+    {
+        <div class="kpi-rail-toggle">@CollapseButton</div>
+    }
     @* Favourites / All, as the phone's reports menu (the same choice, kept with the login: KpiFavourites) *@
     @if (_view is not null && !_collapsed)
     {
@@ -68,17 +74,19 @@
             }
         }
     </nav>
-    <div class="kpi-sidebar-foot">
-        @* a sidebar-panel icon, not chevrons: beside a page title « read as "back" (Steve) *@
+</aside>
+
+@code {
+    // a sidebar-panel icon, not chevrons: beside a page title « read as "back" (Steve)
+    private RenderFragment CollapseButton => __builder =>
+    {
         <button type="button" class="kpi-collapse-btn" @onclick="Toggle"
                 title="@(_collapsed ? "Show the menu" : "Hide the menu")"
                 aria-label="@(_collapsed ? "Show the menu" : "Hide the menu")">
             <i class="bi @(_collapsed ? "bi-layout-sidebar" : "bi-layout-sidebar-inset")"></i>
         </button>
-    </div>
-</aside>
+    };
 
-@code {
     /// <summary>Slug of the current report, to highlight its nav item. "" on the landing page.</summary>
     [Parameter] public string Active { get; set; } = "";
 

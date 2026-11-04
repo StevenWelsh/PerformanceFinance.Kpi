@@ -1,5 +1,6 @@
 @using System.Globalization
 @using Kpi.Web.Components.Shared.Kpis.Mobile
+@implements IDisposable
 
 @* Business Analysis on a phone (portrait only): Sales Office (on a row of its own), Dimension, Measure, Year
    and Quarter, then
@@ -12,10 +13,15 @@
    reload exactly as the full view's fields do; the lender Year only picks which loaded card shows. Donut
    and bars are drawn here (SVG / sized markup) - BusinessAnalysis.razor.js is the full view's.
    Shire Business Analysis (3 Nov 2026) uses it too: its own dimensions and measures, no Sales Office, and Proposed to PF
-   (DimensionChoices, MeasureChoices, MeasureText, ShowOffice, MoreFilters) - PF's page sets none of them. *@
+   (DimensionChoices, MeasureChoices, MeasureText, ShowOffice, MoreFilters) - PF's page sets none of them.
+   KPI site, 4 Nov 2026 (Steve and Andy - "the pie is kind of meaningless like this, too small"): the ring fills the card's
+   width, its centre just the total, "to date" and the change; every row starts CLOSED with its own open button (the
+   trend), and its share in bold. Tapping a row or a slice PICKS it: the slice thickens and the rest fade, the row is
+   tinted, the centre shows its figures. Back to everything: tap it again, Show all (beside the ring, only while one is
+   picked), or 10 seconds untouched. *@
 
 <KpiMobileFilters>
-    <div class="kpim-filters" style="--kpim-cols:2">
+    <div class="kpim-filters" style="--kpim-cols:3">
         @if (ShowOffice)
         {
             <div class="kpim-ba-office"><KpiOfficeField Changed="OfficeChanged" /></div>
@@ -86,44 +92,65 @@ else
     }
     else
     {
-        <section class="kpim-card kpim-ba-summary">
-            <div class="kpim-ba-donut">
-                <svg viewBox="0 0 124 124" width="124" height="124" aria-hidden="true">
+        var picked = d.Items.FirstOrDefault(it => it.Name == _selected);
+        <section class="kpim-card kpim-ba-summary kpim-ba-summary-big">
+            <span class="kpim-ba-caption">@(MeasureText ?? Measure) by @Dimension.ToLowerInvariant()</span>
+            <div class="kpim-ba-donut kpim-ba-donut-big">
+                <svg viewBox="0 0 124 124" role="img" aria-label="@($"Share of {d.CentreLabel} by {Dimension.ToLowerInvariant()}")">
                     @if (d.Slices.Count == 0)
                     {
                         <circle cx="62" cy="62" r="51" class="kpim-ba-ring kpim-ba-ring-empty"></circle>
                     }
                     @foreach (var s in d.Slices)
                     {
-                        <circle cx="62" cy="62" r="51" class="kpim-ba-ring kpim-ba-c@(s.Colour)"
+                        <circle cx="62" cy="62" r="51" @onclick="() => Select(s.Name)"
+                                class="kpim-ba-ring kpim-ba-c@(s.Colour) @(picked is null ? "" : s.Name == _selected ? "kpim-ba-ring-on" : "kpim-ba-ring-off")"
                                 stroke-dasharray="@s.Dash" stroke-dashoffset="@s.Offset" transform="rotate(-90 62 62)"></circle>
                     }
                 </svg>
                 <div class="kpim-ba-centre">
-                    <span class="kpim-ba-centre-total">@Money(d.Total)</span>
-                    <span class="kpim-ba-centre-label">@d.CentreLabel</span>
+                    @if (picked is not null)
+                    {
+                        <span class="kpim-ba-centre-name">@picked.Name</span>
+                        <span class="kpim-ba-centre-total">@Money(picked.Now)</span>
+                        <span class="kpim-ba-centre-label">@picked.Share% of @d.CentreLabel</span>
+                        @Pill(picked.Change, "kpim-ba-big", 10)
+                    }
+                    else
+                    {
+                        <span class="kpim-ba-centre-total">@Money(d.Total)</span>
+                        <span class="kpim-ba-centre-label">@d.CentreLabel</span>
+                        @Pill(d.Change, "kpim-ba-big", 10)
+                        <span class="kpim-ba-centre-vs">@d.Against</span>
+                    }
                 </div>
-            </div>
-            <div class="kpim-ba-sumtext">
-                <span class="kpim-ba-caption">@(MeasureText ?? Measure) by @Dimension.ToLowerInvariant()</span>
-                <span class="kpim-ba-against">@d.Against</span>
-                @Pill(d.Change, "kpim-ba-big", 10)
+                @if (picked is not null)
+                {
+                    <button type="button" class="kpim-ba-showall" @onclick="ShowAll">Show all</button>
+                }
             </div>
         </section>
 
         <section class="kpim-card kpim-ba-list">
             @foreach (var it in d.Items)
             {
-                var isOpen = it.Name == d.OpenName;
-                <div class="kpim-ba-item @(isOpen ? "kpim-ba-open" : "")">
-                    <button type="button" class="kpim-ba-row" aria-expanded="@(isOpen ? "true" : "false")"
-                            @onclick="() => Toggle(it.Name, isOpen)">
-                        <span class="kpim-ba-swatch kpim-ba-c@(it.Colour)"></span>
-                        <span class="kpim-ba-name">@it.Name</span>
-                        <span class="kpim-ba-value">@Money(it.Now)</span>
-                        <span class="kpim-ba-share">@it.Share%</span>
-                        @Pill(it.Change, "kpim-ba-chip", 8)
-                    </button>
+                var isOpen = _expanded.Contains(it.Name);
+                var isPicked = it.Name == _selected;
+                <div class="kpim-ba-item @(isOpen ? "kpim-ba-open" : "") @(isPicked ? "kpim-ba-picked" : "")">
+                    <div class="kpim-ba-rowline">
+                        <button type="button" class="kpim-ba-row" aria-pressed="@(isPicked ? "true" : "false")"
+                                @onclick="() => Select(it.Name)">
+                            <span class="kpim-ba-swatch kpim-ba-c@(it.Colour)"></span>
+                            <span class="kpim-ba-name">@it.Name</span>
+                            <span class="kpim-ba-value">@Money(it.Now)</span>
+                            <span class="kpim-ba-share">@it.Share%</span>
+                            @Pill(it.Change, "kpim-ba-chip", 8)
+                        </button>
+                        <button type="button" class="kpim-ba-expand" aria-expanded="@(isOpen ? "true" : "false")"
+                                aria-label="@((isOpen ? "Hide " : "Show ") + it.Name + "'s 8-year trend")" @onclick="() => Toggle(it.Name)">
+                            <i class="bi bi-chevron-down" aria-hidden="true"></i>
+                        </button>
+                    </div>
                     @if (isOpen)
                     {
                         <div class="kpim-ba-detail">
@@ -196,7 +223,10 @@ else
     /// <summary>Fields after Quarter (Shire's Proposed to PF).</summary>
     [Parameter] public RenderFragment? MoreFilters { get; set; }
 
-    private string? _open;      // the dimension row opened to its trend: null = the first, "" = none
+    private readonly HashSet<string> _expanded = new();   // rows opened to their trend (none to start)
+    private string? _selected;                             // the row / slice picked: null = all
+    private System.Threading.Timer? _reset;                // back to all after ResetAfter untouched
+    private static readonly TimeSpan ResetAfter = TimeSpan.FromSeconds(10);
     private int? _lenderYear;   // the lender card shown: null = the latest
 
     private const string LenderDimension = "Lender";
@@ -227,7 +257,8 @@ else
 
     private async Task PickDimension(string value)
     {
-        _open = null;
+        _expanded.Clear();
+        _selected = null;
         await DimensionChanged.InvokeAsync(value);
     }
 
@@ -240,7 +271,37 @@ else
         if (int.TryParse(value, out var y)) _lenderYear = y;
     }
 
-    private void Toggle(string name, bool isOpen) => _open = isOpen ? "" : name;
+    // a row's open button: shows / hides its trend, and picks it
+    private void Toggle(string name)
+    {
+        if (!_expanded.Remove(name)) _expanded.Add(name);
+        _selected = name;
+        Arm();
+    }
+
+    // a row or a slice: picked, or back to all when it already was
+    private void Select(string name)
+    {
+        _selected = _selected == name ? null : name;
+        Arm();
+    }
+
+    private void ShowAll()
+    {
+        _selected = null;
+        _reset?.Dispose();
+    }
+
+    // back to all after ResetAfter untouched; each tap starts it again
+    private void Arm()
+    {
+        _reset?.Dispose();
+        if (_selected is null) return;
+        _reset = new System.Threading.Timer(_ => InvokeAsync(() => { _selected = null; StateHasChanged(); }),
+                                            null, ResetAfter, Timeout.InfiniteTimeSpan);
+    }
+
+    public void Dispose() => _reset?.Dispose();
 
     // ---- the report date: the current year runs only to it ----
     private DateTime AsAt => ReportDate ?? DateTime.Today;
@@ -253,11 +314,11 @@ else
     private string AsAtShort => $"{AsAt.Day} {MonthNames[AsAt.Month - 1]}";
 
     // ---- a dimension ----
-    private sealed record Slice(int Colour, string Dash, string Offset);
+    private sealed record Slice(string Name, int Colour, string Dash, string Offset);
     private sealed record TrendBar(string Label, int Height, bool Part);
     private sealed record DimItem(string Name, int Colour, decimal Now, int Share, Change Change,
                                   decimal Peak, List<TrendBar> Bars, string Detail);
-    private sealed record DimView(List<DimItem> Items, string? OpenName, List<Slice> Slices, decimal Total,
+    private sealed record DimView(List<DimItem> Items, List<Slice> Slices, decimal Total,
                                   string CentreLabel, string Against, Change Change);
 
     private const int SeriesColours = 8;     // kpim-ba-c0 .. c7
@@ -285,7 +346,7 @@ else
             var now = Full(Year, Dims[i]);
             if (now <= 0) continue;
             var len = (double)(now / total) * Ring;
-            slices.Add(new Slice(i % SeriesColours, Num(len) + " " + Num(Ring), Num(-from)));
+            slices.Add(new Slice(Dims[i], i % SeriesColours, Num(len) + " " + Num(Ring), Num(-from)));
             from += len;
         }
 
@@ -315,7 +376,7 @@ else
             : (Quarter > 0 ? Per(Year) : $"All of {Year}");
 
         return new DimView(
-            items, _open ?? items[0].Name, slices, total, centre,
+            items, slices, total, centre,
             "vs " + Per(Year - 1) + (Partial ? " YTD" : ""),
             Versus(Dims.Sum(dim => Ytd(Year - 1, dim)), Dims.Sum(dim => Ytd(Year, dim))));
     }

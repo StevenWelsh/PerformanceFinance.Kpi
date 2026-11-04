@@ -115,9 +115,10 @@
     private RenderFragment Fields => __builder =>
     {
         <KpiField Caption="Measure" Value="@Measure" ValueChanged="MeasureChanged" Options="ShireReports.MeasureOptions" />
-        <KpiField Caption="Proposed to PF" Value="@ProposedToPF" ValueChanged="ProposedToPFChanged" Options="ShireReports.ProposedToPFOptions" />
         <KpiField Caption="Year" Value="@Year.ToString(Inv)" ValueChanged="OnYear" Enabled="Years.Count > 0"
                   Options="@(Years.Select(y => new KpiOption(y.ToString(Inv), y.ToString(Inv))).ToList())" />
+        @* Proposed to PF is the last filter on every Mobberley report (Steve, 4 Nov 2026) *@
+        <KpiField Caption="Proposed to PF" Value="@ProposedToPF" ValueChanged="ProposedToPFChanged" Options="ShireReports.ProposedToPFOptions" />
     };
 
     private Task OnYear(string value)

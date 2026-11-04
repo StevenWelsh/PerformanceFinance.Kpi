@@ -1381,7 +1381,7 @@ button.kpim-hm-row { cursor: pointer; }
 /* the reports menu lists every section, so over a Shire page (the phone drawer is inside it) it stays PF crimson;
    the bar above a Shire report stays purple (Steve liked it) */
 .kpi-shire .kpim-menu { --kpim-crimson: var(--pf-crimson); --kpim-crimson-dark: var(--pf-crimson-dark); }
-.kpi-shell.kpi-shire .kpi-topbar { box-shadow: inset 0 4px 0 var(--shire-magenta); }
+/* no magenta stripe along the title bar (Steve, 4 Nov 2026): the purple title and card heads mark a Shire page */
 .kpi-shell.kpi-shire .kpi-topbar h1 { color: var(--shire-deep); }
 .kpi-shell.kpi-shire .ss-card-head { background: var(--shire-tint); color: var(--shire-deep); }
 .kpi-shell.kpi-shire .slt-col { fill: var(--shire-purple); }

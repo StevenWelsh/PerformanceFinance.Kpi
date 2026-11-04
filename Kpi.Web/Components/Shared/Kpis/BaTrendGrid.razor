@@ -1,0 +1,90 @@
+@* Business Analysis's 8-year trend as A SMALL CHART PER CATEGORY (KPI site, 4 Nov 2026, Steve and Andy: the grouped
+   8-colour bar chart "sometimes tells me nothing at all" - one big category flattened the rest, and the year to date
+   stood beside whole years). Each category gets its own card and its OWN SCALE, its figure for the chosen year in
+   large type with the change against the year before to the same date and its share, and its 8 years as one-colour
+   bars. The report year is to date, so its bar is pale and a dashed line marks where the year before was by the same
+   date. Plain markup (no script); used by PF's and Mobberley's Business Analysis (not the Lender cards). *@
+
+<div class="ss-card bat-card">
+    <div class="ss-card-head bat-head">
+        <span>@Title</span>
+        <span class="bat-key">
+            <span><i class="bat-sw"></i>Whole year</span>
+            @if (IsReportYear)
+            {
+                <span><i class="bat-sw bat-sw-part"></i>@Year to date</span>
+                <span><i class="bat-mark-key"></i>@(Year - 1) to the same date</span>
+            }
+        </span>
+    </div>
+    <div class="bat-grid">
+        @foreach (var d in Dims)
+        {
+            var now = Ytd(Year, d);
+            var before = Ytd(Year - 1, d);
+            var values = Years.Select(y => Full(y, d)).ToList();
+            var max = Math.Max(values.DefaultIfEmpty(0m).Max(), IsReportYear ? before : 0m);
+            <div class="bat-cell">
+                <div class="bat-top">
+                    <span class="bat-name" title="@d">@d</span>
+                    <span class="bat-peak">peak @Short(values.DefaultIfEmpty(0m).Max())</span>
+                </div>
+                <div class="bat-figure">
+                    <span class="bat-value">@Short(now)</span>
+                    @if (before != 0m)
+                    {
+                        var pct = (now - before) / Math.Abs(before) * 100m;
+                        <span class="bat-pill @(pct >= 0 ? "bat-up" : "bat-down")">@(pct >= 0 ? "▲ +" : "▼ ")@pct.ToString("N0")%</span>
+                    }
+                </div>
+                <div class="bat-sub">@(IsReportYear ? $"{Year} to date" : $"{Year} to {AsOf:d MMM}") · @Share(now) of all</div>
+                <div class="bat-bars">
+                    @for (var i = 0; i < Years.Count; i++)
+                    {
+                        var v = values[i];
+                        var part = IsReportYear && Years[i] == Year;
+                        <div class="bat-bar @(part ? "bat-bar-part" : "")" style="height:@Height(v, max)%"
+                             title="@(part ? $"{Years[i]} to date" : Years[i].ToString()): @Cur(v)"></div>
+                    }
+                    @if (IsReportYear && before > 0m)
+                    {
+                        <div class="bat-mark" style="bottom:@Height(before, max)%" title="@(Year - 1) to the same date: @Cur(before)"></div>
+                    }
+                </div>
+                <div class="bat-years">
+                    @foreach (var y in Years) { <span>'@(y % 100)</span> }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public List<string> Dims { get; set; } = new();
+    /// <summary>The 8 years, oldest first; the last is the chosen year.</summary>
+    [Parameter, EditorRequired] public List<int> Years { get; set; } = new();
+    [Parameter, EditorRequired] public int Year { get; set; }
+    [Parameter, EditorRequired] public Func<int, string, decimal> Full { get; set; } = (_, _) => 0m;
+    [Parameter, EditorRequired] public Func<int, string, decimal> Ytd { get; set; } = (_, _) => 0m;
+    /// <summary>The report date: the chosen year is "to date" when it is this date's year.</summary>
+    [Parameter] public DateTime? AsOf { get; set; }
+
+    private bool IsReportYear => AsOf?.Year == Year;
+
+    private string Share(decimal v)
+    {
+        var total = Dims.Sum(d => Ytd(Year, d));
+        return total == 0m ? "0%" : Math.Round(100m * v / total).ToString("N0") + "%";
+    }
+
+    // bar height as a % of the card's own scale (a sliver for any value above nothing)
+    private static string Height(decimal v, decimal max) =>
+        (max <= 0m || v <= 0m ? 0m : Math.Max(2m, Math.Round(v / max * 100m, 1))).ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string Cur(decimal v) => "£" + v.ToString("N0");
+    private static string Short(decimal v)
+        => v >= 1_000_000m ? "£" + (v / 1_000_000m).ToString("0.0") + "m"
+         : v >= 1_000m     ? "£" + Math.Round(v / 1_000m) + "k"
+         : "£" + v.ToString("N0");
+}

@@ -190,6 +190,8 @@ else
     <div class="set-backdrop" @onclick="() => _historyJob = null"></div>
     <div class="set-dialog tsk-history" role="dialog" aria-modal="true" aria-labelledby="tsk-hist-title">
         <h3 id="tsk-hist-title">History - @hj.Name</h3>
+        @* the list scrolls; the title and Close stay put (Steve, 4 Nov 2026) *@
+        <div class="tsk-history-body">
         @if (_history is null) { <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div> }
         else if (_history.Count == 0) { <p class="set-sub">It hasn't run yet.</p> }
         else
@@ -212,7 +214,8 @@ else
                 </table>
             </div>
         }
-        <div class="set-dialog-buttons">
+        </div>
+        <div class="set-dialog-buttons tsk-history-foot">
             <button type="button" class="acc-btn-secondary" @onclick="() => _historyJob = null">Close</button>
         </div>
     </div>

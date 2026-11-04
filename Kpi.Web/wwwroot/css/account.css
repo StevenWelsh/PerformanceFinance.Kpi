@@ -179,7 +179,11 @@
 .tsk-actions .tsk-btn + .tsk-btn { margin-left: 4px; }
 .tsk-run { color: var(--brand); border-color: var(--brand); }
 .set-dialog.tsk-dialog { width: 620px; }
-.set-dialog.tsk-history { width: 1000px; }
+.set-dialog.tsk-history { width: 1000px; display: flex; flex-direction: column; overflow: hidden; }
+.tsk-history-body { flex: 1; min-height: 0; overflow-y: auto; }
+.tsk-history-body .set-table-wrap { overflow: visible; }
+.tsk-history-body thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.tsk-history-foot { flex: none; margin-top: 0; padding-top: 12px; border-top: 1px solid var(--line); }
 .tsk-field { margin-bottom: 12px; font-size: 13.5px; }
 .tsk-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .tsk-days { margin-top: 6px; gap: 4px; }
@@ -571,20 +575,22 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .intg-howto { margin: 0 0 12px; padding-left: 20px; font-size: 13.5px; line-height: 1.5; color: var(--text-2); }
 .intg-howto li { margin-bottom: 6px; }
 
-/* The sidebar's shrink button at its FOOT (KPI site, 19 Oct 2026, Steve - as Standpoint): a strip below the menu,
-   kept in view at the bottom while a long menu scrolls; collapsed, the logo strip shows the small KPI icon. */
+/* The sidebar's shrink button (KPI site, 4 Nov 2026, Steve and Andy): in the white logo strip, right of the logo
+   (app.css's .kpi-logo / .kpi-collapse-btn); collapsed, just under the small KPI icon, white on the menu's red. Its
+   strip at the foot (19 Oct) pushed the menu into a scrollbar on a laptop. A menu that does need one gets a thin bar
+   in the menu's own colours, not the system's grey one. */
 .kpi-sidebar .app-nav { flex: 1 0 auto; }
-.kpi-sidebar-foot {
-    position: sticky; bottom: 0; flex: 0 0 auto;
-    display: flex; justify-content: center; padding: 10px 0 12px;
-    background: var(--sidebar-bg); border-top: 1px solid rgba(255, 255, 255, 0.22);
-}
-.kpi-sidebar-foot .kpi-collapse-btn {
+.kpi-rail-toggle { display: flex; justify-content: center; padding: 10px 0 4px; flex: 0 0 auto; }
+.kpi-rail-toggle .kpi-collapse-btn {
     width: 36px; height: 36px; padding: 0; border-radius: 8px;
     background: rgba(255, 255, 255, 0.14); color: var(--sidebar-fg); font-size: 17px;
 }
-.kpi-sidebar-foot .kpi-collapse-btn:hover { background: rgba(255, 255, 255, 0.26); color: var(--sidebar-fg); }
-.kpi-sidebar-foot .kpi-collapse-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.kpi-rail-toggle .kpi-collapse-btn:hover { background: rgba(255, 255, 255, 0.26); color: var(--sidebar-fg); }
+.kpi-rail-toggle .kpi-collapse-btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.kpi-sidebar { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.45) transparent; }
+.kpi-sidebar::-webkit-scrollbar { width: 6px; }
+.kpi-sidebar::-webkit-scrollbar-track { background: transparent; }
+.kpi-sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.45); border-radius: 3px; }
 .kpi-logo-mini { display: none; width: 34px; height: 34px; }
 .kpi-sidebar-collapsed .kpi-logo-mini { display: block; }
 
@@ -636,3 +642,72 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .pl-url { display: flex; gap: 8px; flex-wrap: wrap; }
 .pl-url input { flex: 1 1 320px; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 .pl-revoked td { color: var(--text-3); }
+
+/* Business Analysis's 8-year trend as a small chart per category (BaTrendGrid; 4 Nov 2026): each card its own scale,
+   one colour (PF blue; Mobberley purple), the report year pale with a dashed mark at the year before to the same date */
+.bat-card { grid-column: 1 / -1; --bat-bar: var(--brand); --bat-part: #a9bfe0; }
+.kpi-shire .bat-card { --bat-bar: var(--shire-deep); --bat-part: #cdb8e3; }
+.bat-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bat-key { display: flex; gap: 14px; font-size: 12px; font-weight: 400; color: var(--text-2); text-transform: none; letter-spacing: 0; }
+.bat-key > span { display: inline-flex; align-items: center; gap: 6px; }
+.bat-sw { width: 10px; height: 10px; border-radius: 2px; background: var(--bat-bar); display: inline-block; }
+.bat-sw-part { background: var(--bat-part); }
+.bat-mark-key { width: 14px; border-top: 2px dashed var(--text); display: inline-block; }
+/* the hairlines between charts are each chart's own edges, so a part-filled last row shows the page behind (Steve) */
+.bat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); background: var(--kpim-bg, var(--surface-alt)); }
+.bat-cell { background: var(--surface); padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+    box-shadow: inset -1px -1px 0 var(--line); }
+.bat-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.bat-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bat-peak { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.bat-figure { display: flex; align-items: center; gap: 8px; }
+.bat-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bat-pill { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+.bat-up { background: #e3eefc; color: #1d4f91; }
+.bat-down { background: #fdebdc; color: #a14b00; }
+.bat-sub { font-size: 11.5px; color: var(--text-3); }
+.bat-bars { position: relative; height: 96px; display: flex; align-items: flex-end; gap: 6px; border-bottom: 1px solid var(--line-strong); margin-top: 4px; }
+.bat-bar { flex: 1; border-radius: 3px 3px 0 0; background: var(--bat-bar); min-width: 0; }
+.bat-bar-part { background: var(--bat-part); }
+/* over the last bar: an eighth of the width less the gaps */
+.bat-mark { position: absolute; right: 0; width: calc((100% - 42px) / 8); border-top: 2px dashed var(--text); }
+.bat-years { display: flex; gap: 6px; font-size: 10.5px; color: var(--text-3); }
+.bat-years > span { flex: 1; text-align: center; }
+
+/* Business Analysis on a phone (BusinessAnalysisMobile; 4 Nov 2026): the ring across the card's width, picking a row
+   or a slice (the slice thickens, the rest fade, the row tints), and a row's own open button for its trend */
+.kpim-ba-summary.kpim-ba-summary-big { flex-direction: column; align-items: stretch; gap: 6px; padding: 14px 16px 16px; }
+.kpim-ba-donut.kpim-ba-donut-big { width: min(100%, 300px); height: auto; aspect-ratio: 1; align-self: center; }
+.kpim-ba-donut-big > svg { width: 100%; height: 100%; overflow: visible; }
+.kpim-ba-donut-big .kpim-ba-ring { stroke-width: 16; cursor: pointer; transition: opacity .2s, stroke-width .2s; }
+/* picked: thicker, still inside the drawing (r 51 + 11 = its 62 edge) */
+.kpim-ba-donut-big .kpim-ba-ring-on { stroke-width: 22; }
+.kpim-ba-donut-big .kpim-ba-ring-off { opacity: .3; }
+.kpim-ba-donut-big .kpim-ba-centre { inset: 20%; gap: 4px; text-align: center; pointer-events: none; }
+.kpim-ba-donut-big .kpim-ba-centre-total { font-size: 28px; }
+.kpim-ba-donut-big .kpim-ba-centre-label { font-size: 12.5px; }
+.kpim-ba-donut-big .kpim-pill.kpim-ba-big { align-self: center; }
+.kpim-ba-centre-name { font-size: 13px; font-weight: 600; color: var(--kpim-text-2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kpim-ba-centre-vs { font-size: 11.5px; color: var(--kpim-text-2); }
+.kpim-ba-showall { position: absolute; right: -6px; bottom: 0; height: 30px; padding: 0 12px; border-radius: 15px;
+    border: 1px solid var(--kpim-crimson); background: var(--kpim-card); color: var(--kpim-crimson);
+    font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.kpim-ba-rowline { display: flex; align-items: center; background: var(--kpim-card); }
+.kpim-ba-rowline .kpim-ba-row { flex: 1; min-width: 0; padding-right: 6px; background: transparent; }
+.kpim-ba-open .kpim-ba-rowline { background: var(--kpim-card-head); }
+.kpim-ba-picked .kpim-ba-rowline, .kpim-ba-picked .kpim-ba-detail { background: color-mix(in srgb, var(--kpim-crimson) 9%, var(--kpim-card)); }
+.kpim-ba-expand { flex: none; width: 40px; height: 40px; margin-right: 8px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--kpim-row-line); border-radius: 10px; background: var(--kpim-card); color: var(--kpim-crimson); cursor: pointer; }
+.kpim-ba-expand i { transition: transform .2s; }
+.kpim-ba-open .kpim-ba-expand i { transform: rotate(180deg); }
+.kpim-ba-share { width: 40px; font-size: 15px; font-weight: 700; color: var(--kpim-text-strong); }
+
+/* Phone filters, compact (4 Nov 2026, Steve - "these could be smaller and fit on 2 lines"): every report's filter panel
+   (KpiMobileFilters) gets shorter boxes and smaller type; sideways, as many across as fit */
+.kpim-fbox-fields .kpim-filters { gap: 8px; }
+.kpim-fbox-fields .kpim-field { height: 40px; padding: 0 10px; border-radius: 10px; }
+.kpim-fbox-fields .kpim-field-caption { font-size: 10.5px; }
+.kpim-fbox-fields .kpim-field-value { font-size: 13px; }
+@media (orientation: landscape) {
+    .kpim-fbox-fields .kpim-filters { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+}

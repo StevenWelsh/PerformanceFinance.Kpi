@@ -14,8 +14,8 @@
 
 @* Shire Business Analysis (3 Nov 2026, Steve): PF's Business Analysis (Components/Pages/Kpis/BusinessAnalysis) over Shire's
    Salesforce - the same two layouts, switched by Dimension:
-   • Profession / Facility / Purpose - the Full / YTD table, the year's donut and the 8-year trend (PF's
-     BusinessAnalysis.razor.js draws the donut and trend);
+   • Profession / Facility / Purpose - the Full / YTD table, the year's donut (PF's BusinessAnalysis.razor.js) and the
+     8-year trend as a small chart per category (BaTrendGrid);
    • Lender - four ranked year cards, each lender against itself the year before (to the same date for this year).
    Figures mirror Shire's own reports: Closed Won by Close Date (Shire.spBusinessAnalysis, Shire.spBusinessAnalysisByLender
    in Kpi.Data/Shire/002_ShireBusinessAnalysis.sql). Changed from PF's: the title says Shire; no Sales Office; no Arrangement
@@ -175,19 +175,9 @@
                         </div>
                     </div>
 
-                    @* ---- 8-year trend bars (drawn client-side, sized to the host) ---- *@
-                    <div class="ss-card ba-trendcard">
-                        <div class="ss-card-head ba-trendhead">
-                            <span>@MeasureText — 8 year trend</span>
-                            <ul class="ba-yearkey">
-                                @for (int i = 0; i < _trendYears.Count; i++)
-                                {
-                                    <li><span class="ba-swatch" style="background:@Chart(i)"></span>@_trendYears[i]</li>
-                                }
-                            </ul>
-                        </div>
-                        <div class="ba-trendhost" @ref="_barsHost"></div>
-                    </div>
+                    @* ---- 8-year trend: a small chart per category (BaTrendGrid, as PF's - 4 Nov 2026) ---- *@
+                    <BaTrendGrid Title="@TrendTitle" Dims="_dims" Years="_trendYears" Year="_year"
+                                 Full="Full" Ytd="Ytd" AsOf="_asOf" />
                 </div>
             }
         </KpiPanel>
@@ -205,9 +195,8 @@
                             DimensionChanged="OnDimension" MeasureChanged="OnMeasure"
                             YearChanged="OnYear" QuarterChanged="OnQuarter">
         <MoreFilters>
-            <div class="kpim-ba-office">
-                <KpiField Caption="Proposed to PF" Value="@_pf" ValueChanged="OnProposedToPF" Options="ShireReports.ProposedToPFOptions" />
-            </div>
+            @* in the grid like the rest, beside Quarter - not a row of its own (Steve, 4 Nov 2026) *@
+            <KpiField Caption="Proposed to PF" Value="@_pf" ValueChanged="OnProposedToPF" Options="ShireReports.ProposedToPFOptions" />
         </MoreFilters>
     </BusinessAnalysisMobile>
 </KpiMobile>
@@ -248,10 +237,10 @@
     private List<int> _lenderYears = new();
 
     private string MeasureText => ShireReports.MeasureLabel(_measure);
+    private string TrendTitle => $"{MeasureText} — 8 year trend";
     private string MeasureShort => _measure == "Income" ? "Income" : "AF";
 
     private ElementReference _pieHost;
-    private ElementReference _barsHost;
     private IJSObjectReference? _module;
     private bool _pieDirty;            // data changed -> redraw the JS donut and trend after the next render
 
@@ -269,7 +258,7 @@
 
     private bool ChartsShown => !_loading && _error is null && !IsLender && _rows.Count > 0;
 
-    // PF's donut and trend (BusinessAnalysis.razor.js), with colours as hex - it draws raw SVG.
+    // PF's donut (BusinessAnalysis.razor.js), with colours as hex - it draws raw SVG.
     private async Task DrawVisuals()
     {
         _module ??= await JS.InvokeAsync<IJSObjectReference>(
@@ -286,28 +275,6 @@
             valueText = Cur(s.Value)
         });
         await _module.InvokeVoidAsync("render", _pieHost, data, Short(total));
-        await _module.InvokeVoidAsync("renderTrend", _barsHost, TrendData());
-    }
-
-    // The trend chart's data, shaped here as PF's: heights are fractions of a round axis top.
-    private object TrendData()
-    {
-        var rawMax = _dims.SelectMany(d => _trendYears.Select(y => Full(y, d))).DefaultIfEmpty(0m).Max();
-        var max = NiceMax(rawMax);
-        return new
-        {
-            ticks = Enumerable.Range(0, 5).Select(g => new { frac = g / 4.0, label = Axis(max * g / 4m) }),
-            groups = _dims.Select(d => new
-            {
-                label = d,
-                bars = _trendYears.Select((y, i) => new
-                {
-                    frac = max == 0m ? 0.0 : (double)(Full(y, d) / max),
-                    colour = ChartHex(i),
-                    tip = $"{d} · {y}: {Cur(Full(y, d))}"
-                })
-            })
-        };
     }
 
     // PF's chart colours, as hex for the JS
@@ -330,7 +297,6 @@
         {
             try
             {
-                await _module.InvokeVoidAsync("disposeTrend", _barsHost);   // stop the ResizeObserver
                 await _module.DisposeAsync();
             }
             catch (JSDisconnectedException) { }   // circuit already gone
@@ -511,25 +477,6 @@
     private static string Short(decimal v)
         => v >= 1_000_000m ? "£" + (v / 1_000_000m).ToString("0.#") + "m"
          : v >= 1_000m     ? "£" + Math.Round(v / 1_000m) + "k"
-         : "£" + v.ToString("N0");
-
-    // a round axis top (1/2/5 × 10ⁿ) so the ticks land on round numbers
-    private static decimal NiceMax(decimal raw)
-    {
-        if (raw <= 0m) return 4m;
-        var step = NiceStep(raw / 4m);
-        return Math.Ceiling(raw / step) * step;
-    }
-    private static decimal NiceStep(decimal rough)
-    {
-        var mag = (decimal)Math.Pow(10, Math.Floor(Math.Log10((double)rough)));
-        var norm = rough / mag;
-        var nice = norm <= 1m ? 1m : norm <= 2m ? 2m : norm <= 5m ? 5m : 10m;
-        return nice * mag;
-    }
-    private static string Axis(decimal v)
-        => v >= 1_000_000m ? "£" + Math.Round(v / 1_000_000m).ToString("N0") + "m"
-         : v >= 1_000m     ? "£" + Math.Round(v / 1_000m).ToString("N0") + "k"
          : "£" + v.ToString("N0");
 
     private RenderFragment Delta(decimal prev, decimal now) => builder =>

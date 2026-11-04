@@ -14,8 +14,8 @@
    Two layouts on ONE page (two data sources), switched by the Dimension selector:
    • Profession / Facility / Arrangement / Division — Full/YTD comparison table, an
      interactive current-year donut (BusinessAnalysis.razor.js — hover/click pops a
-     segment and cross-highlights the matching table row) and a grouped 8-year trend bar
-     chart (round-number £ axis, top-right year key, hover tooltips).
+     segment and cross-highlights the matching table row) and the 8-year trend as a small
+     chart per category (BaTrendGrid; KPI site, 4 Nov 2026 - was a grouped bar chart).
    • Lender — four ranked year cards (latest 4 years) with a change per lender against the
      year before (BusinessAnalysisLenderService, an embedded query): the report year against
      the year before TO THE SAME DATE ("vs 2025 YTD"), earlier years whole against whole;
@@ -174,21 +174,9 @@
                         </div>
                     </div>
 
-                    @* ---- 8-year trend bars ---- *@
-                    <div class="ss-card ba-trendcard">
-                        <div class="ss-card-head ba-trendhead">
-                            <span>@_measure — 8 year trend</span>
-                            <ul class="ba-yearkey">
-                                @for (int i = 0; i < _trendYears.Count; i++)
-                                {
-                                    <li><span class="ba-swatch" style="background:@Chart(i)"></span>@_trendYears[i]</li>
-                                }
-                            </ul>
-                        </div>
-                        @* trend chart is drawn client-side (measure-and-redraw): JS sizes the
-                           SVG to this host's pixels so it fills the space at any resolution *@
-                        <div class="ba-trendhost" @ref="_barsHost"></div>
-                    </div>
+                    @* ---- 8-year trend: a small chart per category (KPI site, 4 Nov 2026 - was a grouped bar chart) ---- *@
+                    <BaTrendGrid Title="@TrendTitle" Dims="_dims" Years="_trendYears" Year="_year"
+                                 Full="Full" Ytd="Ytd" AsOf="_asOf" />
                 </div>
             }
         </KpiPanel>
@@ -249,11 +237,11 @@
     // KpiPanel title — the header gains a " — By Lender" suffix in the lender view (kept in C# to
     // avoid nesting same-quote string literals inside a Razor attribute expression)
     private string _panelTitle => IsLender ? "Business Analysis — By Lender" : "Business Analysis";
+    private string TrendTitle => $"{_measure} — 8 year trend";
     private List<BusinessAnalysisLenderRow> _lenderRows = new();
     private List<int> _lenderYears = new();     // the 4 years shown, oldest-left to newest-right
 
     private ElementReference _pieHost;
-    private ElementReference _barsHost;
     private IJSObjectReference? _module;
     private bool _pieDirty;            // data changed -> redraw JS visuals after the next render
 
@@ -286,7 +274,7 @@
     // The donut's and the trend's hosts are on the page: a dimension's figures, loaded, for an office that has them.
     private bool ChartsShown => !_loading && _error is null && !IsLender;
 
-    // Hand the current slices to the JS donut and wire the trend bars' hover popups.
+    // Hand the current slices to the JS donut.
     // Colours are resolved to real hex here (JS draws raw SVG and can't read var(--chart-n)),
     // and slices carry their percentages so the pie tooltip matches the legend.
     private async Task DrawVisuals()
@@ -305,36 +293,6 @@
             valueText = Cur(s.Value)
         });
         await _module.InvokeVoidAsync("render", _pieHost, data, Short(total));
-        await _module.InvokeVoidAsync("renderTrend", _barsHost, TrendData());
-    }
-
-    // Everything the JS trend chart needs, computed here so £-formatting and the "nice" axis
-    // stay single-sourced in C#. Heights are fractions of the axis top (0..1); JS multiplies
-    // by the measured plot height. Colours are hex (JS draws raw SVG).
-    private object TrendData()
-    {
-        var rawMax = _dims.SelectMany(d => _trendYears.Select(y => Full(y, d))).DefaultIfEmpty(0m).Max();
-        var max = NiceMax(rawMax);
-        return new
-        {
-            // 5 y-axis ticks: fraction up the plot (0..1) + the round £ label
-            ticks = Enumerable.Range(0, 5).Select(g => new
-            {
-                frac = g / 4.0,
-                label = Axis(max * g / 4m)
-            }),
-            // one group per dimension: its label + a bar per trend year
-            groups = _dims.Select(d => new
-            {
-                label = d,
-                bars = _trendYears.Select((y, i) => new
-                {
-                    frac = max == 0m ? 0.0 : (double)(Full(y, d) / max),   // bar height 0..1
-                    colour = ChartHex(i),
-                    tip = $"{d} · {y}: {Cur(Full(y, d))}"
-                })
-            })
-        };
     }
 
     // JS draws into raw SVG, so it needs concrete colours rather than var(--chart-n).
@@ -357,7 +315,6 @@
         {
             try
             {
-                await _module.InvokeVoidAsync("disposeTrend", _barsHost);   // stop the ResizeObserver
                 await _module.DisposeAsync();
             }
             catch (JSDisconnectedException) { }   // circuit already gone
@@ -567,27 +524,6 @@
     private static string Short(decimal v)
         => v >= 1_000_000m ? "£" + (v / 1_000_000m).ToString("0.#") + "m"
          : v >= 1_000m     ? "£" + Math.Round(v / 1_000m) + "k"
-         : "£" + v.ToString("N0");
-
-    // Round the axis top up to a clean value (1/2/5 × 10ⁿ) so the four ticks land on
-    // round numbers (£5m, £10m, £15m, £20m — never £14.3m).
-    private static decimal NiceMax(decimal raw)
-    {
-        if (raw <= 0m) return 4m;                 // empty chart → arbitrary non-zero top
-        var step = NiceStep(raw / 4m);            // 4 divisions -> pick a clean per-tick step
-        return Math.Ceiling(raw / step) * step;
-    }
-    private static decimal NiceStep(decimal rough)
-    {
-        var mag = (decimal)Math.Pow(10, Math.Floor(Math.Log10((double)rough)));
-        var norm = rough / mag;                   // 1..10
-        var nice = norm <= 1m ? 1m : norm <= 2m ? 2m : norm <= 5m ? 5m : 10m;
-        return nice * mag;
-    }
-    // Axis label: whole-number £m / £k (never a decimal) — round tick values only.
-    private static string Axis(decimal v)
-        => v >= 1_000_000m ? "£" + Math.Round(v / 1_000_000m).ToString("N0") + "m"
-         : v >= 1_000m     ? "£" + Math.Round(v / 1_000m).ToString("N0") + "k"
          : "£" + v.ToString("N0");
 
     private RenderFragment Delta(decimal prev, decimal now) => builder =>
