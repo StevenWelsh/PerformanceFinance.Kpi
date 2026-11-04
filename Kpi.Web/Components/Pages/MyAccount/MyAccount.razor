@@ -62,8 +62,9 @@
                     <AntiforgeryToken />
                     <Kpi.Web.Components.Account.PasswordInput Id="current" Name="currentPassword" Label="Current password" />
                     <Kpi.Web.Components.Account.PasswordInput Id="new" Name="newPassword" Label="New password" Autocomplete="new-password" />
+                    <Kpi.Web.Components.Account.PasswordRules For="new" />
                     <Kpi.Web.Components.Account.PasswordInput Id="confirm" Name="confirmPassword" Label="Confirm new password" Autocomplete="new-password" />
-                    <p class="acc-hint">@Kpi.Web.Components.Account.Messages.PasswordRules Your other devices are signed out.</p>
+                    <p class="acc-hint">Your other devices are signed out.</p>
                     <button type="submit" class="login-button" data-busy-text="Changing…">Change password</button>
                 </form>
             </section>

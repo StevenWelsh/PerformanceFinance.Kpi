@@ -24,6 +24,7 @@ public static class Jobs
         services.AddSingleton<IScheduledJob, AlertsJob>();
         services.AddSingleton<IScheduledJob, HistoryPruneJob>();
         services.AddSingleton<IScheduledJob, ExpireSetupsJob>();
+        services.AddSingleton<IScheduledJob, IpLocationsJob>();
         services.AddSingleton<ScheduledTaskService>();
         services.AddSingleton<OfficeJobsStore>();
         services.AddSingleton<SchedulerRunner>();
@@ -109,4 +110,18 @@ public sealed class ExpireSetupsJob : IScheduledJob
             run.Services.GetRequiredService<UserManager<KpiUser>>()).ExpireUnfinishedAsync();
         return n == 0 ? "None to close." : $"Closed {n}.";
     }
+}
+
+/// <summary>DB-IP's free town lookup, for the places shown beside addresses in Settings > Audit (<see cref="IpLocations"/>).
+/// DB-IP publishes monthly; a weekly look fetches the new month's within a week of it appearing.</summary>
+public sealed class IpLocationsJob(IpLocations locations) : IScheduledJob
+{
+    public string Key => "ip-locations";
+    public string Name => "Update the location lookup";
+    public string Description => "DB-IP's monthly file of where internet addresses are, for the audit.";
+    public string Group => "Upkeep";
+    public TaskSchedule DefaultSchedule => TaskSchedule.DailyAt(3, 15, TaskSchedule.Bit(DayOfWeek.Wednesday));
+    public TimeSpan MinimumRepeat => TimeSpan.FromHours(24);
+    public TimeSpan Timeout => TimeSpan.FromMinutes(10);
+    public Task<string> RunAsync(ScheduledRunContext run, CancellationToken ct) => locations.UpdateAsync(ct);
 }

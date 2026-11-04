@@ -708,6 +708,27 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .kpim-fbox-fields .kpim-field { height: 40px; padding: 0 10px; border-radius: 10px; }
 .kpim-fbox-fields .kpim-field-caption { font-size: 10.5px; }
 .kpim-fbox-fields .kpim-field-value { font-size: 13px; }
+/* Business Analysis's Sales Office takes one box like the rest, not a whole line (Steve: "didn't need 3 rows") */
+.kpim-fbox-fields .kpim-ba-office { grid-column: auto; }
 @media (orientation: landscape) {
     .kpim-fbox-fields .kpim-filters { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 }
+
+/* ONE eye in a password box, ours (4 Nov 2026, Steve - as DavidsonHR): Edge draws its own reveal button once something is
+   typed, which put two side by side. Hidden only in boxes that have our toggle. */
+.login-pw-wrap input::-ms-reveal,
+.login-pw-wrap input::-ms-clear { display: none; }
+
+/* The password rules under a new-password box (PasswordRules): tucked up to the box, two columns; a bullet until the rule
+   is met, then a green tick in the same spot (js/passwordRules.js) - a different shape, never colour alone */
+.pw-rules { margin: -6px 0 14px; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+.pw-rules ul { margin: 2px 0 0; padding-left: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; list-style: none; }
+.pw-rules li { position: relative; }
+.pw-rules li::before { content: "\2022"; position: absolute; left: -16px; top: 0; width: 14px; text-align: center; color: var(--text-2); }
+.pw-rules li.met::before { content: "\2713"; color: #15803d; font-weight: 700; }
+/* text for a screen reader only (the password rules' "done") */
+.visually-hidden { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important;
+    overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
+
+/* Settings > Audit: the place an address is in, above it (IpLocations) */
+.aud-place { font-weight: 600; white-space: nowrap; }

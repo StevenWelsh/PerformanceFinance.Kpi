@@ -1,10 +1,11 @@
-@using Kpi.Data
+﻿@using Kpi.Data
 @using Kpi.Data.Auth
 @using Kpi.Web.Account
 @using Kpi.Web.Data
 @using Kpi.Web.Data.Kpis
 @using Microsoft.EntityFrameworkCore
 @inject IDbContextFactory<KpiDbContext> Dbs
+@inject IpLocations Locations
 
 @* Settings > Audit (tabs 19 Oct 2026, Steve - as DavidsonHR's segmented buttons): the trail in groups - Sign-ins, Users,
    Settings, Embedded reports - and Report views (Auth.ReportView: who opened which report, how), each newest first,
@@ -229,13 +230,20 @@ else
                         <td>@a.ActorName</td>
                         <td>@(a.SubjectName == a.ActorName ? "" : a.SubjectName)</td>
                         <td>@a.Detail</td>
-                        <td class="set-sub">@a.IpAddress</td>
+                        <td class="set-sub">
+                            @if (Locations.Find(a.IpAddress) is { } place)
+                            {
+                                <div class="aud-place">@place</div>
+                            }
+                            @a.IpAddress
+                        </td>
                     </tr>
                 }
             </tbody>
         </table>
     </div>
-    <p class="set-sub aud-foot">The newest @Take entries@(_tab == "all" ? "" : " in this group"). Use the filter to narrow them.</p>
+    <p class="set-sub aud-foot">The newest @Take entries@(_tab == "all" ? "" : " in this group"). Use the filter to narrow them.
+        Places are approximate: <a href="https://db-ip.com" target="_blank" rel="noopener">IP locations by DB-IP</a>.</p>
 }
 
 @code {
@@ -358,7 +366,7 @@ else
     private List<PersonCount>? _peopleSummary;
 
     private IEnumerable<AuditEntry> Shown => string.IsNullOrWhiteSpace(_filter) ? _rows : _rows.Where(a =>
-        Has(a.Event) || Has(a.ActorName) || Has(a.SubjectName) || Has(a.Detail) || Has(a.IpAddress));
+        Has(a.Event) || Has(a.ActorName) || Has(a.SubjectName) || Has(a.Detail) || Has(a.IpAddress) || Has(Locations.Find(a.IpAddress)));
 
     private IEnumerable<ReportView> ShownViews => string.IsNullOrWhiteSpace(_filter) ? _views : _views.Where(v =>
         Has(v.UserName) || Has(ReportLabel(v.Report)) || Has(HowLabel(v.Source)));
