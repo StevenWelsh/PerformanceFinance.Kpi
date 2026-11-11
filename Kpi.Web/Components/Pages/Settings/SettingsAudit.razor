@@ -123,7 +123,7 @@ else if (_tab == "activity")
                         <td class="set-nowrap">@UkTime.Show(e.OccurredUtc, "dd MMM HH:mm:ss")</td>
                         <td>@(e.Kind == ReportEventKinds.Load ? "-" : e.UserName)</td>
                         <td>@ReportLabel(e.Report)</td>
-                        <td>@What(e)</td>
+                        <td>@What(e)@if (_waits.TryGetValue(e, out var waited)) { <span class="set-sub"> (waited @Secs((int)waited) for figures)</span> }</td>
                         <td class="set-sub">@e.Filters</td>
                         <td>@if (e.Source.Length > 0) { <span class="aud-how aud-how-@e.Source.ToLowerInvariant()">@HowLabel(e.Source)</span> }</td>
                     </tr>
@@ -335,7 +335,36 @@ else
         if (_who.ContainsKey(key)) _who[key] = people.Select(p => (p.Name ?? "-", p.Count)).ToList();
     }
 
-    private IEnumerable<ReportEvent> ShownEvents => string.IsNullOrWhiteSpace(_filter) ? _events : _events.Where(e =>
+    // FIGURE LOADS FOLDED INTO WHAT CAUSED THEM (11 Nov 2026, Steve - nameless "Loaded RecordTable in 1.8 s" rows, one per
+    // table, puzzled): a load is recorded without a name (the cache is shared), so on screen each one joins the latest
+    // opening / filter / view / button on the same report up to a minute before it, which then says "waited N s for
+    // figures" - from that click to the last figures arriving. A load with nothing before it keeps its own row.
+    private Dictionary<ReportEvent, double> _waits = new(ReferenceEqualityComparer.Instance);
+    private List<ReportEvent> _rowsShown = new();
+
+    private void FoldLoads()
+    {
+        var spans = new Dictionary<ReportEvent, (DateTime Start, DateTime End)>(ReferenceEqualityComparer.Instance);
+        var folded = new HashSet<ReportEvent>(ReferenceEqualityComparer.Instance);
+        var byTime = _events.OrderBy(e => e.OccurredUtc).ToList();
+        foreach (var load in byTime.Where(e => e.Kind == ReportEventKinds.Load))
+        {
+            var start = load.OccurredUtc.AddMilliseconds(-(load.Ms ?? 0));
+            var cause = byTime.LastOrDefault(e => e.Kind is not (ReportEventKinds.Load or ReportEventKinds.Closed)
+                && e.Report == load.Report && e.OccurredUtc <= load.OccurredUtc.AddSeconds(2)
+                && load.OccurredUtc - e.OccurredUtc <= TimeSpan.FromMinutes(1));
+            if (cause is null) continue;
+            folded.Add(load);
+            var from = start < cause.OccurredUtc ? start : cause.OccurredUtc;
+            spans[cause] = spans.TryGetValue(cause, out var s)
+                ? (from < s.Start ? from : s.Start, load.OccurredUtc > s.End ? load.OccurredUtc : s.End)
+                : (from, load.OccurredUtc);
+        }
+        _waits = spans.ToDictionary<KeyValuePair<ReportEvent, (DateTime Start, DateTime End)>, ReportEvent, double>(k => k.Key, k => (k.Value.End - k.Value.Start).TotalMilliseconds, ReferenceEqualityComparer.Instance);
+        _rowsShown = _events.Where(e => !folded.Contains(e)).ToList();
+    }
+
+    private IEnumerable<ReportEvent> ShownEvents => string.IsNullOrWhiteSpace(_filter) ? _rowsShown : _rowsShown.Where(e =>
         Has(e.UserName) || Has(ReportLabel(e.Report)) || Has(e.Label) || Has(e.Value) || Has(e.Filters) || Has(e.Kind) || Has(HowLabel(e.Source)));
 
     private static string What(ReportEvent e) => e.Kind switch
@@ -407,6 +436,7 @@ else
             if (_tab == "activity")
             {
                 _events = await db.ReportEvents.AsNoTracking().OrderByDescending(e => e.Id).Take(Take).ToListAsync();
+                FoldLoads();
                 _act = await ActivityAsync(db);
                 return;
             }
