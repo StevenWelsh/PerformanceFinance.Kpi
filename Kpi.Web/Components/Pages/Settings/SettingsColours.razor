@@ -1,0 +1,307 @@
+@using System.Text
+@using Kpi.Data.Auth
+@using Kpi.Web.Account
+@using Kpi.Web.Colours
+@using Kpi.Web.Data.Kpis
+@using Microsoft.AspNetCore.Identity
+@inject ColourTheme Theme
+@inject IServiceScopeFactory Scopes
+@inject IJSRuntime JS
+@inject KpiScripts Scripts
+@implements IAsyncDisposable
+
+@* SETTINGS > COLOURS (13 Nov 2026, Steve and Stefanie - "keep everything on brand"; the mock-up is docs/colours-mockup.html).
+   Kettering's and Mobberley's colours, each office with its own palette: every colour is CHOSEN FROM THE PALETTE (or a
+   tint of it) with the button on its row; the hex box is an override. A small amber dot in the left column marks a
+   colour outside the palette (hover says so) - the same beside a section with any. The two icons say where a colour
+   shows: the full view, the phone, or both. Nothing saved = today's colours; Save writes both offices at once.
+   Export / Import move the whole set between sites (a developer's machine and the live site). Open to the System Admin
+   and anyone ticked "Can change colours" (KpiPolicies.Colours). *@
+
+<div class="set-head">
+    <div><h2>Colours</h2></div>
+    <div class="col-tools">
+        <button type="button" class="acc-btn-secondary tsk-btn" @onclick="ExportAsync"><i class="bi bi-download" aria-hidden="true"></i> Export</button>
+        <label class="acc-btn-secondary tsk-btn col-import"><i class="bi bi-upload" aria-hidden="true"></i> Import
+            <InputFile OnChange="ImportAsync" accept=".json,application/json" /></label>
+    </div>
+</div>
+@if (_error is not null) { <div class="login-error" role="alert"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div> }
+@if (_note is not null) { <div class="col-note" role="status">@_note</div> }
+
+@if (_doc is null)
+{
+    <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+}
+else
+{
+    <div class="col-office" role="group" aria-label="Office">
+        @foreach (var o in ColourCatalogue.Offices)
+        {
+            <button type="button" class="@(o == _office ? "col-on" : null)" aria-pressed="@(o == _office ? "true" : "false")" @onclick="() => PickOffice(o)">@ColourCatalogue.OfficeName(o)</button>
+        }
+    </div>
+
+    <div class="col-layout">
+        <nav class="col-card col-nav" aria-label="Colours">
+            <div class="col-grp">Palette</div>
+            <button type="button" class="@(_section == "palette" ? "col-on" : null)" @onclick='() => Pick("palette")'>
+                <span class="col-gut"></span><span class="col-nm">Palette</span>
+                <span class="col-dots">@foreach (var p in Office.Palette.Take(4)) { <i style="background:@p.Hex"></i> }</span>
+            </button>
+            @{ string? last = null; }
+            @foreach (var s in Sections)
+            {
+                if (s.Group != last) { last = s.Group; <div class="col-grp">@s.Group</div> }
+                var off = s.Items.Count(i => PaletteName(Value(s, i)) is null);
+                <button type="button" class="@(_section == s.Key ? "col-on" : null)" @onclick="() => Pick(s.Key)">
+                    <span class="col-gut" title="@(off > 0 ? $"{off} colour{(off == 1 ? "" : "s")} outside the palette" : null)">@if (off > 0) { <em class="col-off"></em> }</span>
+                    <span class="col-nm">@s.Name</span>
+                    <span class="col-dots">@foreach (var i in s.Items.Take(4)) { <i style="background:@Value(s, i)"></i> }</span>
+                </button>
+            }
+        </nav>
+
+        <div class="col-card col-main">
+            <div class="col-card-head">@(Section?.Name ?? "Palette")</div>
+            @if (Section is null)
+            {
+                <ul class="col-rows">
+                    @for (var n = 0; n < Office.Palette.Count; n++)
+                    {
+                        var i = n;
+                        var p = Office.Palette[i];
+                        <li class="col-prow">
+                            <label class="col-sw" style="background:@p.Hex" title="Choose the colour"><input type="color" value="@p.Hex" @onchange="e => SetPalette(i, null, e.Value as string)" aria-label="@p.Name" /></label>
+                            <input class="col-name" value="@p.Name" @onchange="e => SetPalette(i, e.Value as string, null)" aria-label="Name" />
+                            <input class="col-hex" value="@p.Hex.ToUpperInvariant()" @onchange="e => SetPalette(i, null, e.Value as string)" aria-label="@p.Name, hex code" />
+                            <button type="button" class="col-x" title="Remove" aria-label="Remove @p.Name" @onclick="() => RemovePalette(i)">&times;</button>
+                        </li>
+                    }
+                </ul>
+                <div class="col-palette-tools">
+                    <button type="button" class="acc-btn-secondary tsk-btn" @onclick="AddPalette">Add a colour</button>
+                    <button type="button" class="acc-btn-secondary tsk-btn" @onclick="LoadBrand">@(_office == ColourCatalogue.Mobberley ? "Load Shire's colours" : "Load the PF brand palette")</button>
+                </div>
+            }
+            else
+            {
+                <ul class="col-rows">
+                    @foreach (var item in Section.Items)
+                    {
+                        var hex = Value(Section, item);
+                        var name = PaletteName(hex);
+                        var key = $"{Section.Key}.{item.Key}";
+                        <li class="col-row">
+                            <span class="col-gut" title="@(name is null ? "Outside the palette" : null)">@if (name is null) { <em class="col-off"></em> }</span>
+                            <span class="col-what"><b>@item.Label</b>@if (item.Note is not null) { <span class="set-sub">@item.Note</span> }</span>
+                            <span class="col-devs" title="@WhereText(item.Where)">
+                                <i class="bi bi-display @(item.Where != ColourWhere.Phone ? "col-dev-on" : null)" aria-hidden="true"></i>
+                                <i class="bi bi-phone @(item.Where != ColourWhere.Desktop ? "col-dev-on" : null)" aria-hidden="true"></i>
+                            </span>
+                            <span class="col-pickwrap">
+                                <button type="button" class="col-choose" aria-label="@item.Label: choose from the palette" @onclick="() => OpenPicker(key)">
+                                    <i style="background:@hex"></i><span>@(name ?? "Choose")</span><b class="bi bi-chevron-down" aria-hidden="true"></b>
+                                </button>
+                                @if (_picking == key)
+                                {
+                                    <div class="col-pop">
+                                        @foreach (var p in Office.Palette)
+                                        {
+                                            <div class="col-pop-row">
+                                                <span class="col-pop-name">@p.Name</span>
+                                                @foreach (var t in ColourCatalogue.Tints)
+                                                {
+                                                    var h = ColourCatalogue.Tint(p.Hex, t);
+                                                    <button type="button" class="col-chip @(h == hex ? "col-on" : null)" style="background:@h"
+                                                            title="@TintName(p.Name, t) @h.ToUpperInvariant()" @onclick="() => Set(key, h)"></button>
+                                                }
+                                            </div>
+                                        }
+                                        <div class="col-pop-row col-pop-tints"><span></span>@foreach (var t in ColourCatalogue.Tints) { <span>@((int)Math.Round(t * 100))%</span> }</div>
+                                        <div class="col-pop-foot">
+                                            <label>Other colour… <input type="color" value="@hex" @onchange="e => Set(key, e.Value as string)" /></label>
+                                            @if (Office.Colours.ContainsKey(key))
+                                            {
+                                                <button type="button" class="col-today" @onclick="() => Set(key, null)"><i style="background:@item.Default"></i> Today's colour</button>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </span>
+                            <input class="col-hex col-hex-small" value="@hex.ToUpperInvariant()" title="Override with a hex code"
+                                   aria-label="@item.Label, hex code (override)" @onchange="e => Set(key, e.Value as string)" />
+                        </li>
+                    }
+                </ul>
+                <div class="col-key">
+                    <span><em class="col-off"></em> Outside the palette</span>
+                    <span><i class="bi bi-display" aria-hidden="true"></i> Desktop</span>
+                    <span><i class="bi bi-phone" aria-hidden="true"></i> Phone</span>
+                </div>
+            }
+            <div class="col-foot">
+                @if (_saved) { <span class="set-sub" role="status">Saved. Pages show the new colours when next opened.</span> }
+                <button type="button" class="acc-btn-secondary tsk-btn" disabled="@(!_dirty || _busy)" @onclick="CancelAsync">Cancel</button>
+                <button type="button" class="acc-btn" disabled="@(!_dirty || _busy)" @onclick="SaveAsync">Save</button>
+            </div>
+        </div>
+
+        <div class="col-card col-preview">
+            <div class="col-card-head">Preview</div>
+            <div class="col-pv" @ref="_preview"></div>
+        </div>
+    </div>
+    @if (_picking is not null)
+    {
+        <div class="col-backdrop" @onclick="() => _picking = null"></div>
+    }
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private ColourDocument? _doc;
+    private string _office = ColourCatalogue.Kettering;
+    private string _section = "palette";
+    private string? _picking, _error, _note;
+    private bool _dirty, _busy, _saved;
+    private ElementReference _preview;
+    private IJSObjectReference? _module;
+
+    private OfficeColours Office => _doc!.For(_office);
+    private ColourSection[] Sections => ColourCatalogue.Sections(_office);
+    private ColourSection? Section => Sections.FirstOrDefault(s => s.Key == _section);
+
+    protected override async Task OnInitializedAsync() => _doc = await Theme.GetAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_doc is null) return;
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", Scripts.Url("./js/colourPreview.js"));
+            await _module.InvokeVoidAsync("render", _preview, _office, _section, Effective());
+        }
+        catch (JSDisconnectedException) { }
+    }
+
+    // every colour of this office as the reports would show it (saved, else today's), for the preview
+    private Dictionary<string, string> Effective() =>
+        Sections.SelectMany(s => s.Items.Select(i => ($"{s.Key}.{i.Key}", Value(s, i)))).ToDictionary(p => p.Item1, p => p.Item2);
+
+    private string Value(ColourSection s, ColourItem i) =>
+        Office.Colours.TryGetValue($"{s.Key}.{i.Key}", out var h) ? h : i.Default;
+
+    private string? PaletteName(string hex)
+    {
+        foreach (var p in Office.Palette)
+            foreach (var t in ColourCatalogue.Tints)
+                if (ColourCatalogue.Tint(p.Hex, t) == hex) return TintName(p.Name, t);
+        return null;
+    }
+
+    private static string TintName(string name, double t) => t >= 1 ? name : $"{name} {(int)Math.Round(t * 100)}%";
+
+    private static string WhereText(ColourWhere w) => w switch
+    {
+        ColourWhere.Desktop => "Desktop only", ColourWhere.Phone => "Phone only", _ => "Desktop and phone"
+    };
+
+    private void PickOffice(string o) { _office = o; _picking = null; if (Section is null) _section = "palette"; }
+    private void Pick(string s) { _section = s; _picking = null; }
+    private void OpenPicker(string key) => _picking = _picking == key ? null : key;
+
+    private void Changed() { _dirty = true; _saved = false; _note = null; }
+
+    private void Set(string key, string? hex)
+    {
+        _picking = null;
+        if (hex is null) { Office.Colours.Remove(key); Changed(); return; }
+        hex = hex.Trim().ToLowerInvariant();
+        if (!hex.StartsWith('#')) hex = "#" + hex;
+        if (!ColourCatalogue.IsHex(hex)) { _error = "A hex code is # and six characters, like #C20430."; return; }
+        _error = null;
+        Office.Colours[key] = hex;
+        Changed();
+    }
+
+    private void SetPalette(int i, string? name, string? hex)
+    {
+        var p = Office.Palette[i];
+        if (name is not null && name.Trim().Length > 0) p = p with { Name = name.Trim() };
+        if (hex is not null)
+        {
+            hex = hex.Trim().ToLowerInvariant();
+            if (!hex.StartsWith('#')) hex = "#" + hex;
+            if (!ColourCatalogue.IsHex(hex)) { _error = "A hex code is # and six characters, like #C20430."; return; }
+            p = p with { Hex = hex };
+        }
+        _error = null;
+        Office.Palette[i] = p;
+        Changed();
+    }
+
+    private void RemovePalette(int i) { Office.Palette.RemoveAt(i); Changed(); }
+    private void AddPalette() { Office.Palette.Add(new PaletteColour("New colour", "#888888")); Changed(); }
+    private void LoadBrand() { Office.Palette = ColourCatalogue.BrandPalette(_office).ToList(); Changed(); }
+
+    private async Task<KpiUser> ActorAsync()
+    {
+        var principal = (await AuthState!).User;
+        if (!KpiClaims.CanChangeColours(principal)) throw new InvalidOperationException("You can't change the colours.");
+        await using var scope = Scopes.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<UserManager<KpiUser>>().GetUserAsync(principal)
+               ?? throw new InvalidOperationException("Your account could not be found.");
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            await Theme.SaveAsync(await ActorAsync(), _doc!);
+            _doc = await Theme.GetAsync();
+            _dirty = false; _saved = true;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException) { _error = ex.Message; }
+        finally { _busy = false; }
+    }
+
+    private async Task CancelAsync()
+    {
+        _doc = await Theme.GetAsync();
+        _dirty = false; _saved = false; _error = null; _note = null; _picking = null;
+    }
+
+    // the whole set - both offices - as a file, to load on another site with Import
+    private async Task ExportAsync()
+    {
+        var bytes = Encoding.UTF8.GetBytes(ColourTheme.Export(_doc!));
+        _module ??= await JS.InvokeAsync<IJSObjectReference>("import", Scripts.Url("./js/colourPreview.js"));
+        await _module.InvokeVoidAsync("download", $"kpi-colours-{DateTime.UtcNow:yyyy-MM-dd}.json", Convert.ToBase64String(bytes));
+    }
+
+    // loads an Export file into the page; nothing is saved until Save
+    private async Task ImportAsync(InputFileChangeEventArgs e)
+    {
+        _error = null; _note = null;
+        try
+        {
+            using var reader = new StreamReader(e.File.OpenReadStream(maxAllowedSize: 200_000));
+            var doc = ColourTheme.Parse(await reader.ReadToEndAsync()) ?? throw new InvalidOperationException("That file has no colours in it.");
+            _doc = doc;
+            _dirty = true; _saved = false;
+            _note = $"{e.File.Name} loaded. Check it, then Save.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException or IOException)
+        {
+            _error = "That file couldn't be read as exported colours.";
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null) { try { await _module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+    }
+}

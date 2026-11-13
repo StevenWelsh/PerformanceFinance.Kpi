@@ -21,6 +21,13 @@ public static class KpiClaims
     public const string TwoFactor = "kpi:2fa";          // "on" once a mobile is registered for sign-in codes
     public const string Reports = "kpi:reports";        // "*" = every report, else the report slugs, comma separated
     public const string Name = "kpi:name";              // display name, for the avatar
+    /// <summary>"on": may change Settings > Colours without being a System Admin (13 Nov 2026, Steve - for Stefanie).
+    /// Kept as an Identity user claim (Auth.UserClaims), so no migration; Identity adds it to the principal itself.</summary>
+    public const string Colours = "kpi:colours";
+
+    /// <summary>Settings > Colours: the System Admin, or someone ticked for it.</summary>
+    public static bool CanChangeColours(ClaimsPrincipal user) =>
+        user.IsInRole(KpiRoles.SystemAdmin) || user.HasClaim(Colours, "on");
 }
 
 /// <summary>
@@ -50,6 +57,8 @@ public static class KpiPolicies
     public const string BadDebt = "OBEnquiryBadDebt.View";
     public const string Exposure = "OBEnquiryExposure.View";
     public const string Settings = "Settings";
+    /// <summary>Settings > Colours alone: a System Admin, or someone ticked "Can change colours".</summary>
+    public const string Colours = "Colours";
     /// <summary>Signed in with the texted code: My Account.</summary>
     public const string SignedIn = "SignedIn";
 
@@ -64,6 +73,7 @@ public static class KpiPolicies
         o.AddPolicy(BadDebt, p => Base(p).RequireAssertion(c => KpiReportAccess.CanSee(c.User, "bad-debt")));
         o.AddPolicy(Exposure, p => Base(p).RequireAssertion(c => KpiReportAccess.CanSee(c.User, "exposure")));
         o.AddPolicy(Settings, p => Base(p).RequireRole(KpiRoles.SystemAdmin));
+        o.AddPolicy(Colours, p => Base(p).RequireAssertion(c => KpiClaims.CanChangeColours(c.User)));
     }
 }
 

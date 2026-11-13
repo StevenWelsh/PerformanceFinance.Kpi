@@ -6,6 +6,7 @@
 @inject IJSRuntime JS
 @inject Kpi.Web.Data.Kpis.KpiCache KpiCache
 @inject Kpi.Web.Data.Kpis.KpiOfficeState Office
+@inject Kpi.Web.Colours.ColourTheme Colours
 @implements IAsyncDisposable
 @using Kpi.Web.Components.Shared.Kpis
 @using Kpi.Web.Components.Shared.Kpis.Mobile
@@ -282,13 +283,14 @@
         _module ??= await JS.InvokeAsync<IJSObjectReference>(
             "import", Scripts.Url("./Components/Pages/Kpis/BusinessAnalysis/BusinessAnalysis.razor.js"));
 
+        await Colours.ReadyAsync();   // Settings > Colours: a chosen chart colour, else today's
         var slices = PieSlices();
         var total = slices.Sum(s => s.Value);
         var data = slices.Select((s, i) => new
         {
             label = s.Label,
             value = s.Value,
-            colour = ChartHex(i),
+            colour = Colours.ChartHex(false, i) ?? ChartHex(i),
             pct = total == 0 ? 0 : (int)Math.Round(100m * s.Value / total),
             valueText = Cur(s.Value)
         });

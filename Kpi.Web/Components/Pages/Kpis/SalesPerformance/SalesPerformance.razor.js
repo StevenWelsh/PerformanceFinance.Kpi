@@ -8,6 +8,9 @@
 // compact = the phone's landscape race: shorter rows (its CSS, .kpim-sp-race, shrinks the bars to match).
 
 const PALETTE = ["#2b579a", "#d20d43", "#10B981", "#F59E0B", "#8B5CF6", "#06B6D4", "#F97316", "#EC4899"];
+// Settings > Colours (13 Nov 2026): the race takes the chosen Charts colours in order; none chosen = PALETTE, as before
+let raceColours = PALETTE;
+export function setRaceColours(c){ raceColours = Array.isArray(c) && c.length ? c : PALETTE; }
 const ROW_H = 52, GAP = 16;               // bar row height + gap (px) — roomier now the table's gone
 const ROW_H_COMPACT = 26, GAP_COMPACT = 8; // the phone's landscape race (payload.compact)
 const WKS_TEXT = "Weeks @ #1: ";           // the weeks-at-#1 tally trailing each bar's £ value
@@ -97,7 +100,7 @@ export function initRace(hostId, scrubId, dateId, playId, payload){
 
   // colour per person (stable by their order in the list)
   const colour = {};
-  people.forEach((id, i) => colour[id] = PALETTE[i % PALETTE.length]);
+  people.forEach((id, i) => colour[id] = raceColours[i % raceColours.length]);
 
   // DOM: a positioned track holding one row per person
   host.innerHTML = "";

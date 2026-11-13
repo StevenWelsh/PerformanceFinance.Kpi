@@ -1,11 +1,14 @@
-@page "/settings"
+﻿@page "/settings"
 @layout EmptyLayout
-@attribute [Authorize(Policy = KpiPolicies.Settings)]
+@attribute [Authorize(Policy = KpiPolicies.Colours)]
 @using Kpi.Web.Account
+@using System.Security.Claims
 
 @* Settings: the System Admin's alone (Oct 2026, Steve), laid out as DavidsonHR's - a menu of sections on the left
    (a row of tabs on a phone), the section beside it, and the section in the address (?section=) so a link lands on
-   it. My Account is NOT here: it is everybody's, on its own page. *@
+   it. My Account is NOT here: it is everybody's, on its own page.
+   Colours (13 Nov 2026, Steve) is also open to anyone ticked "Can change colours" in Users (Stefanie): they see that
+   section alone. The page lets in either (KpiPolicies.Colours); every other section is the System Admin's. *@
 
 <PageTitle>Settings — Performance Finance KPIs</PageTitle>
 
@@ -21,7 +24,7 @@
 
         <div class="set-layout">
             <nav class="set-nav" aria-label="Settings">
-                @foreach (var s in Sections)
+                @foreach (var s in Shown)
                 {
                     <a href="/settings?section=@s.Key" class="@(s.Key == Current ? "set-on" : "")" aria-current="@(s.Key == Current ? "page" : null)">
                         <i class="bi @s.Icon" aria-hidden="true"></i><span>@s.Label</span>
@@ -34,6 +37,7 @@
                     case "integrations": <SettingsIntegrations />; break;
                     case "tasks": <SettingsTasks />; break;
                     case "links": <SettingsPublishedLinks />; break;
+                    case "colours": <SettingsColours />; break;
         case "audit": <SettingsAudit />; break;
                     default: <SettingsUsers />; break;
                 }
@@ -44,17 +48,28 @@
 
 @code {
     [SupplyParameterFromQuery(Name = "section")] public string? Section { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _admin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null) _admin = (await AuthState).User.IsInRole(Kpi.Data.Auth.KpiRoles.SystemAdmin);
+    }
 
     private sealed record SectionItem(string Key, string Label, string Icon);
 
     private static readonly SectionItem[] Sections =
     {
         new("users", "Users", "bi-people"),
+        new("colours", "Colours", "bi-palette"),
         new("integrations", "Integrations", "bi-plug"),
         new("tasks", "Scheduled tasks", "bi-clock-history"),   // the copies and upkeep (3 Nov 2026: replaced Data sync, Shire sync)
         new("links", "Published links", "bi-link-45deg"),
         new("audit", "Audit", "bi-journal-text")
     };
 
-    private string Current => Sections.Any(s => s.Key == Section) ? Section! : "users";
+    // someone ticked for Colours sees that section alone
+    private IEnumerable<SectionItem> Shown => _admin ? Sections : Sections.Where(s => s.Key == "colours");
+    private string Current => Shown.Any(s => s.Key == Section) ? Section! : _admin ? "users" : "colours";
 }

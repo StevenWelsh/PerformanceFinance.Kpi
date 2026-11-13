@@ -142,6 +142,7 @@ builder.Services.AddSingleton<Kpi.Web.Views.PublishedLinkStore>();   // Settings
 builder.Services.AddSingleton<Mailer>();
 builder.Services.AddSingleton<TwilioConnection>();
 builder.Services.AddSingleton<TextCodes>();
+builder.Services.AddSingleton<Kpi.Web.Colours.ColourTheme>();   // Settings > Colours: the reports' colours (App.razor's head)
 builder.Services.AddSingleton<IpLocations>();      // where an address is, for Settings > Audit (MaxMind's file, on the site)
 builder.Services.AddHttpClient(IpLocations.HttpClientName, c => c.Timeout = TimeSpan.FromMinutes(5));
 builder.Services.AddHttpClient(Mailer.HttpClientName, c =>

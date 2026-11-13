@@ -732,3 +732,145 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 
 /* Settings > Audit: the place an address is in, above it (IpLocations) */
 .aud-place { font-weight: 600; white-space: nowrap; }
+
+/* ---- Settings > Colours (13 Nov 2026, Steve and Stefanie; the mock-up is docs/colours-mockup.html). Fixed columns on
+   every row so the marks line up: [outside-palette dot] [what] [desktop / phone] [palette button] [hex override] ---- */
+.col-tools { display: flex; gap: 8px; }
+.col-import { position: relative; overflow: hidden; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.col-import input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.col-note { margin: 0 0 10px; padding: 8px 12px; border-radius: 8px; background: var(--success-bg); border: 1px solid var(--success-border); font-size: 13px; }
+.col-office { display: inline-flex; background: #e6e6e6; border-radius: 10px; padding: 3px; gap: 2px; margin-bottom: 12px; }
+.col-office button { border: none; background: none; padding: 6px 16px; border-radius: 8px; color: #555; font: inherit; cursor: pointer; }
+.col-office button.col-on { background: #fff; color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+.col-layout { display: grid; grid-template-columns: 230px minmax(0, 1.45fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .col-layout { grid-template-columns: 1fr; } }
+.col-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; min-width: 0; }
+.col-main { overflow: visible; }
+.col-card-head { background: #fafafa; border-bottom: 1px solid var(--line); padding: 10px 16px; font-size: 12px; letter-spacing: .06em;
+    text-transform: uppercase; color: #555; border-radius: 12px 12px 0 0; }
+.col-nav { padding: 6px; display: flex; flex-direction: column; }
+.col-nav .col-grp { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); padding: 10px 10px 4px 24px; }
+.col-nav button { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; border: none; background: none;
+    padding: 8px 10px 8px 4px; border-radius: 8px; color: var(--text); font: inherit; cursor: pointer; }
+.col-nav button:hover { background: #f5f5f5; }
+.col-nav button.col-on { background: #fdeef2; color: #d20d43; font-weight: 600; }
+.col-nm { flex: 1; white-space: nowrap; }
+.col-dots { display: flex; gap: 2px; }
+.col-dots i { width: 8px; height: 8px; border-radius: 2px; border: 1px solid rgba(0, 0, 0, .08); display: block; }
+.col-gut { width: 12px; flex: none; align-self: stretch; display: flex; align-items: center; justify-content: center; }
+.col-gut[title] { cursor: help; }
+.col-off { width: 7px; height: 7px; border-radius: 50%; background: #c77700; display: inline-block; pointer-events: none; }
+.col-rows { list-style: none; margin: 0; padding: 4px 16px; }
+.col-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) 40px auto 84px; align-items: center; gap: 10px; padding: 7px 0;
+    border-bottom: 1px solid #f0f0f0; }
+.col-row:last-child, .col-prow:last-child { border-bottom: none; }
+.col-what { display: flex; flex-direction: column; min-width: 0; }
+.col-what b { font-weight: 500; }
+.col-devs { display: flex; gap: 6px; color: #c4c4c4; font-size: 15px; }
+.col-devs .col-dev-on { color: #444; }
+.col-pickwrap { position: relative; }
+.col-choose { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #cfcfcf; background: #fff; border-radius: 8px;
+    padding: 4px 8px 4px 4px; min-width: 170px; font: inherit; font-size: 13px; color: var(--text); text-align: left; cursor: pointer; }
+.col-choose:hover { border-color: #999; }
+.col-choose i { width: 26px; height: 22px; border-radius: 5px; border: 1px solid rgba(0, 0, 0, .14); flex: none; }
+.col-choose span { flex: 1; white-space: nowrap; }
+.col-choose b { color: #888; font-size: 11px; }
+.col-hex { font-family: Consolas, monospace; font-size: 13px; color: #444; border: 1px solid #ddd; border-radius: 6px; padding: 4px 6px; width: 92px; }
+.col-hex-small { width: 84px; font-size: 12px; color: #777; background: #fafafa; }
+.col-pop { position: absolute; z-index: 30; top: calc(100% + 6px); right: 0; background: #fff; border: 1px solid #d0d0d0; border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .18); padding: 10px 12px; }
+.col-backdrop { position: fixed; inset: 0; z-index: 20; }
+.col-pop-row { display: grid; grid-template-columns: 96px repeat(6, 28px); gap: 4px; align-items: center; margin-bottom: 4px; }
+.col-pop-name { font-size: 12px; color: #444; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-chip { width: 28px; height: 22px; border-radius: 5px; border: 1px solid rgba(0, 0, 0, .12); padding: 0; cursor: pointer; }
+.col-chip.col-on { outline: 2px solid #1a1a1a; outline-offset: 1px; }
+.col-pop-tints span { font-size: 10.5px; color: #888; text-align: center; }
+.col-pop-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; font-size: 12.5px; color: #444; }
+.col-pop-foot label { display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0; }
+.col-pop-foot input[type=color] { width: 34px; height: 22px; border: 1px solid #ccc; border-radius: 5px; padding: 0; }
+.col-today { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; color: var(--brand); font: inherit; cursor: pointer; }
+.col-today i { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(0, 0, 0, .14); }
+.col-prow { display: grid; grid-template-columns: 34px minmax(0, 1fr) 92px 30px; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f0f0f0; }
+.col-sw { width: 34px; height: 26px; border-radius: 6px; border: 1px solid rgba(0, 0, 0, .14); position: relative; overflow: hidden; cursor: pointer; margin: 0; }
+.col-sw input { position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px); opacity: 0; cursor: pointer; }
+.col-name { border: 1px solid #ddd; border-radius: 6px; padding: 4px 8px; font: inherit; min-width: 0; }
+.col-x { border: 1px solid #cfcfcf; background: #fff; border-radius: 8px; padding: 2px 8px; cursor: pointer; }
+.col-palette-tools { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px 16px 12px; }
+.col-key { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 16px; border-top: 1px solid #f0f0f0; font-size: 12px; color: var(--text-3); }
+.col-key span { display: inline-flex; align-items: center; gap: 5px; }
+.col-foot { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line);
+    background: #fafafa; border-radius: 0 0 12px 12px; }
+.col-foot .set-sub { margin-right: auto; }
+.set-colours-tick { margin-top: 10px; }
+.set-colours-mark { margin-left: 6px; color: var(--text-3); }
+/* the preview (js/colourPreview.js) */
+.col-pv { padding: 16px; font-size: 12.5px; }
+.cp-sub { color: #555; margin: 0; }
+.cp-side { display: flex; border: 1px solid #e3e3e3; border-radius: 8px; overflow: hidden; height: 190px; }
+.cp-menu { width: 180px; color: #fff; padding: 10px 0; font-size: 13px; }
+.cp-menu > div { padding: 7px 14px; display: flex; justify-content: space-between; align-items: center; }
+.cp-menu .cp-h { font-size: 10.5px; letter-spacing: .06em; opacity: .8; padding-top: 4px; }
+.cp-menu .cp-on { background: rgba(255, 255, 255, .2); font-weight: 600; }
+.cp-page { flex: 1; background: #f2f2f2; padding: 12px; }
+.cp-title { background: #fff; border: 1px solid #e3e3e3; border-radius: 8px; padding: 10px; font-weight: 600; color: #1a1a1a; }
+.cp-grptitle { padding: 8px 10px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #555; border: 1px solid #e3e3e3; border-bottom: none; border-radius: 8px 8px 0 0; }
+.cp-tbox { border: 1px solid #e3e3e3; border-radius: 0 0 8px 8px; overflow: hidden; }
+.cp-tbox-round { border-radius: 8px; margin-top: 12px; }
+.cp-t { width: 100%; border-collapse: collapse; }
+.cp-t th, .cp-t td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--rl); }
+.cp-t th:first-child, .cp-t td:first-child { text-align: left; }
+.cp-pie { display: grid; grid-template-columns: 140px 1fr; gap: 14px; align-items: center; margin-bottom: 14px; }
+.cp-legend { display: flex; gap: 14px; flex-wrap: wrap; color: #555; margin-top: 10px; }
+.cp-legend-col { flex-direction: column; gap: 4px; margin: 0; }
+.cp-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.cp-legend i.cp-l { height: 3px; width: 16px; vertical-align: 3px; }
+.cp-bars { display: flex; align-items: flex-end; gap: 5px; height: 110px; border-bottom: 1px solid #cfcfcf; }
+.cp-bars div { flex: 1; border-radius: 3px 3px 0 0; }
+.cp-rel { position: relative; }
+.cp-line { position: absolute; left: 0; right: 0; }
+.cp-over { position: absolute; inset: 0; width: 100%; height: 110px; }
+.cp-race-head { display: flex; align-items: center; gap: 8px; margin-top: 16px; color: #555; }
+.cp-race-head span { width: 24px; height: 24px; border-radius: 50%; color: #fff; display: inline-flex; align-items: center; justify-content: center; }
+.cp-race { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.cp-race span { width: 38px; }
+.cp-race div { height: 14px; border-radius: 7px; }
+.cp-funnel { margin: 8px 0; }
+.cp-funnel > div { height: 12px; border-radius: 6px; background: #ececec; margin-top: 4px; }
+.cp-funnel > div > div { height: 100%; border-radius: 6px; }
+.cp-scale { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cp-scale div { height: 46px; border-radius: 6px; }
+.cp-scale-ends { display: flex; justify-content: space-between; color: #555; margin-top: 6px; }
+.cp-map { width: 100%; margin-top: 12px; background: #eef4fa; border-radius: 8px; }
+
+/* Settings > Colours on a phone (13 Nov 2026, Steve: "should be mobile phone friendly"): the sections become a row of chips
+   that scrolls sideways; each colour takes two lines (what it is and where / the palette button and the hex); the palette
+   opens as a sheet along the bottom of the screen */
+@media (max-width: 700px) {
+    .col-layout { gap: 12px; }
+    .col-nav { flex-direction: row; overflow-x: auto; gap: 6px; padding: 8px; scrollbar-width: thin; }
+    .col-nav .col-grp, .col-nav .col-dots { display: none; }
+    .col-nav button { width: auto; flex: none; white-space: nowrap; border: 1px solid var(--line); padding: 6px 12px 6px 4px; }
+    .col-row { grid-template-columns: 12px minmax(0, 1fr) auto; row-gap: 6px; }
+    .col-row .col-gut { grid-row: 1 / span 2; }
+    .col-row .col-pickwrap { grid-column: 2; grid-row: 2; position: static; }
+    .col-row .col-hex-small { grid-column: 3; grid-row: 2; }
+    .col-choose { min-width: 0; width: 100%; }
+    .col-pop { position: fixed; left: 12px; right: 12px; top: auto; bottom: max(12px, env(safe-area-inset-bottom, 0px)); }
+    .col-pop-row { grid-template-columns: 84px repeat(6, minmax(0, 1fr)); }
+    .col-chip { width: 100%; height: 30px; }
+    .col-backdrop { background: rgba(0, 0, 0, .25); }
+    .col-key { gap: 10px; }
+    .col-foot { flex-wrap: wrap; }
+    .col-prow { grid-template-columns: 34px minmax(0, 1fr) 84px 30px; gap: 8px; }
+    .col-pv { padding: 12px; }
+    .cp-side { height: auto; }
+    .cp-menu { width: 150px; }
+}
+
+/* Phone list cards whose title sat on plain white beside shaded totals rows (13 Nov 2026, Steve - Suppliers Year on Year's
+   "Top 30 suppliers", Supplier Development's Top 10): the title gets the group title band, as the desktop's cards have */
+/* (more specific than kpi.css's own rules for these, which load after this file) */
+.kpim-card.kpim-sy-card, .kpim-card.kpim-sd-top { padding-top: 0; }
+.kpim-sy-card > .kpim-sy-head, .kpim-sd-top > .kpim-sd-top-title { margin: 0; padding: 10px 16px 9px 14px;
+    background: var(--kpim-card-head); border-bottom: 1px solid var(--kpim-card-head-line); }
+.kpim-sy-card > .kpim-sy-head + .kpim-sy-row, .kpim-sd-top > .kpim-sd-top-title + .kpim-sd-row { border-top: 0; }

@@ -6,6 +6,7 @@
 @inject IJSRuntime JS
 @inject Kpi.Web.Data.Kpis.KpiCache KpiCache
 @inject Kpi.Web.Data.Kpis.KpiOfficeState Office
+@inject Kpi.Web.Colours.ColourTheme Colours
 @implements IAsyncDisposable
 @using System.Globalization
 @using Kpi.Web.Reports
@@ -84,9 +85,9 @@
                         <div class="ss-card-head ma-graphhead">
                             <span>Annual to Date</span>
                             <ul class="ma-key">
-                                <li><span class="ma-swatch" style="background:var(--chart-2)"></span>Margin</li>
-                                <li><span class="ma-line" style="background:var(--chart-6)"></span>Buy Rate</li>
-                                <li><span class="ma-line" style="background:var(--chart-3)"></span>Sell Rate</li>
+                                <li><span class="ma-swatch" style="background:var(--kpim-ma-margin)"></span>Margin</li>
+                                <li><span class="ma-line" style="background:var(--kpim-ma-buy)"></span>Buy Rate</li>
+                                <li><span class="ma-line" style="background:var(--kpim-ma-sell)"></span>Sell Rate</li>
                             </ul>
                         </div>
                         <div class="ma-graphhost" @ref="_graphHost"></div>
@@ -337,6 +338,8 @@
     {
         _module ??= await JS.InvokeAsync<IJSObjectReference>(
             "import", Scripts.Url("./Components/Pages/Kpis/MarginAnalysis/MarginAnalysis.razor.js"));
+        await Colours.ReadyAsync();
+        var (marginColour, buyColour, sellColour) = Colours.Margin();   // Settings > Colours, else today's amber / teal / green
         var data = new
         {
             points = _years.Select(r => new
@@ -346,9 +349,9 @@
                 buy = (double)r.BuyRate,
                 sell = (double)r.SellRate
             }),
-            marginColour = "#F59E0B",   // amber (var --chart-2)
-            buyColour = "#06B6D4",      // teal  (var --chart-6)
-            sellColour = "#10B981"      // green (var --chart-3)
+            marginColour,
+            buyColour,
+            sellColour
         };
         await _module.InvokeVoidAsync("renderMarginChart", _graphHost, data);
     }

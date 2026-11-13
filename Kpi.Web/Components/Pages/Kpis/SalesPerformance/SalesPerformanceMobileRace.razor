@@ -1,6 +1,7 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject Kpi.Web.Data.Kpis.KpiScripts Scripts
+@inject Kpi.Web.Colours.ColourTheme Colours
 
 @* The timelapse on a phone (landscape), for one year and the current measure: the full view's bar race - the same
    script, SalesPerformance.razor.js, given the page's payload with its compact rows - and play and the scrubber
@@ -78,7 +79,11 @@
             StateHasChanged();
             // a change of year or measure while it loaded: the next render builds that one instead
             if (key == $"{Measure}|{Year}")
+            {
+                await Colours.ReadyAsync();
+                await _module.InvokeVoidAsync("setRaceColours", (object?)Colours.RacePalette());   // Settings > Colours' Charts, else today's
                 await _module.InvokeAsync<bool>("initRace", HostId, ScrubId, DateId, PlayId, payload);
+            }
         }
         catch (JSDisconnectedException) { }
         catch (Exception ex)

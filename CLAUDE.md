@@ -306,6 +306,17 @@ the tables in full (25k paid leads).
   writes in batches every 5 s; never blocks a click.
 - **Report activity's summary is behind a "Statistics" button** (a pop-up; 3 Nov 2026, Steve - the list comes first); its
   "N people" open who. Each block's rows share one grid (subgrid) so the bars line up.
+- **SETTINGS > COLOURS (13 Nov 2026, Steve and Stefanie - "keep everything on brand"; mock-up `docs/colours-mockup.html`):**
+  `Kpi.Web/Colours`. Kettering and Mobberley each have a PALETTE (PF's brand guide / shirepf.co.uk) and the colours
+  chosen FROM it or its tints (hex = override); amber dot = outside the palette. One `Cfg.Integration` row (provider
+  `Colours`, no migration). `ColourCatalogue` lists every colour, where it shows (desktop / phone) and how it reaches
+  the pages: existing CSS tokens and a few extra rules, written by App.razor into a `<style id="kpi-colours">` AFTER
+  HeadOutlet; Kettering's on `:root:root`, Mobberley's inside `.kpi-shire` (and Kettering's tokens put back there, so
+  neither office leaks into the other). Script-drawn charts ask `ColourTheme` (BA pies, Margin Analysis chart, the
+  timelapse race = Charts 1-8, Heat Map's 7 bands from one colour). NOTHING SAVED = NO CSS = today's colours; a colour
+  added to a page needs a catalogue entry. Export / Import (a JSON file) move a set between sites; staging and live
+  share the row. Open to System Admins and anyone ticked "Can change colours" in Users (Identity user claim
+  `kpi:colours` in `Auth.UserClaims`, policy `KpiPolicies.Colours`: they see Settings with the Colours section alone).
 - **Data Protection key ring** encrypts cookies, emailed links and the Resend key: locally the user profile; **in Azure it
   must be a shared persisted ring (storage + Key Vault)** or every restart signs everyone out and the Resend key becomes
   unreadable. Pin `AllowedHosts` in Azure: emailed links are built from the request's host.

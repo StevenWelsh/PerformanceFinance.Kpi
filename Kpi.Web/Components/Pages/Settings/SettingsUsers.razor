@@ -1,4 +1,4 @@
-@using Kpi.Data.Auth
+﻿@using Kpi.Data.Auth
 @using Kpi.Web.Account
 @using Kpi.Web.Integrations
 @using Kpi.Web.Data.Kpis
@@ -58,7 +58,7 @@ else
                     @* data-label: on a phone each row is a card, labelled by these *@
                     <tr>
                         <td data-label="Name"><div class="set-strong">@u.Name@(u.IsMe ? " (you)" : "")@AlertIcon(u.Email)</div><div class="set-sub">@u.Email</div></td>
-                        <td data-label="Role">@KpiRoles.Label(u.Role)</td>
+                        <td data-label="Role">@KpiRoles.Label(u.Role)@if (u.Colours) { <i class="bi bi-palette set-colours-mark" title="Can change colours" aria-label="Can change colours"></i> }</td>
                         <td data-label="Reports" title="@ReportsTitle(u)">@ReportsText(u)</td>
                         <td data-label="Status"><span class="set-pill set-pill-@(u.Status.Replace(" ", "").ToLowerInvariant())">@u.Status</span></td>
                         <td data-label="Online">@OnlineCell(u.Id)</td>
@@ -124,6 +124,10 @@ else
                 <option value="@KpiRoles.User">User - the reports ticked below</option>
                 <option value="@KpiRoles.SystemAdmin">System Admin - every report, and Settings</option>
             </select>
+            @if (_role == KpiRoles.User && _dialog == "Edit user")
+            {
+                <label class="acc-check set-colours-tick"><input type="checkbox" @bind="_colours" /> Can change colours <span class="set-sub">(Settings &gt; Colours, nothing else)</span></label>
+            }
             @* the tick-only reports (Shire's) are ticked by name for everyone, System Admins and "All reports" too *@
             <div class="set-reports">
                 @if (_role == KpiRoles.User)
@@ -195,7 +199,7 @@ else
     private bool _busy;
     private UserAdmin.UserRow? _target;
     private string _name = "", _email = "", _role = KpiRoles.User, _how = "";
-    private bool _allReports, _editingSelf;
+    private bool _allReports, _editingSelf, _colours;
     private HashSet<string> _reports = new();
     private string? _confirmText;
     private Func<Task>? _confirmAction;
@@ -276,7 +280,7 @@ else
     private void StartInvite() => Open("Invite someone", null, "", "", KpiRoles.User, false, Array.Empty<string>());
 
     private void StartEdit(UserAdmin.UserRow u) => Open("Edit user", u, u.Name, u.Email,
-        string.IsNullOrEmpty(u.Role) ? KpiRoles.User : u.Role, u.AllReports, u.Reports);
+        string.IsNullOrEmpty(u.Role) ? KpiRoles.User : u.Role, u.AllReports, u.Reports, u.Colours);
 
     private void StartReset(UserAdmin.UserRow u)
     {
@@ -310,8 +314,9 @@ else
     }
 
     private void Open(string dialog, UserAdmin.UserRow? target, string name, string email, string role, bool allReports,
-                      IEnumerable<string> reports)
+                      IEnumerable<string> reports, bool colours = false)
     {
+        _colours = colours;
         _dialog = dialog; _target = target; _dialogError = null; _confirmText = null; _confirmAction = null;
         _name = name; _email = email; _role = role; _allReports = allReports; _reports = reports.ToHashSet();
         _editingSelf = target?.IsMe == true;
@@ -331,7 +336,7 @@ else
                     _link = await Admin.InviteAsync(User, _name, _email, _role, _allReports, _reports, Nav.BaseUri);
                     break;
                 case "Edit user":
-                    await Admin.UpdateAsync(User, _target!.Id, _name, _role, _allReports, _reports);
+                    await Admin.UpdateAsync(User, _target!.Id, _name, _role, _allReports, _reports, _colours);
                     break;
                 case "Reset mobile":
                     _link = await Admin.ResetTwoFactorAsync(User, _target!.Id, _how, Nav.BaseUri);

@@ -5,6 +5,7 @@
 @inject Kpi.Web.Data.Kpis.KpiScripts Scripts
 @inject IJSRuntime JS
 @inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@inject Kpi.Web.Colours.ColourTheme Colours
 @implements IAsyncDisposable
 @using Kpi.Web.Components.Shared.Kpis
 @using Kpi.Web.Components.Shared.Kpis.Mobile
@@ -311,6 +312,8 @@
                     // ensure Leaflet + geo data are loaded (global loader), then build once, on the measure and
                     // level already chosen (the phone's can be changed while the first load runs)
                     await JS.InvokeVoidAsync("cmsHeatMapEnsureAssets");
+                    await Colours.ReadyAsync();
+                    await _module.InvokeVoidAsync("setColours", (object?)Colours.HeatScale());   // Settings > Colours, else today's
                     await _module.InvokeVoidAsync("init", _mapHost, rows, _self, _zoomSlider, _metric, _level);
                     _mapReady = true;
                 }

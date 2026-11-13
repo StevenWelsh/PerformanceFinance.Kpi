@@ -24,6 +24,12 @@
     <link rel="stylesheet" href="app.css?v=@Version("app.css")" />
     <link rel="stylesheet" href="css/account.css?v=@Version("css/account.css")" />
     <HeadOutlet @rendermode="RenderMode" />
+    @* SETTINGS > COLOURS (13 Nov 2026): the saved colours, after every stylesheet (the report pages' own kpi.css comes in
+       through HeadOutlet, above) so equal rules give way to these. Empty while nothing is saved: today's colours. *@
+    @if (_colourCss.Length > 0)
+    {
+        <style id="kpi-colours">@((MarkupString)_colourCss)</style>
+    }
 </head>
 <body>
     <Routes @rendermode="RenderMode" EmbedUser="@(HttpContext.Items[Kpi.Web.Views.CmsDesktopDoor.EmbedUserItem] as string)" />
@@ -103,6 +109,11 @@
 @code {
     [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
     [Inject] private IWebHostEnvironment Env { get; set; } = default!;
+    [Inject] private Kpi.Web.Colours.ColourTheme Colours { get; set; } = default!;
+
+    private string _colourCss = "";
+
+    protected override async Task OnInitializedAsync() => _colourCss = await Colours.CssAsync();
 
     // The account screens are static pages posting plain forms (the sign-in cookie can only be written in an
     // ordinary request); everything else is Interactive Server without prerendering, as CMS.Web: one data load per page.

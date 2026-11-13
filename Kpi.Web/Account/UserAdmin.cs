@@ -20,7 +20,8 @@ public sealed class UserAdmin(IServiceScopeFactory scopes, Mailer mailer, Accoun
     public const string ReenrolPurpose = "reenrol";
 
     public sealed record UserRow(string Id, string Name, string Email, string Role, string Status,
-                                 bool AllReports, IReadOnlyList<string> Reports, DateTime? LastSignInUtc, bool IsMe);
+                                 bool AllReports, IReadOnlyList<string> Reports, DateTime? LastSignInUtc, bool IsMe,
+                                 bool Colours = false);
 
     /// <summary>What happened to the email; the link is for the System Admin to pass on when it wasn't sent.</summary>
     public sealed record LinkResult(MailOutcome Mail, string Link);
@@ -32,10 +33,12 @@ public sealed class UserAdmin(IServiceScopeFactory scopes, Mailer mailer, Accoun
                            join r in s.Db.Roles on ur.RoleId equals r.Id
                            select new { ur.UserId, r.Name }).ToListAsync();
         var users = await s.Db.Users.AsNoTracking().ToListAsync();
+        var colours = (await s.Db.UserClaims.Where(c => c.ClaimType == KpiClaims.Colours && c.ClaimValue == "on")
+                                            .Select(c => c.UserId).ToListAsync()).ToHashSet();
         return users
             .Select(u => new UserRow(u.Id, AuditLog.NameOf(u), u.Email ?? "",
                 roles.FirstOrDefault(r => r.UserId == u.Id)?.Name ?? "", StatusOf(u),
-                u.AllReports, Split(u.Reports), u.LastSignInUtc, u.Id == s.Actor.Id))
+                u.AllReports, Split(u.Reports), u.LastSignInUtc, u.Id == s.Actor.Id, colours.Contains(u.Id)))
             .OrderBy(u => u.Name)
             .ToList();
     }
@@ -102,7 +105,8 @@ public sealed class UserAdmin(IServiceScopeFactory scopes, Mailer mailer, Accoun
         Check(await s.Users.DeleteAsync(user));
     }
 
-    public async Task UpdateAsync(ClaimsPrincipal caller, string userId, string name, string role, bool allReports, IEnumerable<string> reports)
+    public async Task UpdateAsync(ClaimsPrincipal caller, string userId, string name, string role, bool allReports, IEnumerable<string> reports,
+                                  bool? colours = null)
     {
         name = name.Trim();
         if (name.Length == 0) throw new InvalidOperationException("Enter their name.");
@@ -126,6 +130,17 @@ public sealed class UserAdmin(IServiceScopeFactory scopes, Mailer mailer, Accoun
         var reportList = Join(reports);
         if (allReports != user.AllReports || reportList != user.Reports)
             changes.Add($"reports: {Describe(role, allReports, reportList)}");
+
+        // "Can change colours" (Settings > Colours alone; 13 Nov 2026): an Identity user claim, meaningless for a System
+        // Admin (who has all of Settings), so it goes when they become one. Reaches their session within a minute.
+        var hasColours = (await s.Users.GetClaimsAsync(user)).Where(c => c.Type == KpiClaims.Colours).ToList();
+        var wantColours = role == KpiRoles.User && (colours ?? hasColours.Any(c => c.Value == "on"));
+        if (wantColours != hasColours.Any(c => c.Value == "on"))
+        {
+            if (hasColours.Count > 0) Check(await s.Users.RemoveClaimsAsync(user, hasColours));
+            if (wantColours) Check(await s.Users.AddClaimAsync(user, new Claim(KpiClaims.Colours, "on")));
+            changes.Add(wantColours ? "can change colours" : "can no longer change colours");
+        }
         if (changes.Count == 0) return;
 
         user.DisplayName = name;

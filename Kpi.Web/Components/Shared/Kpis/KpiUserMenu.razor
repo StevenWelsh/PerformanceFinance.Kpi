@@ -54,7 +54,7 @@
         var user = (await AuthState).User;
         _name = user.FindFirstValue(KpiClaims.Name) ?? "";
         _email = user.FindFirstValue(ClaimTypes.Email) ?? "";
-        _systemAdmin = user.IsInRole(KpiRoles.SystemAdmin);
+        _systemAdmin = KpiClaims.CanChangeColours(user);   // Settings: the System Admin, or Colours alone for someone ticked for it
         _role = KpiRoles.Label(KpiRoles.All.FirstOrDefault(user.IsInRole));
         _initials = Initials(_name);
     }

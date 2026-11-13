@@ -1,0 +1,329 @@
+<title>KPI Chart Colours</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Mock-up of the KPI site's Settings > Colours: looks like the site (light only, as the site is) */
+:root{color-scheme:light;--crimson:#d20d43;--bg:#f2f2f2;--card:#fff;--line:#e3e3e3;--text:#1a1a1a;--sub:#6b6b6b;--head:#fafafa;--pick:#fdeef2}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:"Segoe UI",system-ui,sans-serif;color:var(--text);font-size:14px}
+.note,.wrap{max-width:1320px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.note{padding-block:14px 0;color:var(--sub);font-size:12.5px}
+.wrap{padding-block:10px 40px}
+h1{font-size:22px;margin:0 0 14px;font-weight:600}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow-x:auto}
+.tabs span{padding:9px 16px;border:1px solid transparent;border-bottom:none;border-radius:8px 8px 0 0;color:var(--sub);white-space:nowrap}
+.tabs .on{background:var(--card);border-color:var(--line);color:var(--text);font-weight:600;margin-bottom:-1px}
+.top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.top .sp{flex:1}
+.seg{display:inline-flex;background:#e6e6e6;border-radius:10px;padding:3px;gap:2px}
+.seg button{border:none;background:none;padding:6px 16px;border-radius:8px;color:#555}
+.seg button.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.layout{display:grid;grid-template-columns:230px minmax(0,1.45fr) minmax(0,1fr);gap:16px;align-items:start}
+@media(max-width:1000px){.layout{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.card-head{background:var(--head);border-bottom:1px solid var(--line);padding:10px 16px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#555;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.nav{list-style:none;margin:0;padding:6px}
+.nav li button{width:100%;text-align:left;border:none;background:none;padding:8px 10px;border-radius:8px;display:flex;justify-content:space-between;gap:6px;color:var(--text)}
+.nav li button:hover{background:#f5f5f5}
+.nav li button.on{background:var(--pick);color:var(--crimson);font-weight:600}
+.nav .grp{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);padding:10px 10px 4px}
+.nav .dots{display:flex;gap:2px}.nav .dots i{width:8px;height:8px;border-radius:2px;display:block;border:1px solid rgba(0,0,0,.08)}
+button{font:inherit;cursor:pointer}
+.btn{border:1px solid #cfcfcf;background:#fff;border-radius:8px;padding:6px 12px;font-size:13px}
+.btn.on{border-color:var(--crimson);color:var(--crimson);font-weight:600}
+.btn.primary{background:var(--crimson);border-color:var(--crimson);color:#fff;font-weight:600}
+.rows{list-style:none;margin:0;padding:4px 16px}
+.rows li{display:grid;grid-template-columns:34px minmax(0,1fr) 92px;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f0f0f0}
+.rows li:last-child{border-bottom:none}
+.sw{width:34px;height:26px;border-radius:6px;border:1px solid rgba(0,0,0,.14);position:relative;overflow:hidden}
+.sw input{position:absolute;inset:-6px;width:calc(100% + 12px);height:calc(100% + 12px);border:none;padding:0;cursor:pointer;opacity:0}
+.what{font-weight:500}
+.where{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;margin-left:4px;vertical-align:1px;border:1px solid #d6d6d6;color:#555;background:#fafafa}
+.where.w-phone{border-color:#9ac0e8;color:#0b4f94;background:#eef5fc}
+.where.w-desktop{border-color:#d9c08a;color:#7a5600;background:#fcf6e8}.cname{display:block;color:var(--sub);font-size:12px}
+.hex{font-family:Consolas,monospace;font-size:13px;color:#444;border:1px solid #ddd;border-radius:6px;padding:4px 6px;width:92px}
+.sw{cursor:pointer;padding:0}
+.choose{display:inline-flex;align-items:center;gap:8px;border:1px solid #cfcfcf;background:#fff;border-radius:8px;padding:4px 8px 4px 4px;min-width:170px;font-size:13px;color:var(--text);text-align:left}
+.choose:hover{border-color:#999}
+.choose i{width:26px;height:22px;border-radius:5px;border:1px solid rgba(0,0,0,.14);flex:none}
+.choose span{flex:1;white-space:nowrap}
+.choose b{font-weight:400;color:#888;font-size:11px}
+.offpal{width:7px;height:7px;border-radius:50%;background:#c77700;display:block;margin:0 auto}
+.gut{width:12px;flex:none;align-self:stretch;display:flex;align-items:center;justify-content:center}
+.gut[title]{cursor:help}
+.offpal{pointer-events:none}
+.nav li button{justify-content:flex-start}.nav li button .nm{flex:1;white-space:nowrap}
+.devs{display:flex;gap:6px;color:#bbb}.devs svg{width:16px;height:16px;display:block}.devs .on{color:#444}
+.hex-small{width:84px;font-size:12px;color:#777;background:#fafafa}
+.pop{position:absolute;z-index:20;background:#fff;border:1px solid #d0d0d0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:10px 12px;max-width:calc(100vw - 32px)}
+.pop-grid{display:grid;gap:4px}
+.pop-row,.pop-tints{display:grid;grid-template-columns:96px repeat(6,28px);gap:4px;align-items:center}
+.pop-name{font-size:12px;color:#444;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pop-chip{width:28px;height:22px;border-radius:5px;border:1px solid rgba(0,0,0,.12);padding:0;cursor:pointer;display:block}
+.pop-chip.on{outline:2px solid #1a1a1a;outline-offset:1px}
+.pop-tints span{font-size:10.5px;color:#888;text-align:center}
+.pop-other{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12.5px;color:#444;cursor:pointer}
+.pop-other input{width:34px;height:22px;border:1px solid #ccc;border-radius:5px;padding:0}
+.key{display:flex;align-items:center;gap:6px 8px;flex-wrap:wrap;padding:8px 16px;border-top:1px solid #f0f0f0;font-size:12px;color:var(--sub)}
+.key > span:first-child{display:inline-flex;align-items:center;margin-right:10px}
+.foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:var(--head)}
+.pv{padding:16px}
+table.t{width:100%;border-collapse:collapse;font-size:12.5px}
+table.t th,table.t td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--rl)}
+table.t th:first-child,table.t td:first-child{text-align:left}
+.grptitle{padding:8px 10px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#555;border:1px solid #e3e3e3;border-bottom:none;border-radius:8px 8px 0 0}
+.tbox{border:1px solid #e3e3e3;border-radius:0 0 8px 8px;overflow:hidden}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#555;margin-top:10px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.legend i.line{height:3px;vertical-align:3px;width:16px}
+.side{display:flex;gap:0;border:1px solid #e3e3e3;border-radius:8px;overflow:hidden;height:190px}
+.side .menu{width:180px;color:#fff;padding:10px 0;font-size:13px}
+.side .menu div{padding:7px 14px;display:flex;justify-content:space-between;align-items:center}
+.side .menu .h{font-size:10.5px;letter-spacing:.06em;opacity:.8;padding-top:4px}
+.side .menu .on{background:rgba(255,255,255,.2);font-weight:600}
+.side .page{flex:1;background:#f2f2f2;padding:12px;font-size:13px;color:#555}
+</style>
+
+<p class="note">Mock-up only (13 Nov 2026): nothing is saved. Load a palette first; every colour is then chosen from it (or its tints) with the button on its row. The hex code beside it is an override. The preview follows. The starting colours are today's, so most carry the small amber dot: outside the palette. Kettering and Mobberley each have their own set: PF's brand guide for Kettering, the colours on shirepf.co.uk for Mobberley.</p>
+<div class="wrap">
+  <h1>Settings</h1>
+  <div class="tabs"><span>Users</span><span>Integrations</span><span>Scheduled tasks</span><span class="on">Colours</span><span>Audit</span></div>
+  <div class="top"><span class="seg" id="office"><button data-o="kettering" class="on">Kettering</button><button data-o="mobberley">Mobberley</button></span><span class="sp"></span></div>
+  <div class="layout">
+    <div class="card"><ul class="nav" id="nav"></ul></div>
+    <div class="card">
+      <div class="card-head"><span id="secTitle"></span>
+        </div>
+      <ul class="rows" id="rows"></ul>
+      <div class="key" id="key"><span><em class="offpal" style="display:inline-block;margin:0 5px 0 0"></em>Outside the palette</span>
+        <span class="devs" style="display:inline-flex"><svg class="on" viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 14h5M8 11v3" stroke="currentColor" stroke-width="1.4"/></svg></span>Desktop
+        <span class="devs" style="display:inline-flex"><svg class="on" viewBox="0 0 16 16"><rect x="4.5" y="1.5" width="7" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 12.5h2" stroke="currentColor" stroke-width="1.4"/></svg></span>Phone</div>
+      <div class="foot"><button class="btn">Cancel</button><button class="btn primary">Save</button></div>
+    </div>
+    <div class="card"><div class="card-head"><span>Preview</span></div><div class="pv" id="pv"></div></div>
+  </div>
+</div>
+
+<script>
+// PF brand guide p20-21; tints are the guide's own allowance ("lighter tints are also allowed").
+const NAMES = {"#d20d43":"Site red (today)","#c20430":"PF red","#6bc2b9":"Cyan","#ee7624":"Orange","#898b8e":"Cool grey","#54585a":"Dark grey",
+  "#da6883":"PF red 60%","#a6dad5":"Cyan 60%","#f6b584":"Orange 60%","#f9e6ea":"PF red 10%","#f0c0cb":"PF red 25%","#f3cdd6":"PF red 20%",
+  "#e7e8e8":"Cool grey 20%","#f3f3f4":"Cool grey 10%","#fcece0":"Orange 15%","#3b0086":"Shire indigo","#7209b7":"Shire purple","#f72585":"Shire pink","#06d6a0":"Shire green","#290628":"Shire plum","#fa7cb6":"Shire pink 60%","#aa6bd4":"Shire purple 60%","#6ae6c6":"Shire green 60%","#f1e6f8":"Shire purple 10%","#dcc2ed":"Shire purple 25%","#efefef":"Shire light grey","#f9f9f9":"Shire off-white","#62368b":"Deep purple (today)","#b93491":"Magenta (today)","#8061a3":"Lavender (today)","#f5b301":"Gold","#f2c94c":"Gold"};
+// [key, what it colours, today, PF brand, where it shows: Both / Desktop / Phone (+ a note when they differ today)]
+const KETTERING = [
+ {key:"palette", grp:"Palette", name:"Palette", items:[]},
+ {key:"site", grp:"Every report", name:"Menu", items:[
+   ["menu","Menu and top bar","#d20d43","#c20430","Both"],
+   ["star","Favourite star","#f5b301","#f5b301","Both"]]},
+ {key:"tables", grp:"Every report", name:"Tables", items:[
+   ["title","Group title band","#fafafa","#f3f3f4","Both"],
+   ["head","Column headings band","#f5f5f5","#e7e8e8","Phone|the tables you turn sideways; desktop headings are white"],
+   ["foot","Totals row","#fafafa","#f3f3f4","Desktop|Minimum IRR, Bad Debt, Exposure"],
+   ["now","Current year: row or column","#fdeef2","#f9e6ea","Both"],
+   ["nowhead","Current year: its heading","#f6c9d5","#f0c0cb","Both"],
+   ["pick","Picked or pointed-at row","#fdeef2","#f9e6ea","Both|Business Analysis, Heat Map list"],
+   ["rule","Lines under headings and above totals","#cfcfcf","#cfcfcf","Both"],
+   ["line","Lines between rows","#ececec","#ececec","Both"]]},
+ {key:"charts", grp:"Every report", name:"Charts", items:[
+   ["s1","1st","#4f46e5","#c20430","Both|today the phone's pie uses reds and greys"],["s2","2nd","#f59e0b","#6bc2b9","Both"],["s3","3rd","#10b981","#ee7624","Both"],
+   ["s4","4th","#ef4444","#898b8e","Both"],["s5","5th","#8b5cf6","#54585a","Both"],["s6","6th","#06b6d4","#da6883","Both"],
+   ["s7","7th","#f97316","#a6dad5","Both"],["s8","8th","#ec4899","#f6b584","Both"],
+   ["bar","Bars of one colour","#2b579a","#c20430","Both|today navy on desktop, red on the phone (Bad Debt, Exposure, Supplier Development)"],
+   ["part","This year so far (a part bar)","#a9bfe0","#f3cdd6","Both"]]},
+ {key:"sp", grp:"Only on one report", name:"Sales Performance", items:[
+   ["col","Columns","#2b579a","#898b8e","Both"],
+   ["colon","Tapped column","#1f3a5f","#54585a","Phone"],
+   ["race","Timelapse race: a colour per salesperson","#2b579a","#c20430","Both|desktop and phone sideways; takes Charts 1st–8th in order (today its own 8, from navy)"],
+   ["play","Timelapse play button and slider","#d20d43","#c20430","Both|follows the menu red today"],
+   ["ytd","Year to date target","#f4c20d","#ee7624","Both|one yellow for both targets today"],["year","Year target","#f4c20d","#6bc2b9","Both"]]},
+ {key:"spr", grp:"Only on one report", name:"Sales Productivity", items:[
+   ["appr","Approved bar","#e86a8b","#da6883","Phone|the desktop table has no bars"]]},
+ {key:"rp", grp:"Only on one report", name:"Record Performances", items:[
+   ["rec","A record set this year","#fdf6dc","#fcece0","Both"],["trophy","Trophy","#f2c94c","#f2c94c","Both"]]},
+ {key:"sd", grp:"Only on one report", name:"Supplier Development", items:[
+   ["bar","Trend bars","#d20d43","#c20430","Both"],["cur","This year's bar","#f9dce4","#f3cdd6","Both"]]},
+ {key:"hm", grp:"Only on one report", name:"Postcode Heat Map", items:[
+   ["base","Colour (the scale runs pale to dark)","#d20d43","#c20430","Both"]]},
+ {key:"ma", grp:"Only on one report", name:"Margin Analysis", items:[
+   ["margin","Margin bars","#f59e0b","#ee7624","Both"],["buy","Buy rate","#06b6d4","#898b8e","Both"],["sell","Sell rate","#10b981","#c20430","Both"],
+   ["band","Band between buy and sell","#f4b6c6","#f3cdd6","Phone"]]},
+];
+// Mobberley: today's colours, and Shire's own from shirepf.co.uk (13 Nov 2026): indigo #3B0086, purple #7209B7,
+// pink #F72585, green #06D6A0, plum #290628, and tints of them
+const MOBBERLEY = [
+ {key:"palette", grp:"Palette", name:"Palette", items:[]},
+ {key:"site", grp:"Every Mobberley report", name:"Menu", items:[
+   ["menu","Menu section and report titles","#62368b","#3b0086","Both"],["open","The open report","#b93491","#f72585","Both"]]},
+ {key:"tables", grp:"Every Mobberley report", name:"Tables", items:[
+   ["title","Group title band","#efe9f6","#f1e6f8"],["head","Column headings","#f5f5f5","#efefef"],["foot","Totals row","#fafafa","#f9f9f9"],
+   ["now","Current year: row or column","#efe9f6","#f1e6f8"],["nowhead","Current year: its heading","#dccdec","#dcc2ed"],["rule","Lines between rows","#ececec","#ececec"]]},
+ {key:"charts", grp:"Every Mobberley report", name:"Charts", items:[
+   ["s1","1st","#62368b","#3b0086","Both|today only the phone’s pie; desktop uses the PF set"],["s2","2nd","#b93491","#f72585"],["s3","3rd","#8061a3","#7209b7"],["s4","4th","#cdb9e3","#06d6a0"],
+   ["s5","5th","#3a3a3a","#290628"],["s6","6th","#76777c","#fa7cb6"],["s7","7th","#a1a2a7","#aa6bd4"],["s8","8th","#d0d1d4","#6ae6c6"],
+   ["bar","Bars of one colour","#8061a3","#7209b7"],["part","This year so far (a part bar)","#cdb8e3","#dcc2ed"]]},
+ {key:"sp", grp:"Only on one report", name:"Sales Performance", items:[["col","Columns","#8061a3","#7209b7","Both"],["colon","Tapped column","#62368b","#3b0086","Phone"]]},
+];
+// THE PALETTE: loaded once per office, then every colour is picked from it (or from its tints); "Other colour" still allowed
+const BRAND_PALETTES = {
+  kettering: [["PF red","#c20430"],["Cool grey","#898b8e"],["Black","#1d1d1b"],["Cyan","#6bc2b9"],["Orange","#ee7624"],["Dark grey","#54585a"]],
+  mobberley: [["Shire indigo","#3b0086"],["Shire purple","#7209b7"],["Shire pink","#f72585"],["Shire green","#06d6a0"],["Shire plum","#290628"]]};
+const PALETTE = { kettering: BRAND_PALETTES.kettering.map(x=>[...x]), mobberley: BRAND_PALETTES.mobberley.map(x=>[...x]) };
+const TINTS = [1, .8, .6, .4, .2, .1];
+let office = "kettering";
+const SETS = {kettering: KETTERING, mobberley: MOBBERLEY};
+const cur = {}; Object.entries(SETS).forEach(([o,list]) => list.forEach(s => s.items.forEach(([k,,x]) => cur[o+"."+s.key+"."+k] = x)));
+let sel = "palette";
+const SECTIONS_NOW = () => SETS[office];
+const v = (s,k) => cur[office+"."+s+"."+k];
+function paletteName(h){ h = h.toLowerCase();
+  for (const [n,c] of PALETTE[office]) for (const t of TINTS) if (mix(c,"w",1-t) === h) return t === 1 ? n : `${n} ${Math.round(t*100)}%`;
+  return ""; }
+const label = h => paletteName(h) || NAMES[h.toLowerCase()] || "Not in the palette";
+const sec = () => SECTIONS_NOW().find(s => s.key === sel);
+const isAll = (s, i) => s.items.every(it => cur[office+"."+s.key+"."+it[0]] === it[i]);
+function mix(hex, toward, t){ const a=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)); const b=toward==="w"?[255,255,255]:[30,0,8];
+  return "#"+a.map((x,j)=>Math.round(x+(b[j]-x)*t).toString(16).padStart(2,"0")).join(""); }
+
+function nav(){
+  let html = "", last = "";
+  SECTIONS_NOW().forEach(s => { if (s.grp !== last){ html += `<li class="grp">${s.grp}</li>`; last = s.grp; }
+    const off = s.items.filter(it => !paletteName(v(s.key,it[0]))).length;
+    html += `<li><button class="${s.key===sel?"on":""}" data-k="${s.key}"><span class="gut"${off ? ` title="${off} colour${off>1?"s":""} outside the palette"` : ""}>${off ? `<em class="offpal"></em>` : ""}</span><span class="nm">${s.name}</span><span class="dots">${
+      (s.key==="palette" ? PALETTE[office].slice(0,4).map(([,c])=>c) : s.items.slice(0,4).map(it=>v(s.key,it[0]))).map(c=>`<i style="background:${c}"></i>`).join("")}</span></button></li>`; });
+  const n = document.getElementById("nav"); n.innerHTML = html;
+  n.querySelectorAll("button[data-k]").forEach(b => b.onclick = () => { sel = b.dataset.k; draw(); });
+}
+function paletteRows(ul){
+  PALETTE[office].forEach(([n,c],i) => { const li = document.createElement("li"); li.style.gridTemplateColumns = "34px minmax(0,1fr) 92px 30px";
+    li.innerHTML = `<span class="sw" style="background:${c}"><input id="pc-${i}" type="color" value="${c}" aria-label="${n}"></span>
+      <input id="pn-${i}" class="hex" style="width:100%;font-family:inherit" value="${n}" aria-label="Name">
+      <input id="ph-${i}" class="hex" value="${c.toUpperCase()}" aria-label="${n}, hex">
+      <button class="btn" style="padding:2px 8px" title="Remove" aria-label="Remove ${n}">&times;</button>`;
+    li.querySelector("input[type=color]").oninput = e => { PALETTE[office][i][1] = e.target.value; draw(); };
+    li.querySelector("#pn-"+i).onchange = e => { PALETTE[office][i][0] = e.target.value.trim() || n; draw(); };
+    li.querySelector("#ph-"+i).onchange = e => { const t=e.target.value.trim(); if (/^#[0-9a-f]{6}$/i.test(t)) PALETTE[office][i][1]=t.toLowerCase(); draw(); };
+    li.querySelector("button").onclick = () => { PALETTE[office].splice(i,1); draw(); };
+    ul.appendChild(li); });
+  const add = document.createElement("li"); add.style.display = "flex"; add.style.gap = "8px"; add.style.flexWrap = "wrap";
+  add.innerHTML = `<button class="btn" id="palAdd">Add a colour</button><button class="btn" id="palLoad">${office==="mobberley"?"Load Shire's colours":"Load the PF brand palette"}</button>`;
+  ul.appendChild(add);
+  add.querySelector("#palAdd").onclick = () => { PALETTE[office].push(["New colour","#888888"]); draw(); };
+  add.querySelector("#palLoad").onclick = () => { PALETTE[office] = BRAND_PALETTES[office].map(x=>[...x]); draw(); };
+}
+let pop = null;
+function openPicker(anchor, current, onPick){
+  closePicker();
+  pop = document.createElement("div"); pop.className = "pop";
+  pop.innerHTML = `<div class="pop-grid">${PALETTE[office].map(([n,c]) => `<div class="pop-row"><span class="pop-name">${n}</span>${
+      TINTS.map(t => { const h = mix(c,"w",1-t); return `<button class="pop-chip${h===current?" on":""}" data-h="${h}" style="background:${h}" title="${t===1?n:n+" "+Math.round(t*100)+"%"} ${h.toUpperCase()}"></button>`; }).join("")}</div>`).join("")}
+    <div class="pop-tints"><span></span>${TINTS.map(t=>`<span>${Math.round(t*100)}%</span>`).join("")}</div></div>
+    <label class="pop-other">Other colour&hellip; <input type="color" value="${current}"></label>`;
+  document.body.appendChild(pop);
+  const r = anchor.getBoundingClientRect();
+  pop.style.left = Math.max(16, Math.min(r.left, innerWidth - pop.offsetWidth - 16)) + "px"; pop.style.top = (r.bottom + scrollY + 6) + "px";
+  pop.querySelectorAll(".pop-chip").forEach(b => b.onclick = () => { onPick(b.dataset.h); closePicker(); });
+  pop.querySelector("input").oninput = e => onPick(e.target.value);
+  setTimeout(() => document.addEventListener("click", outside), 0);
+}
+function outside(e){ if (pop && !pop.contains(e.target)) closePicker(); }
+function closePicker(){ if (pop) { pop.remove(); pop = null; document.removeEventListener("click", outside); } }
+function rows(){
+  const s = sec(); document.getElementById("secTitle").textContent = s.name;
+  const ul = document.getElementById("rows"); ul.innerHTML = "";
+  document.getElementById("key").hidden = s.key === "palette";
+  if (s.key === "palette") { paletteRows(ul); return rowsButtons(s); }
+  s.items.forEach(([k,text,,,where]) => { const hex = v(s.key,k), id = s.key+"-"+k;
+    const [w, note] = (where || "Both").split("|");
+    const li = document.createElement("li");
+    li.style.gridTemplateColumns = "12px minmax(0,1fr) 38px auto 84px";
+    const inPal = paletteName(hex);
+    const desk = w !== "Phone", phone = w !== "Desktop";
+    li.innerHTML = `<span class="gut"${inPal ? "" : ` title="Outside the palette"`}>${inPal ? "" : `<em class="offpal"></em>`}</span>
+      <span><span class="what">${text}</span>${note ? `<span class="cname">${note}</span>` : ""}</span>
+      <span class="devs" title="${desk && phone ? "Desktop and phone" : desk ? "Desktop only" : "Phone only"}">
+        <svg class="${desk ? "on" : ""}" viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="8.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5.5 14h5M8 11v3" stroke="currentColor" stroke-width="1.4"/></svg>
+        <svg class="${phone ? "on" : ""}" viewBox="0 0 16 16" aria-hidden="true"><rect x="4.5" y="1.5" width="7" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 12.5h2" stroke="currentColor" stroke-width="1.4"/></svg></span>
+      <button class="choose" id="c-${id}" aria-label="${text}: choose from the palette${inPal ? "" : " (outside the palette)"}"><i style="background:${hex}"></i><span>${inPal || "Choose"}</span><b>&#9662;</b></button>
+      <input id="h-${id}" class="hex hex-small" value="${hex.toUpperCase()}" title="Override with a hex code" aria-label="${text}, hex code (override)">`;
+    li.querySelector(".choose").onclick = e => { e.stopPropagation(); openPicker(e.currentTarget, hex, h => { cur[office+"."+s.key+"."+k] = h; draw(); }); };
+    li.querySelector(".hex").onchange = e => { const t = e.target.value.trim(); if (/^#[0-9a-f]{6}$/i.test(t)) cur[office+"."+s.key+"."+k] = t.toLowerCase(); draw(); };
+    ul.appendChild(li); });
+  rowsButtons(s); }
+function rowsButtons(s){}
+const T = k => v("tables",k), C = k => v("charts",k);
+function bars(heights, colour, curIdx, curColour){ return `<div style="display:flex;align-items:flex-end;gap:5px;height:110px;border-bottom:1px solid #cfcfcf">${
+  heights.map((h,i)=>`<div style="flex:1;height:${h}%;border-radius:3px 3px 0 0;background:${i===curIdx?curColour:colour}"></div>`).join("")}</div>`; }
+function preview(){
+  const s = sel, p = document.getElementById("pv");
+  if (s==="palette"){ p.innerHTML = `<div class="pop-grid">${PALETTE[office].map(([n,c]) => `<div class="pop-row"><span class="pop-name">${n}</span>${
+      TINTS.map(t => `<span class="pop-chip" style="background:${mix(c,"w",1-t)}"></span>`).join("")}</div>`).join("")}
+      <div class="pop-tints"><span></span>${TINTS.map(t=>`<span>${Math.round(t*100)}%</span>`).join("")}</div></div>
+      <p style="font-size:12.5px;color:#555;margin:12px 0 0">Every colour in the other sections is picked from these, or their tints.</p>`; return; }
+  if (s==="site" && office==="mobberley"){
+    p.innerHTML = `<div class="side"><div class="menu" style="background:#d20d43">
+      <div class="h">SALES</div><div>Year on Year</div><div class="h" style="background:${v(s,"menu")};opacity:1">MOBBERLEY</div>
+      <div style="background:${v(s,"menu")};box-shadow:inset 3px 0 0 ${v(s,"open")}"><b>Year on Year</b></div><div style="background:${v(s,"menu")}">Sales Performance</div></div>
+      <div class="page"><div style="background:#fff;border:1px solid #e3e3e3;border-radius:8px;padding:10px;font-weight:600;color:${v(s,"menu")}">Mobberley: Year on Year</div></div></div>`; return; }
+  if (s==="site"){ const star = `<span style="color:${v(s,"star")}">&#9733;</span>`;
+    p.innerHTML = `<div class="side"><div class="menu" style="background:${v(s,"menu")}">
+      <div class="h">SALES</div><div>Sales Summary ${star}</div><div class="on">Year on Year ${star}</div><div>Sales Performance <span style="opacity:.6">&#9734;</span></div><div class="h">ANALYSIS</div><div>Business Analysis ${star}</div></div>
+      <div class="page"><div style="background:#fff;border:1px solid #e3e3e3;border-radius:8px;padding:10px;font-weight:600;color:#1a1a1a">Year on Year</div></div></div>`; return; }
+  if (s==="tables"){ p.innerHTML = `<div class="grptitle" style="background:${T("title")}">Year on Year — Amount Financed</div>
+    <div class="tbox"><table class="t" style="--rl:${T("line")}">
+     <tr style="background:${T("head")};border-bottom:2px solid ${T("rule")}"><th>Month</th><th>2024</th><th>2025</th><th style="background:${T("nowhead")}">2026</th></tr>
+     ${[["Jan","5.1m","5.6m","6.0m"],["Feb","5.4m","5.2m","5.9m"],["Mar","6.2m","6.8m","7.1m"]].map(r=>
+       `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td style="background:${T("now")}">${r[3]}</td></tr>`).join("")}
+     <tr style="background:${T("foot")};font-weight:700;border-top:2px solid ${T("rule")}"><td>Total</td><td>16.7m</td><td>17.6m</td><td style="background:${T("now")}">19.0m</td></tr>
+    </table></div>
+    <div class="tbox" style="border-radius:8px;margin-top:12px"><table class="t" style="--rl:${T("line")}">
+     <tr style="background:${T("head")}"><th>Salesperson</th><th>Deals</th><th>AF</th></tr>
+     <tr style="background:${T("pick")}"><td>2025 (pointed at)</td><td>212</td><td>£17.6m</td></tr>
+     <tr style="background:${T("now")}"><td>2026</td><td>231</td><td>£19.0m</td></tr></table></div>`; return; }
+  if (s==="charts"){ const vals=[37,33,26,2,1,0.6,0.3,0.1], Cc=2*Math.PI*45; let off=0, svg="";
+    vals.forEach((x,i)=>{ const len=x/100*Cc; svg+=`<circle cx="60" cy="60" r="45" fill="none" stroke="${C("s"+(i+1))}" stroke-width="18" stroke-dasharray="${len} ${Cc-len}" stroke-dashoffset="${-off}" transform="rotate(-90 60 60)"/>`; off+=len; });
+    p.innerHTML = `<div style="display:grid;grid-template-columns:140px 1fr;gap:14px;align-items:center">
+      <svg viewBox="0 0 120 120" width="140" height="140">${svg}<text x="60" y="65" text-anchor="middle" font-size="14" font-weight="700" fill="#1a1a1a">£66.7m</text></svg>
+      <div class="legend" style="flex-direction:column;gap:4px;margin:0">${["Legal","Dental","Optical","Misc","Veterinary","Medical","Wealth","Aesthetics"].map((n,i)=>
+        `<span><i style="background:${C("s"+(i+1))}"></i>${n}</span>`).join("")}</div></div>
+      <div style="margin-top:14px">${bars([80,45,60,52,74,76,70,50], C("bar"), 7, C("part"))}</div>
+      <div class="legend"><span><i style="background:${C("bar")}"></i>Whole year</span><span><i style="background:${C("part")}"></i>2026 so far</span>
+      <span style="color:#888">${office==="mobberley"?"Business Analysis, Sales Performance's columns":"Business Analysis, Supplier Development, Sales Performance's columns"}</span></div>`; return; }
+  if (s==="sp"){ const hs=[88,74,66,58,51,40,33,25];
+    const race = ["Andy","Kate","Ross","Sam"].map((n,i)=>`<div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12px"><span style="width:38px">${n}</span><div style="height:14px;border-radius:7px;width:${[86,70,58,44][i]}%;background:${C("s"+(i+1))}"></div></div>`).join("");
+    p.innerHTML = `<div style="position:relative">${bars(hs, v(s,"col"), 2, v(s,"colon"))}
+     ${v(s,"ytd") ? `<div style="position:absolute;left:0;right:0;bottom:55%;border-top:3px solid ${v(s,"ytd")}"></div>
+     <div style="position:absolute;left:0;right:0;bottom:78%;border-top:3px dashed ${v(s,"year")}"></div>` : ""}</div>
+     <div class="legend"><span><i style="background:${v(s,"col")}"></i>Salesperson</span><span><i style="background:${v(s,"colon")}"></i>Picked</span>
+     ${v(s,"ytd") ? `<span><i class="line" style="background:${v(s,"ytd")}"></i>Year to date target</span><span><i class="line" style="background:${v(s,"year")}"></i>Year target</span>` : ""}</div>
+     ${v(s,"race") ? `<div style="margin-top:16px;font-size:12px;color:#555;display:flex;align-items:center;gap:8px"><span style="width:24px;height:24px;border-radius:50%;background:${v(s,"play")};color:#fff;display:inline-flex;align-items:center;justify-content:center">&#9654;</span>Timelapse race</div>${race}` : ""}`; return; }
+  if (s==="sd"){ p.innerHTML = bars([40,55,48,62,70,74,81,60], v(s,"bar"), 7, v(s,"cur")) +
+     `<div class="legend"><span><i style="background:${v(s,"bar")}"></i>Past years</span><span><i style="background:${v(s,"cur")}"></i>This year</span></div>`; return; }
+  if (s==="spr"){ p.innerHTML = ["Enquiries 100%","Proposals 64%","Approved 41%"].map((t,i)=>`<div style="margin:8px 0;font-size:12.5px">${t}
+     <div style="height:12px;border-radius:6px;background:#ececec;margin-top:4px"><div style="height:100%;width:${[100,64,41][i]}%;border-radius:6px;background:${i===2?v(s,"appr"):C("bar")}"></div></div></div>`).join(""); return; }
+  if (s==="rp"){ p.innerHTML = `<div class="tbox" style="border-radius:8px"><table class="t" style="--rl:${T("line")}">
+     <tr style="background:${T("head")}"><th>Record</th><th>Figure</th><th>Year</th></tr>
+     <tr><td>Best month</td><td>£9.4m</td><td>2023</td></tr>
+     <tr style="background:${v(s,"rec")}"><td>Best quarter <span style="color:${v(s,"trophy")}">&#127942;&#xFE0E;</span></td><td>£24.1m</td><td>2026</td></tr>
+     <tr><td>Best year</td><td>£81.2m</td><td>2024</td></tr></table></div>`; return; }
+  if (s==="hm"){ const b=v(s,"base"); const steps=[mix(b,"w",.88),mix(b,"w",.66),mix(b,"w",.44),mix(b,"w",.22),b,mix(b,"k",.25),mix(b,"k",.5)];
+    p.innerHTML = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${steps.map(c=>`<div style="height:46px;border-radius:6px;background:${c}"></div>`).join("")}</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#555;margin-top:6px"><span>Least</span><span>Most</span></div>
+      <svg viewBox="0 0 200 120" style="width:100%;margin-top:12px;background:#eef4fa;border-radius:8px">${
+        [[20,20,3],[60,10,5],[100,25,1],[140,15,6],[40,60,2],[90,65,4],[140,60,0],[60,95,5],[120,95,3]].map(([x,y,i])=>
+        `<rect x="${x}" y="${y}" width="38" height="24" rx="4" fill="${steps[i]}" stroke="#fff"/>`).join("")}</svg>`; return; }
+  if (s==="ma"){ const hs=[62,48,70,55,80,66];
+    p.innerHTML = `<div style="position:relative">${bars(hs, v(s,"margin"), -1, "")}
+      <svg viewBox="0 0 100 110" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:110px">
+       ${v(s,"band")?`<polygon fill="${v(s,"band")}" opacity=".6" points="8,70 25,66 42,72 58,64 75,60 92,62 92,28 75,22 58,32 42,26 25,34 8,30"/>`:""}
+       <polyline fill="none" stroke="${v(s,"buy")}" stroke-width="2" vector-effect="non-scaling-stroke" points="8,70 25,66 42,72 58,64 75,60 92,62"/>
+       <polyline fill="none" stroke="${v(s,"sell")}" stroke-width="2" vector-effect="non-scaling-stroke" points="8,30 25,34 42,26 58,32 75,22 92,28"/></svg></div>
+      <div class="legend"><span><i style="background:${v(s,"margin")}"></i>Margin</span><span><i class="line" style="background:${v(s,"buy")}"></i>Buy rate</span><span><i class="line" style="background:${v(s,"sell")}"></i>Sell rate</span></div>`; return; }
+}
+function set(s, i){ s.items.forEach(it => cur[office+"."+s.key+"."+it[0]] = it[i]); }
+function draw(){
+  const m = office === "mobberley";
+  nav(); rows(); preview(); }
+document.querySelectorAll("#office button").forEach(b => b.onclick = () => {
+  office = b.dataset.o; document.querySelectorAll("#office button").forEach(x => x.classList.toggle("on", x === b));
+  if (!sec()) sel = "palette"; draw(); });
+draw();
+</script>

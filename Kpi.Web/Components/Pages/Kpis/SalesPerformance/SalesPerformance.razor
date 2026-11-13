@@ -7,6 +7,7 @@
 @inject Kpi.Web.Data.Kpis.KpiCache KpiCache
 @inject Kpi.Web.Data.Kpis.ReportDateProvider ReportDate
 @inject Kpi.Web.Data.Kpis.KpiOfficeState Office
+@inject Kpi.Web.Colours.ColourTheme Colours
 @implements IAsyncDisposable
 @using Kpi.Web.Reports
 @using Kpi.Web.Components.Shared.Kpis
@@ -382,6 +383,8 @@
             var payload = _pendingRace;
             try
             {
+                await Colours.ReadyAsync();
+                await _module.InvokeVoidAsync("setRaceColours", (object?)Colours.RacePalette());   // Settings > Colours' Charts, else today's
                 var ok = await _module.InvokeAsync<bool>("initRace",
                     RaceHostId, RaceScrubId, RaceDateId, RacePlayId, payload);
                 if (ok)

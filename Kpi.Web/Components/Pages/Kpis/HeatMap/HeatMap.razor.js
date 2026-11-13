@@ -6,7 +6,10 @@
 // Requires window.L (Leaflet), window.AREAS_GEOJSON (geo.js), window.IRELAND_GEOJSON (ireland.js)
 // loaded on the page before init().
 
-const COLORS = ['#fbe0e8','#f4a9c0','#ec7199','#e13b73','#d20d43','#a10a34','#6f0724'];
+const DEFAULT_COLORS = ['#fbe0e8','#f4a9c0','#ec7199','#e13b73','#d20d43','#a10a34','#6f0724'];
+let COLORS = DEFAULT_COLORS;
+// Settings > Colours (13 Nov 2026): seven bands worked out from the chosen colour; none chosen = today's reds
+export function setColours(c){ COLORS = Array.isArray(c) && c.length === 7 ? c : DEFAULT_COLORS; }
 const NO_FILL = '#eef0f2';   // no-value areas + Ireland (exact original) — reads as pale grey on the #eef4fa sea
 
 // metric config: which row field + how to format. Sales metrics (af/tfi) added to the
