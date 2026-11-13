@@ -874,3 +874,10 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .kpim-sy-card > .kpim-sy-head, .kpim-sd-top > .kpim-sd-top-title { margin: 0; padding: 10px 16px 9px 14px;
     background: var(--kpim-card-head); border-bottom: 1px solid var(--kpim-card-head-line); }
 .kpim-sy-card > .kpim-sy-head + .kpim-sy-row, .kpim-sd-top > .kpim-sd-top-title + .kpim-sd-row { border-top: 0; }
+
+/* Settings > Colours: the Palette section's preview - each palette colour with its tints, as the brand guide's sheets */
+.cp-pal { display: grid; gap: 4px; margin-bottom: 12px; }
+.cp-pal-row { display: grid; grid-template-columns: minmax(70px, 110px) repeat(6, minmax(0, 1fr)); gap: 4px; align-items: center; }
+.cp-pal-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #444; }
+.cp-pal-chip { height: 26px; border-radius: 5px; border: 1px solid rgba(0, 0, 0, .1); }
+.cp-pal-tints span { font-size: 10.5px; color: #888; text-align: center; }

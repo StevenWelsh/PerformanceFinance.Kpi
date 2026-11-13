@@ -8,6 +8,8 @@ function bars(heights, colour, curIdx, curColour) {
     `<div style="height:${h}%;background:${i === curIdx ? curColour : colour}"></div>`).join("")}</div>`;
 }
 
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]); }
+
 function mix(hex, t) {   // t of the way to white
   const a = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
   return "#" + a.map(x => Math.round(x + (255 - x) * t).toString(16).padStart(2, "0")).join("");
@@ -17,14 +19,20 @@ function shade(hex, t) {
   return "#" + a.map(x => Math.round(x * (1 - t)).toString(16).padStart(2, "0")).join("");
 }
 
-export function render(host, office, section, colours) {
+export function render(host, office, section, colours, palette) {
   if (!host) return;
   const v = k => colours[section + "." + k], T = k => colours["tables." + k], C = k => colours["charts." + k];
   const shire = office === "mobberley";
   let html = "";
 
   if (section === "palette") {
-    html = `<p class="cp-sub">Every colour in the other sections is chosen from these, or their lighter tints.</p>`;
+    // the palette and its tints, as the brand guide's sheets show them (and as the picker offers them)
+    const tints = [1, .8, .6, .4, .2, .1];
+    html = (palette || []).length === 0 ? `<p class="cp-sub">No colours in the palette yet.</p>`
+      : `<div class="cp-pal">${palette.map(p => `<div class="cp-pal-row"><span class="cp-pal-name">${esc(p.name)}</span>${
+          tints.map(t => `<span class="cp-pal-chip" style="background:${mix(p.hex, 1 - t)}" title="${esc(p.name)}${t === 1 ? "" : " " + Math.round(t * 100) + "%"} ${mix(p.hex, 1 - t).toUpperCase()}"></span>`).join("")}</div>`).join("")}
+        <div class="cp-pal-row cp-pal-tints"><span></span>${tints.map(t => `<span>${Math.round(t * 100)}%</span>`).join("")}</div></div>
+        <p class="cp-sub">Every colour in the other sections is chosen from these, or their lighter tints.</p>`;
   } else if (section === "site" && shire) {
     html = `<div class="cp-side"><div class="cp-menu" style="background:#d20d43">
       <div class="cp-h">SALES</div><div>Year on Year</div>

@@ -181,7 +181,8 @@ else
         try
         {
             _module ??= await JS.InvokeAsync<IJSObjectReference>("import", Scripts.Url("./js/colourPreview.js"));
-            await _module.InvokeVoidAsync("render", _preview, _office, _section, Effective());
+            await _module.InvokeVoidAsync("render", _preview, _office, _section, Effective(),
+                Office.Palette.Select(p => new { name = p.Name, hex = p.Hex }).ToArray());
         }
         catch (JSDisconnectedException) { }
     }
