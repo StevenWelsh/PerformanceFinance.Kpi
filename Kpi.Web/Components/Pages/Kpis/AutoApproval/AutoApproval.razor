@@ -83,6 +83,27 @@
                             Division="@_division" DivisionChanged="SetDivision" Months="@_months" MonthsChanged="SetMonths"
                             Measure="@_measure" MeasureChanged="SetMeasure" />
     </ChildContent>
+    <Landscape>
+        @* the phone turned sideways: Performance by rule in full, every column (Steve, 26 Nov 2026) *@
+        @if (_loading)
+        {
+            <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+        }
+        else if (_error is not null)
+        {
+            <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @_error</div>
+        }
+        else
+        {
+            <section class="kpim-card aa-pcard aa-landcard">
+                <h3 class="kpim-card-head aa-phead aa-phead-btn">
+                    <span>Performance by rule <small>· since auto approval began</small></span>
+                    <span class="aa-key"><span><i style="background:var(--kpim-aa-arrears, #898b8e)"></i>Serious arrears (60+ days)</span><span><i style="background:var(--kpim-aa-term, #ee7624)"></i>Terminated</span><span><i style="background:var(--kpim-aa-baddebt, #c20430)"></i>Bad debt</span></span>
+                </h3>
+                <div class="kpim-card-pad">@PerfTable(_data)</div>
+            </section>
+        }
+    </Landscape>
 </KpiMobile>
 
 @code {

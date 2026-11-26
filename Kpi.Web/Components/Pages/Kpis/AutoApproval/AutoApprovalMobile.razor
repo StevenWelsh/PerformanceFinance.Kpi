@@ -56,7 +56,7 @@ else
     <section class="kpim-card aa-pcard">
         <h3 class="kpim-card-head aa-phead aa-phead-btn">
             <span>Performance by rule <small>· since auto approval began <AutoApprovalPerfInfo Short="true" /></small></span>
-            <button type="button" class="aa-turn" aria-label="Show the full table sideways" @onclick="() => _sideways = true">@TurnIcon</button>
+            <span class="aa-turn" title="Turn your phone sideways for the full table" aria-hidden="true">@TurnIcon</span>
         </h3>
         <div class="kpim-card-pad">
             <table class="aa-table">
@@ -80,28 +80,10 @@ else
     </section>
 }
 
-@* the full table, turned sideways on the screen (a page can't turn an iPhone itself); the same button turns it back *@
-@if (_sideways)
-{
-    <div class="aa-land" role="dialog" aria-label="Performance by rule">
-        <div class="aa-land-inner">
-            <div class="aa-land-head">
-                <b>Performance by rule</b> <small>· since auto approval began</small>
-                <span class="aa-key"><span><i style="background:var(--kpim-aa-arrears, #898b8e)"></i>Serious arrears (60+ days)</span><span><i style="background:var(--kpim-aa-term, #ee7624)"></i>Terminated</span><span><i style="background:var(--kpim-aa-baddebt, #c20430)"></i>Bad debt</span></span>
-                <button type="button" class="aa-turn aa-turn-back" aria-label="Back" @onclick="() => _sideways = false">@TurnBackIcon</button>
-            </div>
-            @AutoApproval.PerfTable(Data)
-        </div>
-    </div>
-}
-
 @code {
-    private bool _sideways;
-
-    // EXACTLY the turn-the-phone icon of the other reports' hint strips (KpiMobile): it turns sideways to open the table;
-    // the back button's turns upright again, as the "turn your phone back" strip's does
+    // EXACTLY the turn-the-phone icon of the other reports' hint strips (KpiMobile), as a picture only: turning the phone
+    // shows Performance by rule in full (the page's Landscape view), as the other reports do (Steve, 26 Nov 2026)
     private static readonly RenderFragment TurnIcon = @<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g class="kpim-lh-phone"><rect x="8.5" y="2.5" width="7" height="19" rx="1.6"></rect><line x1="10.7" y1="18.8" x2="13.3" y2="18.8"></line></g></svg>;
-    private static readonly RenderFragment TurnBackIcon = @<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><g class="kpim-lh-phone-up"><rect x="8.5" y="2.5" width="7" height="19" rx="1.6"></rect><line x1="10.7" y1="18.8" x2="13.3" y2="18.8"></line></g></svg>;
 
     [Parameter] public AutoApprovalData Data { get; set; } = new();
     [Parameter] public bool Loading { get; set; }
