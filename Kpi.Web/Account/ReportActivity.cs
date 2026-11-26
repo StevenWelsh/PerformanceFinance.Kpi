@@ -29,7 +29,7 @@ public sealed class ReportActivity(IDbContextFactory<KpiDbContext> dbs, ILogger<
     // which report a cache part belongs to (KpiCache's names; Salesperson Summary shares Sales Summary's cells)
     private static readonly Dictionary<string, string> PartReports = new(StringComparer.Ordinal)
     {
-        ["BadDebt"] = "bad-debt", ["BusinessAnalysis"] = "business-analysis", ["Exposure"] = "exposure", ["FundCapacity"] = "fund-capacity",
+        ["BadDebt"] = "bad-debt", ["BusinessAnalysis"] = "business-analysis", ["Exposure"] = "exposure", ["FundCapacity"] = "fund-capacity", ["AutoApproval"] = "auto-approval",
         ["HeatMap"] = "heat-map", ["MarginAnalysis"] = "margin-analysis", ["MinimumIrr"] = "minimum-irr",
         ["RecordPerformances"] = "record-performances", ["RecordTable"] = "record-performances",
         ["SalesPerformance"] = "sales-performance", ["SalesProductivity"] = "sales-productivity",

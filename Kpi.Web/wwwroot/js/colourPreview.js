@@ -95,6 +95,13 @@ export function render(host, office, section, colours, palette) {
   } else if (section === "fc") {
     html = [["British Business Investments", 34, v("ok")], ["Novuna Business Finance", 66, v("ok")], ["Shawbrook Bank", 81, v("warn")], ["Renaissance Asset Finance", 97, v("over")]]
       .map(([n, p, c]) => `<div class="cp-funnel">${n} · ${p}% used<div><div style="width:${p}%;background:${c}"></div></div></div>`).join("");
+  } else if (section === "aa") {
+    const sw = (c, t) => `<span style="display:inline-flex;align-items:center;gap:6px;margin:0 12px 6px 0"><i style="width:14px;height:14px;border-radius:3px;background:${c};display:inline-block"></i>${t}</span>`;
+    html = `<div class="cp-funnel">Application to paid out<div style="display:flex"><div style="width:70%;background:${v("medical")}"></div><div style="width:30%;background:${v("paper")};border-radius:0 6px 6px 0"></div></div></div>` +
+      `<div class="cp-funnel">Not eligible: reason<div><div style="width:60%;background:${v("reason")}"></div></div></div>` +
+      `<div style="margin-top:10px">${["r1", "r2", "r3", "r4", "r5"].map((k, i) => sw(v(k), "Reason " + (i + 1))).join("")}</div>` +
+      `<div>${sw(v("approved"), "Approved by hand")}${sw(v("declined"), "Declined by hand")}</div>` +
+      `<div>${sw(v("arrears"), "Serious arrears")}${sw(v("term"), "Terminated")}${sw(v("baddebt"), "Bad debt")}</div>`;
   } else if (section === "ma") {
     html = `<div class="cp-rel">${bars([62, 48, 70, 55, 80, 66], v("margin"), -1, "")}
       <svg viewBox="0 0 100 110" preserveAspectRatio="none" class="cp-over">

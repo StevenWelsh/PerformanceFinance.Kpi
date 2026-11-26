@@ -1,0 +1,459 @@
+<title>Auto Approval Mock-up</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Mock-up of an Auto Approval report for the KPI site (26 Nov 2026), for Stuart: watch the leads CMS auto approves and
+   check them against the rules. Light only, as the site is; Kettering's saved colours. Figures are made up. */
+:root{color-scheme:light;--red:#c20430;--cyan:#6bc2b9;--cyan-part:#c4e7e3;--orange:#ee7624;--dark:#54585a;--grey:#898b8e;
+  --bg:#f2f2f2;--card:#fff;--line:#e3e3e3;--band:#e7e8e8;--band2:#f3f3f4;--text:#1a1a1a;--sub:#6b6b6b;--amber:#b35c00;--amber-bg:#fdf0e1}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:"Segoe UI",system-ui,sans-serif;color:var(--text);font-size:14px;font-variant-numeric:tabular-nums}
+.note,.wrap{max-width:1360px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.note{padding-block:14px 0;color:var(--sub);font-size:12.5px}
+.wrap{padding-block:10px 40px}
+.views{display:inline-flex;background:#e6e6e6;border-radius:10px;padding:3px;gap:2px;margin:6px 0 14px}
+.views button{border:none;background:none;padding:6px 16px;border-radius:8px;color:#555;font:inherit;cursor:pointer}
+.views button.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.hidden{display:none!important}
+.desk{display:grid;grid-template-columns:210px minmax(0,1fr);border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.side{border-radius:12px 0 0 12px;background:var(--red);color:#fff;padding:12px 0;font-size:13px}
+.side .h{font-size:10.5px;letter-spacing:.06em;opacity:.8;padding:10px 16px 4px}
+.side div{padding:6px 16px}.side .on{background:rgba(255,255,255,.2);font-weight:600}
+.main{padding:0 18px 18px;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:center;padding:14px 0}
+.top h1{margin:0;font-size:22px;font-weight:600}
+.asat{text-align:right;font-size:12px;color:var(--sub)}
+.filters{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.seg{display:inline-flex;background:#e6e6e6;border-radius:10px;padding:3px;gap:2px}
+.seg button{border:none;background:none;padding:6px 14px;border-radius:8px;color:#555;font:inherit;cursor:pointer}
+.seg button.on{background:#fff;color:#8f0323;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.tile small{display:block;color:var(--sub);font-size:12px;margin-bottom:4px}
+.tile b{font-size:24px;font-weight:700}
+.tile span{display:block;color:var(--sub);font-size:12px;margin-top:2px}
+.tile.warn b{color:var(--amber)}
+.quad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:14px}
+.quad .card{display:flex;flex-direction:column;min-width:0}.quad .card-body{height:270px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;padding:12px 16px}.quad .fwrap{height:100%}.quad .fwrap svg{width:100%;height:100%}.quad .rs{font-size:14px;gap:11px 12px;grid-template-columns:minmax(0,1fr) 40% 30px}.quad .rsr .b{height:14px;border-radius:3px}.quad .rs .n{font-weight:600;color:var(--text)}.quad .donut{height:100%}.quad .donut svg{width:100%;height:100%;max-width:none;max-height:none}
+.row2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;margin-bottom:14px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px}
+.card-head{border-radius:12px 12px 0 0;background:var(--band);padding:9px 14px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#444;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.card-head .r{text-transform:none;letter-spacing:0;color:var(--sub);display:flex;gap:12px;align-items:center}
+.card-body{padding:14px}
+/* funnel */
+.fun{display:grid;grid-template-columns:150px minmax(0,1fr) 92px;gap:8px 12px;align-items:center}
+.fun .lab{font-size:13px}.fun .lab small{display:block;color:var(--sub);font-size:11.5px}
+.fun .bar{height:30px;background:var(--band2);border-radius:6px;position:relative;overflow:hidden}
+.fun .bar i{position:absolute;inset:0 auto 0 0;border-radius:6px}
+.fun .bar em{position:absolute;left:10px;top:0;line-height:30px;font-style:normal;font-weight:600;font-size:13px;color:#fff;text-shadow:0 0 2px rgba(0,0,0,.25)}
+.fun .val{text-align:right;font-size:12.5px;color:var(--sub)}.fun .val b{display:block;color:var(--text);font-size:14px}
+.fun .drop{grid-column:2/4;font-size:12px;color:var(--sub);margin:-4px 0 2px 2px}
+.fun .drop a{color:#8f0323;cursor:pointer;text-decoration:underline dotted}
+.fwrap{position:relative}
+.fwrap svg{display:block;width:100%;height:auto}
+.fwrap path.seg-p{cursor:default;transition:opacity .12s}
+.fwrap svg:hover path.seg-p{opacity:.55}.fwrap svg path.seg-p:hover{opacity:1}
+.ftip{position:fixed;z-index:50;pointer-events:none;background:#fff;border:1px solid #d0d0d0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16);padding:10px 12px;font-size:12.5px;line-height:1.5;min-width:190px}
+.ftip b{display:block;margin-bottom:2px}
+.ftip div{display:flex;justify-content:space-between;gap:14px}
+.ftip i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.ri{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:6px;border-radius:50%;border:1px solid #898b8e;background:#fff;color:#54585a;font:italic 700 10.5px Georgia,serif;cursor:pointer;vertical-align:1px;padding:0}
+.ri:hover{background:#54585a;color:#fff;border-color:#54585a}
+.rtip{pointer-events:auto;width:330px;line-height:1.4}
+.rtip .rt-now{color:#2f7f77;font-size:12px;margin-bottom:6px}
+.rtip dl{display:grid;grid-template-columns:86px 1fr;gap:4px 8px;margin:0}
+.rtip dt{color:var(--sub);font-size:12px}.rtip dd{margin:0}
+.rtip dd small{display:block;color:var(--sub);font-size:11.5px}
+.rtip .rt-warn{color:var(--amber);font-weight:600}
+.ftip .tot{border-top:1px solid #eee;margin-top:4px;padding-top:4px;font-weight:600}
+.dkey i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+/* outcome donut */
+.stack{display:flex;flex-direction:column;gap:14px;min-width:0}
+.donut{display:flex;align-items:center;justify-content:center}
+.donut svg{width:100%;max-width:320px;max-height:190px;height:auto;display:block}
+.pkey{display:flex;gap:14px;justify-content:center;font-size:13px;margin-bottom:8px}
+.donut .lg{display:flex;flex-direction:column;gap:14px;font-size:15px}
+.donut .lg small{display:block;color:var(--sub);font-size:12.5px;margin-left:18px}
+.donut .lg i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:7px;vertical-align:-1px}
+.donut .lg b{margin-left:6px}
+/* by rule */
+.br td,.br th{padding:7px 10px}
+.br td.l:first-child{white-space:normal}
+.br th{white-space:normal}
+.br .bar2{display:inline-block;height:10px;border-radius:2px;background:var(--red);vertical-align:middle}
+.br tfoot td{font-weight:700;border-top:2px solid #d0d1d2;border-bottom:none}
+/* deals doing */
+.pf td,.pf th{padding:8px 12px}
+.pf td.l:first-child{white-space:normal}
+.pf .stk{display:flex;height:14px;background:var(--band2);border-radius:3px;overflow:hidden;width:100%;min-width:120px}
+.pf .stk i{display:block;height:100%}
+.pf .pc{font-weight:700}
+.pf tr.cmp td{background:#e8f5f3;border-top:2px solid var(--cyan);border-bottom:2px solid var(--cyan);font-weight:600}
+.pf .ctl{display:inline-block;background:var(--cyan);color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:4px;padding:1px 6px;margin-right:8px;vertical-align:1px}
+.pf .up{color:var(--red);font-weight:700}.pf .dn{color:#2f7f77;font-weight:700}
+.pf tr.tot td{font-weight:700;border-top:2px solid #d0d1d2}
+.pf .z{color:#b0b0b0}
+/* reasons */
+.rs{display:grid;grid-template-columns:150px minmax(0,1fr) 40px;gap:16px 12px;align-items:center;font-size:13px}
+.rs .b{height:18px;background:var(--band2);border-radius:4px;overflow:hidden;display:flex}.rs .b i{display:block;height:100%}
+.rsr{grid-template-columns:minmax(0,1fr) 130px 34px;gap:7px 10px}.rsr .b{height:12px;border-radius:3px}
+.rs .n{text-align:right;color:var(--sub)}
+.foot{color:var(--sub);font-size:12px;margin-top:10px}
+/* tables */
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;color:var(--sub);font-weight:600;text-align:right;padding:8px 10px;border-bottom:2px solid #d0d1d2;background:var(--band2);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--band);text-align:right;vertical-align:middle;white-space:nowrap}
+th.l,td.l{text-align:left}
+tbody tr:hover td{background:#f9e6ea}
+td.near{background:var(--amber-bg);color:var(--amber);font-weight:600}
+td .sub{display:block;color:var(--sub);font-size:11.5px;font-weight:400}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600}
+.p-paid{background:#e3f4f2;color:#2f7f77}.p-live{background:#eee;color:#555}.p-arr{background:#fbe3e8;color:var(--red)}.p-nt{background:var(--amber-bg);color:var(--amber)}
+.div-m{color:#2f7f77}.div-p{color:var(--dark)}
+.info{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid #9a9a9a;color:#6b6b6b;font-size:10px;font-weight:700;font-style:normal;cursor:help;margin-left:4px;vertical-align:1px;position:relative;text-transform:none;letter-spacing:0}
+.tip{display:none;position:absolute;z-index:40;top:calc(100% + 8px);right:-8px;width:290px;background:#fff;color:var(--text);border:1px solid #d0d0d0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.16);padding:12px 14px;text-align:left;font-size:12.5px;font-weight:400;line-height:1.45;white-space:normal}
+.info:hover .tip,.info:focus .tip{display:block}
+select.f{font:inherit;font-size:12.5px;border:1px solid #cfcfcf;border-radius:8px;padding:3px 8px;background:#fff}
+.tbl-wrap{overflow-x:auto}
+/* phone */
+.phone{width:390px;max-width:100%;margin:0 auto;border:10px solid #1d1d1b;border-radius:36px;overflow:hidden;background:var(--bg)}
+.pbar{background:var(--red);color:#fff;padding:12px 14px;display:flex;gap:12px;align-items:center}
+.pbar b{flex:1;font-size:16px}.pbar small{font-size:10.5px;opacity:.85;text-align:right}
+.pbody{padding:12px;display:flex;flex-direction:column;gap:12px}
+.pbody .seg{width:100%}.pbody .seg button{flex:1;padding:6px 4px;font-size:13px}
+.ptiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.ptiles .tile b{font-size:20px}
+.pcard{background:#fff;border:1px solid var(--line);border-radius:12px}
+.pcard h3{margin:0;padding:9px 12px;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:#444;background:var(--band);border-radius:12px 12px 0 0}
+.pfun{padding:12px;display:flex;flex-direction:column;gap:8px}
+.pfun .bar{height:26px;background:var(--band2);border-radius:6px;position:relative;overflow:hidden}
+.pfun .bar i{position:absolute;inset:0 auto 0 0;border-radius:6px}
+.pfun .bar span{position:absolute;inset:0 8px;display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:600}
+.plead{padding:10px 12px;border-bottom:1px solid var(--band);font-size:13px}
+.plead:last-child{border-bottom:none}
+.plead .t{display:flex;justify-content:space-between;gap:8px}.plead .t b{font-weight:600}
+.plead .m{color:var(--sub);font-size:12px;margin-top:3px}
+.plead .m .nr{color:var(--amber);font-weight:600}
+</style>
+
+<p class="note">Mock-up only (26 Nov 2026). Figures are made up.</p>
+<div class="wrap">
+  <div class="views" role="group" aria-label="View"><button id="vDesk" class="on">Desktop</button><button id="vPhone">Phone</button></div>
+
+  <div id="desk" class="desk">
+    <nav class="side" aria-hidden="true"><div class="h">SALES</div><div>Sales Summary</div><div>Year on Year</div><div class="h">OWN BOOK</div><div>Bad Debt</div><div>Exposure Top 10</div><div>Fund Capacity</div><div class="on">Auto Approval</div></nav>
+    <div class="main">
+      <div class="top"><h1>Auto Approval</h1><div class="asat">As at 26 Nov 2026 09:40<br>Refreshed 09:41</div></div>
+      <div class="filters">
+        <div class="seg" data-g="div"><button data-v="all" class="on">All</button><button data-v="Medical">Medical</button><button data-v="Paper">Paper</button></div>
+        <div class="seg" data-g="per"><button data-v="1">Last month</button><button data-v="3" class="on">3 months</button><button data-v="6">6 months</button><button data-v="12">12 months</button></div>
+        <div class="seg" data-g="by"><button data-v="n" class="on">Count</button><button data-v="af">Amount financed</button></div>
+      </div>
+      <div class="quad">
+        <div class="card"><div class="card-head"><span>Application to paid out</span><span class="r" id="funKey"></span></div><div class="card-body"><div id="fun" class="fwrap"></div></div></div>
+        <div class="card"><div class="card-head"><span>Not eligible: reason <span style="text-transform:none;letter-spacing:0;color:var(--sub)">· since 16 Oct 2026</span></span><span class="r" id="neN"></span></div><div class="card-body"><div class="rs rsr" id="ne"></div></div></div>
+        <div class="card"><div class="card-head"><span>Eligible: not auto approved reason <span style="text-transform:none;letter-spacing:0;color:var(--sub)">· since 16 Oct 2026</span></span><span class="r" id="rsN"></span></div><div class="card-body"><div class="rs rsr" id="rs"></div></div></div>
+        <div class="card"><div class="card-head"><span>Eligible: not auto approved outcome</span><span class="r" id="donutKey"></span></div><div class="card-body"><div id="donut" class="donut"></div></div></div>
+      </div>
+      <div class="card" style="margin-bottom:14px"><div class="card-head"><span>Auto approved by rule</span></div><div class="tbl-wrap"><table id="byRule" class="br"></table></div></div>
+      <div class="card">
+        <div class="card-head"><span>How auto approved deals are doing <span style="text-transform:none;letter-spacing:0;color:var(--sub)">· since auto approval began</span></span>
+          <span class="r"><span class="dkey"><i style="background:#898b8e"></i>Serious arrears (60+ days)</span><span class="dkey"><i style="background:var(--orange)"></i>Terminated</span><span class="dkey"><i style="background:var(--red)"></i>Bad debt</span></span></div>
+        <div class="tbl-wrap"><table id="perf" class="pf"></table></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="phone" class="phone hidden">
+    <div class="pbar"><span>☰</span><b>Auto Approval</b><small>As at 26 Nov 09:40<br>Refreshed 09:41</small></div>
+    <div class="pbody" id="pbody"></div>
+  </div>
+</div>
+
+<script>
+const S = {div:"all", per:"3", by:"n", rule:""};
+// made-up figures per division for 3 months; other periods scale
+const BASE = {
+  Medical:{decided:690, eligible:312, approved:226, paid:198, af:[6210000,2740000,1690000,1482000], arrears:2},
+  Paper:{decided:240, eligible:71, approved:44, paid:31, af:[3480000,610000,402000,284000], arrears:0}
+};
+const SCALE = {"1":.34,"3":1,"6":1.9,"12":3.7};
+// Not eligible: the checks failed on the rule it came closest to (each application can fail more than one). Made up.
+const NOTELIG = {
+  Medical:[["Quote amount over the rule's limit",128],["Facility not covered (Rental, Refinance)",74],["Company established under 2 years",51],["Late payments in last 12 months",33],["Profession not on the rule",22],["Term over the rule's limit",19],["Bad debt or serious arrears ever",7]],
+  Paper:[["Profession not on the rule",61],["Quote amount over the rule's limit",44],["Company established under 2 years",38],["Facility not covered (Rental, Refinance)",19],["Late payments in last 12 months",9],["Term over the rule's limit",6]]
+};
+// Eligible, not auto approved: what stopped it on its rule - a search below the pass mark, searches not run, or nothing. Made up.
+const ELIGWHY = {
+  Medical:[["Creditsafe check fail",9],["TransUnion credit check fail",6],["TransUnion Call Validate fail",2],["Searches not run",4],["Every check passed (decided by hand)",5]],
+  Paper:[["Creditsafe check fail",4],["TransUnion credit check fail",3],["TransUnion Call Validate fail",1],["Searches not run",2],["Every check passed (decided by hand)",2]]
+};
+const REASONS = {
+  Medical:[["Quote amount over the rule's limit",128],["Creditsafe check fail",52],["TransUnion credit check fail",34],["Facility not covered (Rental, Refinance)",74],["Company established under 2 years",51],["Late payments in last 12 months",33],["Profession not on the rule",22],["Term over the rule's limit",19],["Bad debt or serious arrears ever",7]],
+  Paper:[["Profession not on the rule",61],["Quote amount over the rule's limit",44],["Company established under 2 years",38],["Creditsafe check fail",17],["TransUnion credit check fail",10],["Facility not covered (Rental, Refinance)",19],["Late payments in last 12 months",9],["Term over the rule's limit",6]]
+};
+// Kept for later: eligible but decided by hand (not shown now)
+const BYHAND = {Medical:{approved:80, declined:6}, Paper:{approved:22, declined:5}};
+const RULES = {"Lease & HP up to £60k Ltd/LLP":{amt:60000,term:60,age:2},"Lease & HP up to £80k Partnership/Sole Trader":{amt:80000,term:60,age:3},"Loan up to £15k Ltd/LLP":{amt:15000,term:60,age:2},"OB Schemes - Employees up to £6k":{amt:6000,term:24,age:0}};
+const LEADS = [
+ ["25 Nov","PF-118342","Ashby Print & Design Ltd","Paper","Lease & HP up to £60k Ltd/LLP",58400,60,"Lease","Ltd","Printing",2017,71,0,"live"],
+ ["25 Nov","PF-118337","Harlow Dental Care Ltd","Medical","Lease & HP up to £60k Ltd/LLP",24950,48,"HP","Ltd","Dentist",2012,88,0,"paid"],
+ ["24 Nov","PF-118301","J Moss t/a Moss Joinery","Paper","Lease & HP up to £80k Partnership/Sole Trader",31200,60,"HP","Sole Trader","Joinery",2023,64,1,"live"],
+ ["24 Nov","PF-118298","Riverside Veterinary LLP","Medical","Lease & HP up to £60k Ltd/LLP",12480,36,"Lease","LLP","Veterinary",2009,92,0,"paid"],
+ ["21 Nov","PF-118215","Northgate Signs Ltd","Paper","Loan up to £15k Ltd/LLP",14800,60,"Loan","Ltd","Signage",2021,58,0,"nt"],
+ ["20 Nov","PF-118190","Bright Smile Orthodontics Ltd","Medical","Lease & HP up to £60k Ltd/LLP",41300,60,"HP","Ltd","Orthodontist",2015,81,0,"paid"],
+ ["19 Nov","PF-118154","Kemp Optometrists","Medical","Lease & HP up to £80k Partnership/Sole Trader",76500,60,"Lease","Partnership","Optometrist",2019,74,0,"paid"],
+ ["18 Nov","PF-118122","Sarah Ellis (employee scheme)","Medical","OB Schemes - Employees up to £6k",5900,24,"Loan","","",null,null,0,"paid"],
+ ["14 Nov","PF-118040","Carver Print Solutions Ltd","Paper","Lease & HP up to £60k Ltd/LLP",22000,60,"Lease","Ltd","Printing",2024,69,0,"arr"],
+ ["12 Nov","PF-117988","Pennine Physio Ltd","Medical","Lease & HP up to £60k Ltd/LLP",9860,36,"HP","Ltd","Physiotherapy",2016,90,0,"paid"],
+ ["10 Nov","PF-117931","Tanner Packaging Ltd","Paper","Lease & HP up to £60k Ltd/LLP",47950,54,"HP","Ltd","Packaging",2014,77,0,"paid"],
+ ["6 Nov","PF-117850","Oakwood Dental Partnership","Medical","Lease & HP up to £80k Partnership/Sole Trader",18750,48,"Lease","Partnership","Dentist",2006,95,0,"paid"]
+];
+const STATUS = {paid:["Paid out","p-paid"],live:["In progress","p-live"],arr:["In arrears","p-arr"],nt:["Not taken up","p-nt"]};
+const cur = v => "£" + Math.round(v).toLocaleString("en-GB");
+const sh = v => v >= 1e6 ? "£" + (v/1e6).toFixed(2) + "m" : "£" + Math.round(v/1000) + "k";
+const pct = (a,b) => b ? (100*a/b).toFixed(1) + "%" : "–";
+
+function figures(){
+  const ds = S.div === "all" ? ["Medical","Paper"] : [S.div], k = SCALE[S.per];
+  const f = {decided:0,eligible:0,approved:0,paid:0,arrears:0,af:[0,0,0,0],per:{}};
+  ds.forEach(d => { const b = BASE[d]; ["decided","eligible","approved","paid"].forEach(x => f[x] += Math.round(b[x]*k)); f.arrears += b.arrears; b.af.forEach((v,i) => f.af[i] += v*k);
+    f.per[d] = {n:[b.decided,b.eligible,b.approved,b.paid].map(v => Math.round(v*k)), af:b.af.map(v => v*k)}; });
+  const rs = {}; ds.forEach(d => REASONS[d].forEach(([r,n]) => rs[r] = (rs[r]||0) + Math.round(n*k)));
+  f.reasons = Object.entries(rs).sort((a,b) => b[1]-a[1]);
+  const tally = src => { const t = {}; ds.forEach(d => src[d].forEach(([r,n]) => t[r] = (t[r]||0) + n)); return Object.entries(t).sort((a,b) => b[1]-a[1]); };
+  f.notElig = tally(NOTELIG); f.eligWhy = tally(ELIGWHY);
+  // eligible minus auto approved, split approved / declined by hand - always adds up to the funnel's gap
+  f.hand = ds.map(d => { const gap = f.per[d].n[1] - f.per[d].n[2], b = BYHAND[d], dec = Math.round(gap * b.declined / (b.approved + b.declined));
+    return {d, approved: gap - dec, declined: dec}; });
+  f.leads = LEADS.filter(l => ds.includes(l[3]));
+  return f;
+}
+const COL = {Medical:"#6bc2b9", Paper:"#54585a"};
+const STAGES = ["Total applications","Eligible for auto approval","Auto approved","Paid out"];
+let TIPS = [];
+// An inverted-triangle funnel: four bands narrowing down; each band split Medical | Paper by its share when both are shown.
+function funnel(f, compact){
+  const byAf = S.by === "af", fmt = v => byAf ? sh(v) : Math.round(v).toLocaleString("en-GB");
+  const ds = Object.keys(f.per), H = compact ? 58 : 70, gap = 5, top = compact ? 0 : 26;
+  // Desktop: the drawing is as wide as its box allows (its height is fixed), so the labels sit at the far left, the two
+  // % columns at the far right, and the funnel takes the room between - its right edge stays clear of "% total", and any
+  // extra width goes to its left.
+  const box = document.getElementById("fun"), bw = box ? box.clientWidth : 0, bh = box ? box.clientHeight : 0;
+  const W = compact ? 340 : Math.max(560, bw && bh ? (top + 4*(H+gap)) * bw / bh : 560);
+  const right = W - 96 - 72, x0 = compact ? 0 : 182, fw = compact ? 330 : right - x0, cx = x0 + fw/2;
+  const totals0 = [0,1,2,3].map(i => ds.map(d => (byAf ? f.per[d].af : f.per[d].n)[i]).reduce((a,b)=>a+b,0));
+  // Drawn to scale: each band starts at its own figure's width and narrows to the next one's (the last stays level).
+  // (never narrower than a small stub, so an empty stage still shows as a band with its 0)
+  const widths = [0,1,2,3,3].map(i => Math.max(fw*.16, fw*totals0[i]/(totals0[0]||1)));
+  let s = `<svg viewBox="0 0 ${W} ${top + 4*(H+gap)}" role="img" aria-label="Funnel">`;
+  if (!compact) s += `<text x="${W-96}" y="15" text-anchor="end" font-size="13.5" fill="#6b6b6b">% total</text><text x="${W-2}" y="15" text-anchor="end" font-size="13.5" fill="#6b6b6b">% step above</text>`;
+  const totals = [0,1,2,3].map(i => ds.map(d => (byAf ? f.per[d].af : f.per[d].n)[i]).reduce((a,b)=>a+b,0));
+  if (!compact) TIPS = [];
+  const tips = [];
+  for (let i = 0; i < 4; i++) {
+    const y = top + i*(H+gap), wt = widths[i], wb = widths[i+1], wm = (wt+wb)/2;
+    const vals = ds.map(d => (byAf ? f.per[d].af : f.per[d].n)[i]), tot = vals.reduce((a,b) => a+b, 0);
+    const trap = `M${cx-wt/2},${y} L${cx+wt/2},${y} L${cx+wb/2},${y+H} L${cx-wb/2},${y+H} Z`;
+    const id = `c${compact ? "p" : "d"}${i}`;
+    s += `<clipPath id="${id}"><path d="${trap}"/></clipPath>`;
+    if (!tot) s += `<path d="${trap}" fill="#e7e8e8"/>`;
+    let x = cx - wm/2;
+    const shown = ds.filter((d,j) => vals[j] > 0);
+    ds.forEach((d,j) => {
+      if (!vals[j]) return;
+      // Split at the band's middle width; the outer segments run past the edges (clipped) to fill the slanted corners.
+      const share = vals[j]/tot, first = d === shown[0], last = d === shown[shown.length-1];
+      const w = share*wm, x1 = first ? x - 60 : x, w1 = w + (first ? 60 : 0) + (last ? 60 : 0);
+      tips.push({i, d});
+      s += `<path class="seg-p" data-t="${tips.length-1}" clip-path="url(#${id})" d="M${x1},${y} h${w1} v${H} h${-w1} Z" fill="${COL[d]}"/>`;
+      x += w;
+    });
+    if (compact) {
+      const nar = wm < 150, tc = nar ? "#1a1a1a" : "#fff", ts = nar ? "paint-order:stroke;stroke:#fff;stroke-width:4px;" : "";
+      s += `<text x="${cx}" y="${y+22}" text-anchor="middle" fill="${tc}" font-size="12" style="pointer-events:none;${ts}">${STAGES[i]}</text>`+
+           `<text x="${cx}" y="${y+42}" text-anchor="middle" fill="${tc}" font-size="17" font-weight="700" style="pointer-events:none;${ts}">${fmt(tot)}</text>`;
+    } else {
+      const zc = tot ? "#1a1a1a" : "#b0b0b0";
+      s += `<text x="2" y="${y+H/2+5}" text-anchor="start" font-size="16" fill="#1a1a1a">${STAGES[i]}</text>`+
+           `<text x="${W-96}" y="${y+H/2+6}" text-anchor="end" font-size="16.5" font-weight="600" fill="${zc}">${pct(tot, totals[0])}</text>`+
+           `<text x="${W-2}" y="${y+H/2+6}" text-anchor="end" font-size="16.5" font-weight="600" fill="${i ? zc : "#b0b0b0"}">${i ? pct(tot, totals[i-1]) : "–"}</text>`+
+           (wm < String(fmt(tot)).length*21*0.6 + 14 || !tot
+             ? `<text x="${cx+wm/2+8}" y="${y+H/2+7}" text-anchor="start" fill="${zc}" font-size="21" font-weight="700" style="pointer-events:none">${fmt(tot)}</text>`
+             : `<text x="${cx}" y="${y+H/2+7}" text-anchor="middle" fill="#fff" font-size="21" font-weight="700" style="pointer-events:none;paint-order:stroke;stroke:rgba(0,0,0,.18);stroke-width:2px">${fmt(tot)}</text>`);
+    }
+  }
+  TIPS.push({f, tips});
+  return s.replace("<svg ", `<svg data-set="${TIPS.length-1}" `) + "</svg>";
+}
+function tipHtml(f, i){
+  const byAf = S.by === "af", fmt = v => byAf ? sh(v) : Math.round(v).toLocaleString("en-GB"), ds = Object.keys(f.per);
+  const vals = ds.map(d => (byAf ? f.per[d].af : f.per[d].n)[i]), tot = vals.reduce((a,b) => a+b, 0);
+  let h = `<b>${STAGES[i]}</b>`;
+  ds.forEach((d,j) => h += `<div><span><i style="background:${COL[d]}"></i>${d}</span><span>${fmt(vals[j])}${ds.length > 1 ? " · " + pct(vals[j], tot) : ""}</span></div>`);
+  if (ds.length > 1) h += `<div class="tot"><span>Total</span><span>${fmt(tot)}</span></div>`;
+  if (i > 0) { const prev = ds.map(d => (byAf ? f.per[d].af : f.per[d].n)[i-1]).reduce((a,b)=>a+b,0); h += `<div style="color:#6b6b6b"><span>From ${STAGES[i-1].toLowerCase()}</span><span>${pct(tot, prev)}</span></div>`; }
+  return h;
+}
+const ftip = Object.assign(document.createElement("div"), {className:"ftip hidden"}); document.body.appendChild(ftip);
+document.addEventListener("mousemove", e => {
+  const p = e.target.closest && e.target.closest("path.seg-p");
+  if (!p) { ftip.classList.add("hidden"); return; }
+  const set = TIPS[+p.closest("svg").dataset.set], t = set.tips[+p.dataset.t];
+  ftip.innerHTML = tipHtml(set.f, t.i); ftip.classList.remove("hidden");
+  ftip.style.left = Math.min(e.clientX + 14, innerWidth - 220) + "px"; ftip.style.top = (e.clientY + 14) + "px";
+});
+// Eligible but not auto approved: decided by a person instead - both recorded in CMS (the application's status, no approval rule).
+// Eligible but not auto approved: what a person decided instead (recorded: the application's status, no approval rule)
+// Auto approved by rule: share of each division's deals and amount financed (made up), so the rows add up to the funnel's auto approved
+const BYRULE = {
+  Medical:[["Lease & HP up to £60k Ltd/LLP",.45,.55],["Lease & HP up to £80k Partnership/Sole Trader",.27,.31],["OB Schemes - Employees up to £6k",.16,.03],["Loan up to £15k Ltd/LLP",.07,.07],["Loan up to £20k Partnership/Sole Trader",.05,.04]],
+  Paper:[["Lease & HP up to £60k Ltd/LLP",.52,.6],["Lease & HP up to £80k Partnership/Sole Trader",.3,.32],["Loan up to £15k Ltd/LLP",.18,.08]]
+};
+function byRule(f){
+  const rows = {};
+  Object.keys(f.per).forEach(d => { const n = f.per[d].n[2], af = f.per[d].af[2]; let left = n;
+    BYRULE[d].forEach(([r,sn,sa],j) => { const c = j === BYRULE[d].length-1 ? left : Math.round(n*sn); left -= c;
+      rows[r] = rows[r] || {n:0, af:0}; rows[r].n += c; rows[r].af += af*sa; }); });
+  const list = Object.entries(rows).sort((a,b) => b[1].n - a[1].n), byAf = S.by === "af";
+  const max = Math.max(...list.map(([,v]) => byAf ? v.af : v.n)), tn = list.reduce((a,[,v]) => a + v.n, 0), ta = list.reduce((a,[,v]) => a + v.af, 0);
+  return `<thead><tr><th class="l">Rule</th><th>Deals</th><th>Amount financed</th><th class="l" style="width:18%"></th></tr></thead><tbody>` +
+    list.map(([r,v]) => `<tr><td class="l">${ruleCell(r)}</td><td>${v.n}</td><td>${sh(v.af)}</td><td class="l"><span class="bar2" style="width:${100*(byAf ? v.af : v.n)/max}%"></span></td></tr>`).join("") +
+    `</tbody><tfoot><tr><td class="l">Total</td><td>${tn}</td><td>${sh(ta)}</td><td></td></tr></tfoot>`;
+}
+// How auto approved deals are doing: every auto approved deal paid out since auto approval began (division filter only, not the period).
+// Each deal counted once, at its worst: bad debt, else terminated, else serious arrears (60+ days, CMS's own flag). Made up.
+const PERF = {
+  Medical:{rules:[["Lease & HP up to £60k Ltd/LLP",1012,21,6,4,61200],["Lease & HP up to £80k Partnership/Sole Trader",588,19,7,5,88400],["OB Schemes - Employees up to £6k",344,6,1,1,2900],["Loan up to £15k Ltd/LLP",161,7,3,2,14100],["Loan up to £20k Partnership/Sole Trader",96,5,2,1,9800]],
+           hand:[3260,98,36,24,412000]},
+  Paper:{rules:[["Lease & HP up to £60k Ltd/LLP",22,1,0,0,0],["Lease & HP up to £80k Partnership/Sole Trader",13,0,0,0,0],["Loan up to £15k Ltd/LLP",6,0,0,0,0]],
+         hand:[410,15,6,3,58000]}
+};
+const PCOL = ["#898b8e","var(--orange)","var(--red)"];
+// Each rule's history, from CMS_Dev's rule sets (real): grouped by name, so a renamed rule's earlier name is only a likely match.
+const RHIST = {
+  "Lease & HP up to £60k Ltd/LLP":{since:"26 Sep 2023", versions:9, now:"Credit limit £60k · term up to 60 months",
+    pending:"Credit limit £70k (name not changed)"},
+  "Lease & HP up to £80k Partnership/Sole Trader":{since:"26 Nov 2024", versions:3, now:"Credit limit £80k · term up to 60 months",
+    earlier:"Lease & HP up to £60k Partnership/Sole Trader · Sep 2023 – Nov 2024"},
+  "Loan up to £15k Ltd/LLP":{since:"26 Nov 2024", versions:3, now:"Loan up to £15k · credit limit £60k · term up to 60 months",
+    earlier:"Loan up to £10k Ltd/LLP · Sep 2023 – Nov 2024"},
+  "Loan up to £20k Partnership/Sole Trader":{since:"26 Nov 2024", versions:3, now:"Loan up to £20k · credit limit £60k · term up to 60 months",
+    pending:"Loan up to £25k (name not changed)", earlier:"Loan up to £10k Partnership/Sole Trader · Sep 2023 – Nov 2024",
+    same:"Jul – Sep 2023 (credit limit £20k) - counted here"},
+  "OB Schemes - Employees up to £6k":{since:"6 Aug 2025", versions:1, now:"Credit limit £6k · term up to 24 months",
+    earlier:"OB Schemes - Employees up to £5k · Jan 2024 – Aug 2025"}
+};
+const ruleCell = r => RHIST[r] ? `${r}<button class="ri" data-r="${r}" aria-label="Rule history">i</button>` : r;
+function ruleTip(r){
+  const h = RHIST[r];
+  return `<b>${r}</b><div class="rt-now">In use · active set since 6 Aug 2025</div>`+
+    `<dl><dt>Now</dt><dd>${h.now}</dd><dt>Versions</dt><dd>${h.versions} since ${h.since}${h.versions > 1 ? ", same name" : ""}</dd>`+
+    (h.pending ? `<dt>Pending</dt><dd class="rt-warn">${h.pending}</dd>` : "")+
+    (h.same ? `<dt>Name reused</dt><dd>${h.same}</dd>` : "")+
+    (h.earlier ? `<dt>Earlier name</dt><dd>${h.earlier}<small>Likely the same rule, but not linked in CMS: its deals aren't in this row</small></dd>` : "")+`</dl>`;
+}
+const rtip = Object.assign(document.createElement("div"), {className:"ftip rtip hidden"}); document.body.appendChild(rtip);
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("button.ri");
+  if (!b) { rtip.classList.add("hidden"); return; }
+  rtip.innerHTML = ruleTip(b.dataset.r); rtip.classList.remove("hidden");
+  const rc = b.getBoundingClientRect();
+  rtip.style.left = Math.max(8, Math.min(rc.left, innerWidth - 340)) + "px"; rtip.style.top = (rc.bottom + 6) + "px";
+});
+function perf(div, compact){
+  const ds = div === "all" ? ["Medical","Paper"] : [div], rows = {}, hand = [0,0,0,0,0];
+  ds.forEach(d => { PERF[d].rules.forEach(([r,...v]) => { rows[r] = rows[r] || [0,0,0,0,0]; v.forEach((x,i) => rows[r][i] += x); }); PERF[d].hand.forEach((x,i) => hand[i] += x); });
+  const list = Object.entries(rows).sort((a,b) => b[1][0]-a[1][0]);
+  const tot = list.reduce((a,[,v]) => a.map((x,i) => x + v[i]), [0,0,0,0,0]);
+  const cell = n => n ? n : `<span class="z">0</span>`;
+  const rate = v => v[0] ? (v[1]+v[2]+v[3])/v[0] : 0, ctl = rate(hand);
+  // vs control: percentage points; up = more adverse than the control (red), down = less (cyan)
+  const delta = v => { const d = 100*(rate(v) - ctl);
+    if (Math.abs(d) < 0.05) return `<span class="z">=</span>`;
+    return d > 0 ? `<span class="up">▲ ${d.toFixed(1)}</span>` : `<span class="dn">▼ ${(-d).toFixed(1)}</span>`; };
+  const row = (name, v, cls) => { const p = rate(v), isCtl = cls === "cmp";
+    const bar = `<span class="stk">${[1,2,3].map(i => `<i style="width:${v[0] ? 100*v[i]/v[0]/0.08 : 0}%;background:${PCOL[i-1]}"></i>`).join("")}</span>`;
+    const dl = isCtl ? `<span class="z">–</span>` : delta(v);
+    return compact
+      ? `<tr class="${cls||""}"><td class="l">${name}</td><td>${v[0]}</td><td class="pc">${(100*p).toFixed(1)}%</td><td>${dl}</td></tr>`
+      : `<tr class="${cls||""}"><td class="l">${name}</td><td>${v[0].toLocaleString("en-GB")}</td><td>${cell(v[1])}</td><td>${cell(v[2])}</td><td>${cell(v[3])}</td><td>${v[4] ? sh(v[4]) : '<span class="z">–</span>'}</td><td class="pc">${(100*p).toFixed(1)}%</td><td>${dl}</td><td class="l" style="width:20%">${bar}</td></tr>`; };
+  const head = compact ? `<thead><tr><th class="l">Rule</th><th>Paid out</th><th>Adverse rate</th><th>vs control</th></tr></thead>`
+    : `<thead><tr><th class="l">Rule</th><th>Paid out</th><th>Serious arrears</th><th>Terminated</th><th>Bad debt</th><th>Written off</th><th>Adverse rate</th><th>vs control</th><th class="l"></th></tr></thead>`;
+  return head + `<tbody>` + list.map(([r,v]) => row(ruleCell(r),v)).join("") + row("All auto approved", tot, "tot") + row(`<span class="ctl">Control</span>All other deals (not auto approved)`, hand, "cmp") + `</tbody>`;
+}
+const OUT = [["Approved by hand","approved","#898b8e"],["Declined by hand","declined","#c20430"]];
+const donutKey = () => OUT.map(([l,,c]) => `<span class="dkey"><i style="background:${c}"></i>${l.replace(" by hand","")}</span>`).join("");
+function donut(f, size){
+  // Number on the ring; its % outside, on a short leader line into the corner space.
+  const vals = OUT.map(([,k]) => f.hand.reduce((a,h) => a + h[k], 0)), tot = vals[0] + vals[1];
+  // turned so Declined sits centred on the left: its % label goes out to the side, not across the top
+  const R = 60, r = 36, cx = 120, cy = 76; let a0 = tot ? Math.PI - 2*Math.PI*vals[0]/tot - Math.PI*vals[1]/tot : -Math.PI/2, segs = "", labs = "";
+  const p = (rad,ang) => `${cx + rad*Math.cos(ang)},${cy + rad*Math.sin(ang)}`;
+  vals.forEach((v,i) => {
+    if (!v) return;
+    const a1 = a0 + 2*Math.PI*v/tot, big = a1 - a0 > Math.PI ? 1 : 0, am = (a0+a1)/2;
+    segs += v === tot ? `<circle cx="${cx}" cy="${cy}" r="${(R+r)/2}" fill="none" stroke="${OUT[i][2]}" stroke-width="${R-r}"/>`
+      : `<path d="M${p(R,a0)} A${R},${R} 0 ${big} 1 ${p(R,a1)} L${p(r,a1)} A${r},${r} 0 ${big} 0 ${p(r,a0)} Z" fill="${OUT[i][2]}"><title>${OUT[i][0]}: ${v}</title></path>`;
+    const m = (R+r)/2;
+    labs += `<text x="${cx + m*Math.cos(am)}" y="${cy + m*Math.sin(am)+4}" text-anchor="middle" font-size="12" font-weight="700" fill="#fff" style="pointer-events:none">${v}</text>`;
+    const right = Math.cos(am) >= 0, ex = cx + (R+12)*Math.cos(am), ey = cy + (R+12)*Math.sin(am), hx = ex + (right ? 12 : -12);
+    labs += `<polyline points="${p(R+2,am)} ${ex},${ey} ${hx},${ey}" fill="none" stroke="#898b8e" stroke-width="1"/>`+
+            `<text x="${hx + (right ? 3 : -3)}" y="${ey+4}" text-anchor="${right ? "start" : "end"}" font-size="11" font-weight="600" fill="#1a1a1a">${pct(v, tot)}</text>`;
+    a0 = a1;
+  });
+  return `<svg viewBox="22 4 196 144" preserveAspectRatio="xMidYMid meet">${segs}${labs}<text x="${cx}" y="${cy+8}" text-anchor="middle" font-size="24" font-weight="700" fill="#1a1a1a">${tot}</text></svg>`;
+}
+function handRows(f){
+  const rows = [["Approved by hand","approved"],["Declined by hand","declined"]];
+  const tot = f.hand.reduce((a,h) => a + h.approved + h.declined, 0) || 1;
+  return rows.map(([lab,k]) => {
+    const n = f.hand.reduce((a,h) => a + h[k], 0);
+    const segs = f.hand.map(h => `<i title="${h.d}: ${h[k]}" style="width:${100*h[k]/tot}%;background:${COL[h.d]}"></i>`).join("");
+    return `<span>${lab}<small style="display:block;color:var(--sub);font-size:11.5px">${pct(n, f.eligible)} of eligible</small></span><span class="b">${segs}</span><span class="n"><b style="color:var(--text)">${n}</b></span>`;
+  }).join("");
+}
+function nearLimit(l){ const r = RULES[l[4]]; return {amt: l[5] >= r.amt*.9, term: r.term && l[6] >= r.term*.9, age: r.age && l[10] && (2026 - l[10]) <= r.age}; }
+
+function render(){
+  const f = figures(), byAf = S.by === "af";
+  const stage = byAf ? f.af : [f.decided, f.eligible, f.approved, f.paid];
+  const fmt = v => byAf ? sh(v) : v.toLocaleString("en-GB");
+  document.getElementById("fun").innerHTML = funnel(f, false);
+  document.getElementById("funKey").innerHTML = S.div === "all" ? `<span class="dkey"><i style="background:${COL.Medical}"></i>Medical</span><span class="dkey"><i style="background:${COL.Paper}"></i>Paper</span>` : "";
+  const list = rs => { const max = Math.max(1, ...rs.map(r => r[1])); return rs.map(([r,n]) => `<span>${r}</span><span class="b"><i style="width:${100*n/max}%;background:var(--orange)"></i></span><span class="n">${n}</span>`).join(""); };
+  document.getElementById("ne").innerHTML = list(f.notElig);
+  document.getElementById("rs").innerHTML = list(f.eligWhy);
+  document.getElementById("donut").innerHTML = donut(f);
+  document.getElementById("donutKey").innerHTML = donutKey();
+  document.getElementById("byRule").innerHTML = byRule(f);
+  const ds2 = S.div === "all" ? ["Medical","Paper"] : [S.div];
+  document.getElementById("neN").textContent = `${ds2.reduce((a,d) => a + {Medical:96, Paper:58}[d], 0)} applications`;
+  document.getElementById("rsN").textContent = `${ds2.reduce((a,d) => a + {Medical:21, Paper:11}[d], 0)} applications`;
+  // rule filter
+  document.getElementById("perf").innerHTML = perf(S.div);
+  phone(f, stage, fmt);
+}
+function segHtml(g, opts){ return `<div class="seg" data-g="${g}">` + opts.map(([v,l]) => `<button data-v="${v}" class="${S[g] === v ? "on" : ""}">${l}</button>`).join("") + `</div>`; }
+function phone(f, stage, fmt){
+  let h = segHtml("div",[["all","All"],["Medical","Medical"],["Paper","Paper"]]) + segHtml("per",[["1","1m"],["3","3m"],["6","6m"],["12","12m"]]);
+  h += `<div class="pcard"><h3>Application to paid out</h3><div class="pfun fwrap">${funnel(f, true)}</div></div>`;
+  const pl = (t, rs) => `<div class="pcard"><h3>${t} <small style="font-weight:400;color:var(--sub)">· since 16 Oct 2026</small></h3>` + rs.slice(0,5).map(([r,n]) => `<div class="plead"><div class="t"><span>${r}</span><b>${n}</b></div></div>`).join("") + `</div>`;
+  h += pl("Not eligible: reason", f.notElig) + pl("Eligible: not auto approved reason", f.eligWhy);
+  h += `<div class="pcard"><h3>Eligible: not auto approved outcome</h3><div class="card-body"><div class="pkey">${donutKey()}</div><div class="donut">${donut(f)}</div></div></div>`;
+  h += `<div class="pcard"><h3>Auto approved by rule</h3><div class="tbl-wrap"><table class="br">${byRule(f)}</table></div></div>`;
+  h += `<div class="pcard"><h3>How auto approved deals are doing</h3><div class="tbl-wrap"><table class="pf">${perf(S.div, true)}</table></div></div>`;
+  document.getElementById("pbody").innerHTML = h;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest(".seg button"); if (!b) return;
+  S[b.parentElement.dataset.g] = b.dataset.v;
+  document.querySelectorAll(`.seg[data-g="${b.parentElement.dataset.g}"] button`).forEach(x => x.classList.toggle("on", x.dataset.v === b.dataset.v));
+  render();
+});
+const show = p => { document.getElementById("desk").classList.toggle("hidden", p); document.getElementById("phone").classList.toggle("hidden", !p);
+  document.getElementById("vDesk").classList.toggle("on", !p); document.getElementById("vPhone").classList.toggle("on", p); };
+document.getElementById("vDesk").onclick = () => show(false);
+document.getElementById("vPhone").onclick = () => show(true);
+render();
+window.addEventListener("resize", () => render());   // the funnel is drawn to its box's shape
+</script>

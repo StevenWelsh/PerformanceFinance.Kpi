@@ -61,7 +61,8 @@ public static class ColourCatalogue
     private const string TotalsRows =
         ".kpi-shell .mi-card .mi-table tfoot td,.kpi-shell .sy-table tr.sy-total td,.kpi-shell .sy-table tbody tr.sy-total:hover td," +
         ".kpi-shell .sd-table tfoot td,.kpi-shell .kpi-ex-table tfoot td,.kpi-shell .ma-table tfoot td," +
-        ".kpim-sy-total,.kpim-sd-total,.kpim-ex-total,.kpim-ex-table tfoot td,.kpim-mi-table tfoot tr";
+        ".kpim-sy-total,.kpim-sd-total,.kpim-ex-total,.kpim-ex-table tfoot td,.kpim-mi-table tfoot tr," +
+        ".aa-table tr.aa-tot td";   // Auto Approval (26 Nov 2026)
 
     private static readonly string[] Now = { "--kpim-now", "--kpim-yoy-cur", "--kpim-bd-now", "--kpim-spr-now" };
     private static readonly string[] NowHead = { "--kpim-now-head", "--kpim-yoy-cur-head", "--kpim-bd-now-head", "--kpim-spr-now-head" };
@@ -93,7 +94,7 @@ public static class ColourCatalogue
         {
             new("title", "Group title band", ColourWhere.Both, null, "#fafafa", new[] { "--kpim-card-head" }),
             new("head", "Column headings band", ColourWhere.Phone, "the tables you turn sideways; desktop headings are white", "#f5f5f5", Heads),
-            new("foot", "Totals row", ColourWhere.Both, "Suppliers, Supplier Development, Exposure, Bad Debt, Minimum IRR, Margin Analysis", "#fafafa", Array.Empty<string>(),
+            new("foot", "Totals row", ColourWhere.Both, "Suppliers, Supplier Development, Exposure, Bad Debt, Minimum IRR, Margin Analysis, Auto Approval", "#fafafa", Array.Empty<string>(),
                 h => $"{TotalsRows}{{background:{h}}}"),
             new("now", "Current year: row or column", ColourWhere.Both, null, "#fdeef2", Now),
             new("nowhead", "Current year: its heading", ColourWhere.Both, null, "#f6c9d5", NowHead),
@@ -144,6 +145,22 @@ public static class ColourCatalogue
             new("ok", "Used: under 80%", ColourWhere.Both, null, "#6bc2b9", new[] { "--kpim-fc-ok" }),
             new("warn", "Used: 80% to 95%", ColourWhere.Both, null, "#ee7624", new[] { "--kpim-fc-warn" }),
             new("over", "Used: over 95%", ColourWhere.Both, null, "#c20430", new[] { "--kpim-fc-over" }),
+        }),
+        new("aa", "Only on one report", "Auto Approval", new ColourItem[]
+        {
+            new("medical", "Funnel: Medical", ColourWhere.Both, null, "#6bc2b9", new[] { "--kpim-aa-medical" }),
+            new("paper", "Funnel: Paper", ColourWhere.Both, null, "#ee7624", new[] { "--kpim-aa-paper" }),
+            new("reason", "Not eligible reason bars", ColourWhere.Both, null, "#ee7624", new[] { "--kpim-aa-reason" }),
+            new("r1", "Eligible reasons: 1st", ColourWhere.Both, null, "#c20430", new[] { "--kpim-aa-r1" }),
+            new("r2", "Eligible reasons: 2nd", ColourWhere.Both, null, "#ee7624", new[] { "--kpim-aa-r2" }),
+            new("r3", "Eligible reasons: 3rd", ColourWhere.Both, null, "#6bc2b9", new[] { "--kpim-aa-r3" }),
+            new("r4", "Eligible reasons: 4th", ColourWhere.Both, null, "#54585a", new[] { "--kpim-aa-r4" }),
+            new("r5", "Eligible reasons: 5th", ColourWhere.Both, null, "#898b8e", new[] { "--kpim-aa-r5" }),
+            new("approved", "Outcome: approved by hand", ColourWhere.Both, null, "#898b8e", new[] { "--kpim-aa-approved" }),
+            new("declined", "Outcome: declined by hand", ColourWhere.Both, null, "#c20430", new[] { "--kpim-aa-declined" }),
+            new("arrears", "Performance: serious arrears", ColourWhere.Both, null, "#898b8e", new[] { "--kpim-aa-arrears" }),
+            new("term", "Performance: terminated", ColourWhere.Both, null, "#ee7624", new[] { "--kpim-aa-term" }),
+            new("baddebt", "Performance: bad debt", ColourWhere.Both, null, "#c20430", new[] { "--kpim-aa-baddebt" }),
         }),
         new("ma", "Only on one report", "Margin Analysis", new ColourItem[]
         {

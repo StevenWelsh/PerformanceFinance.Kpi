@@ -1,0 +1,258 @@
+@page "/kpis/auto-approval"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@using Kpi.Web.Reports
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* AUTO APPROVAL (26 Nov 2026, Steve - for Stuart: "a dashboard of AA approvals so we can monitor the leads that get auto
+   approved ... to ensure we are not making any mistakes with our parameters"; the agreed mock-up is
+   docs/auto-approval-mockup.html). KPI-site only. Applications are chosen as CMS's AutoApprovalStatistics. Rules are
+   grouped by NAME (CMS copies a rule with no link back; Steve: "I don't want missing data" - every name its own row).
+   "Performance by rule" covers every deal paid out since auto approval began (the division filter only), each counted
+   once at its worst; "All non-auto approved" is shown for comparison, not as a control (Steve). Figures: Rpt.spAutoApproval. *@
+
+<PageTitle>Auto Approval — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="auto-approval" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Auto Approval" AsAt="_asOf" RefreshedOn="_refreshedOn" RefreshRequested="OnRefreshRequested">
+            <div class="kpi-filters aa-filters">
+                <KpiField Caption="Division" Value="@_division" ValueChanged="SetDivision" Options="DivisionOptions" />
+                <KpiField Caption="Period" Value="@_months" ValueChanged="SetMonths" Options="PeriodOptions" />
+                <KpiField Caption="Show" Value="@_measure" ValueChanged="SetMeasure" Options="MeasureOptions" />
+            </div>
+
+            @if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+            else
+            {
+                @* four equal boxes, in the order of the process (the agreed mock-up); performance by rule below *@
+                <div class="aa-quad">
+                    <div class="ss-card aa-card">
+                        <div class="ss-card-head aa-head"><span>Application to paid out</span>
+                            @if (_data.Funnel.Count > 1)
+                            {
+                                <span class="aa-key">@foreach (var r in _data.Funnel) { <span><i style="background:@AutoApprovalCharts.DivisionColour(r.DivisionId)"></i>@r.Division</span> }</span>
+                            }
+                        </div>
+                        <div class="aa-qbody">@AutoApprovalCharts.FunnelGrid(_data.Funnel, ByAmount)</div>
+                    </div>
+                    <div class="ss-card aa-card">
+                        <div class="ss-card-head aa-head"><span>Not eligible: reason <span class="aa-sub">· since 16 Oct 2026 <AutoApprovalSinceInfo /></span></span><span class="aa-key">@Apps(_data.NotEligible)</span></div>
+                        <div class="aa-qbody aa-qlist">@Reasons(_data.NotEligible, _data, ByAmount)</div>
+                    </div>
+                    <div class="ss-card aa-card">
+                        <div class="ss-card-head aa-head"><span>Eligible: not auto approved reason <span class="aa-sub">· since 16 Oct 2026 <AutoApprovalSinceInfo /></span></span><span class="aa-key">@Apps(_data.EligibleNotAuto)</span></div>
+                        <div class="aa-qbody aa-qpie">@ReasonPie(_data.EligibleNotAuto, _data, ByAmount)</div>
+                    </div>
+                    <div class="ss-card aa-card">
+                        <div class="ss-card-head aa-head"><span>Eligible: not auto approved outcome</span>
+                            <span class="aa-key"><span><i style="background:@AutoApprovalCharts.ApprovedColour"></i>Approved</span><span><i style="background:@AutoApprovalCharts.DeclinedColour"></i>Declined</span></span>
+                        </div>
+                        <div class="aa-qbody aa-donut">@AutoApprovalCharts.Donut(_data.Outcome, ByAmount)</div>
+                    </div>
+                </div>
+
+                <div class="ss-card aa-card aa-perfcard">
+                    <div class="ss-card-head aa-head"><span>Performance by rule <span class="aa-sub">· since auto approval began <AutoApprovalPerfInfo /></span></span>
+                        <span class="aa-key"><span><i style="background:var(--kpim-aa-arrears, #898b8e)"></i>Serious arrears (60+ days)</span><span><i style="background:var(--kpim-aa-term, #ee7624)"></i>Terminated</span><span><i style="background:var(--kpim-aa-baddebt, #c20430)"></i>Bad debt</span></span>
+                    </div>
+                    <div class="aa-scroll">
+                        <table class="aa-table aa-perf">
+                            <thead><tr><th class="aa-l">Rule</th><th>Amount financed</th><th>Paid out</th><th>Last 12 months</th><th>Serious arrears</th><th>Terminated</th><th>Bad debt</th><th>Written off</th><th>Adverse rate</th><th class="aa-l aa-barh"></th></tr></thead>
+                            <tbody>
+                                @foreach (var r in Rules.Take(TopRules))
+                                {
+                                    <tr>
+                                        <td class="aa-l">@r.RuleName</td>
+                                        @PerfCells(r)
+                                    </tr>
+                                }
+                                @if (Rules.Count() > TopRules)
+                                {
+                                    <tr><td class="aa-l">Other rules (@(Rules.Count() - TopRules))</td>@PerfCells(Sum(Rules.Skip(TopRules)))</tr>
+                                }
+                                <tr class="aa-tot"><td class="aa-l">All auto approved</td>@PerfCells(AllAuto)</tr>
+                                <tr><td class="aa-l">All non-auto approved</td>@PerfCells(NonAuto)</tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Auto Approval" Active="auto-approval" AsAt="_asOf">
+    <ChildContent>
+        <AutoApprovalMobile Data="_data" Loading="_loading" Error="@_error" ByAmount="ByAmount"
+                            Division="@_division" DivisionChanged="SetDivision" Months="@_months" MonthsChanged="SetMonths"
+                            Measure="@_measure" MeasureChanged="SetMeasure" />
+    </ChildContent>
+</KpiMobile>
+
+@code {
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    // All divisions by default (Steve, 26 Nov 2026 - it was Paper)
+    private string _division = "all";
+    private string _months = "3";
+    private string _measure = "n";
+    private AutoApprovalData _data = new();
+
+    private bool ByAmount => _measure == "af";
+
+    public static readonly IReadOnlyList<KpiOption> DivisionOptions = [new("all", "All"), new("0", "Medical"), new("1", "Paper")];
+    public static readonly IReadOnlyList<KpiOption> PeriodOptions = [new("this", "This month"), new("last", "Last month"), new("3", "Last 3 months"), new("6", "Last 6 months"), new("12", "Last 12 months")];
+    public static readonly IReadOnlyList<KpiOption> MeasureOptions = [new("n", "Count"), new("af", "Amount financed")];
+
+    // the 10 rules with the most amount financed; the rest in one "Other rules" row, so the total still adds up (Steve, 26 Nov 2026)
+    public const int TopRules = 10;
+    private IEnumerable<AutoApprovalPerformanceRow> Rules =>_data.Performance.Where(r => r.Kind == "Rule").OrderByDescending(r => r.AF);
+    private AutoApprovalPerformanceRow AllAuto => Sum(Rules);
+    private AutoApprovalPerformanceRow NonAuto => Sum(_data.Performance.Where(r => r.Kind == "Control"));
+
+    private static AutoApprovalPerformanceRow Sum(IEnumerable<AutoApprovalPerformanceRow> rows) => new()
+    {
+        PaidOut = rows.Sum(r => r.PaidOut), SeriousArrears = rows.Sum(r => r.SeriousArrears), Terminated = rows.Sum(r => r.Terminated),
+        BadDebt = rows.Sum(r => r.BadDebt), WrittenOff = rows.Sum(r => r.WrittenOff), AF = rows.Sum(r => r.AF), AF12m = rows.Sum(r => r.AF12m)
+    };
+
+    private static string Apps(List<AutoApprovalReasonRow> rows) =>
+        rows.Count == 0 ? "" : rows[0].Total.ToString("N0") + (rows[0].Total == 1 ? " application" : " applications");
+
+    // a reason list: each reason, a bar against the largest, how many applications had it (or, Show: Amount financed, how much)
+    public static RenderFragment Reasons(List<AutoApprovalReasonRow> rows, AutoApprovalData data, bool byAmount) => __builder =>
+    {
+        if (rows.Count == 0)
+        {
+            <div class="aa-none">None in this period.</div>
+            return;
+        }
+        decimal Val(AutoApprovalReasonRow x) => byAmount ? x.AF : x.Applications;
+        var max = rows.Max(Val);
+        <div class="aa-rs">
+            @foreach (var r in rows.OrderByDescending(Val))
+            {
+                <span class="aa-rr"><span class="aa-rt">@r.Reason</span>@if (r.Reason.Length > 50) { <span class="aa-rtip">@r.Reason</span> }</span><span class="aa-rb" data-tip="@data.ReasonTip(r, byAmount)"><i style="width:@BarWidth(Val(r), max)"></i></span><span class="aa-rn" data-tip="@data.ReasonTip(r, byAmount)">@(byAmount ? AutoApprovalCharts.Money(r.AF) : r.Applications.ToString("N0"))</span>
+            }
+        </div>
+    };
+
+    // the eligible reasons as a donut, its key underneath (names only: the counts are on the donut)
+    public static RenderFragment ReasonPie(List<AutoApprovalReasonRow> rows, AutoApprovalData data, bool byAmount) => __builder =>
+    {
+        if (rows.Count == 0)
+        {
+            <div class="aa-none">None in this period.</div>
+            return;
+        }
+        <div class="aa-pie">@AutoApprovalCharts.ReasonDonut(rows, byAmount, r => data.ReasonTip(r, byAmount))</div>
+        <div class="aa-pkey">
+            @for (var i = 0; i < rows.Count; i++)
+            {
+                <span><i style="background:@AutoApprovalCharts.PieColour(i)"></i>@rows[i].Reason</span>
+            }
+        </div>
+    };
+
+
+    public static string BarWidth(decimal v, decimal max) =>
+        (max > 0 ? Math.Clamp(v / max, 0m, 1m) * 100m : 0m).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    private static string Zero(int n) => n == 0 ? "aa-z" : "";
+
+    // the outcome columns and the stacked bar (each adverse kind as a share of paid out, the bar full at 8%)
+    private RenderFragment PerfCells(AutoApprovalPerformanceRow r) => @<text>
+        <td>@AutoApprovalCharts.Money(r.AF)</td>
+        <td>@r.PaidOut.ToString("N0")</td>
+        <td class="@(r.AF12m == 0 ? "aa-z" : "")">@(r.AF12m == 0 ? "–" : AutoApprovalCharts.Money(r.AF12m))</td>
+        <td class="@Zero(r.SeriousArrears)">@r.SeriousArrears</td>
+        <td class="@Zero(r.Terminated)">@r.Terminated</td>
+        <td class="@Zero(r.BadDebt)">@r.BadDebt</td>
+        <td class="@(r.WrittenOff == 0 ? "aa-z" : "")">@(r.WrittenOff == 0 ? "–" : AutoApprovalCharts.Money(r.WrittenOff))</td>
+        <td class="aa-rate">@AutoApprovalCharts.Pct(r.Adverse, r.PaidOut)</td>
+        <td class="aa-l"><span class="aa-stk">
+            <i style="width:@StackWidth(r.SeriousArrears, r.PaidOut);background:var(--kpim-aa-arrears, #898b8e)"></i><i style="width:@StackWidth(r.Terminated, r.PaidOut);background:var(--kpim-aa-term, #ee7624)"></i><i style="width:@StackWidth(r.BadDebt, r.PaidOut);background:var(--kpim-aa-baddebt, #c20430)"></i>
+        </span></td>
+    </text>;
+
+    public static string StackWidth(int n, int paid) =>
+        (paid > 0 ? Math.Min(100m, 100m * n / paid / 0.08m) : 0m).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Load();
+    }
+
+    private async Task SetDivision(string v) { _division = v; await Load(); }
+    private async Task SetMonths(string v) { _months = v; await Load(); }
+    private Task SetMeasure(string v) { _measure = v; StateHasChanged(); return Task.CompletedTask; }
+
+    private async Task Load()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            var (division, months) = (_division, _months);
+            var entry = await KpiCache.GetOrLoad(KpiCache.Key("AutoApproval", division, months), () => LoadPayload(division, months));
+            _data = entry.Data;
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    // the loader takes its choices as arguments, never the page's current ones (Gotchas: "A page's cache loader ...")
+    private async Task<(AutoApprovalData, DateTime)> LoadPayload(string division, string months)
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        int? div = division == "all" ? null : int.Parse(division);
+        var m = months;
+        var svc = new AutoApprovalService(cms.Db);
+        return (new AutoApprovalData
+        {
+            Funnel = svc.GetFunnel(div, m),
+            Outcome = svc.GetOutcome(div, m),
+            NotEligible = svc.GetReasons("NotEligibleReasons", div, m),
+            EligibleNotAuto = svc.GetReasons("EligibleReasons", div, m),
+            ReasonDetails = svc.GetReasonDetails(div, m),
+            Performance = svc.GetPerformance(div)
+        }, asAt);
+    }
+
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (division, months) = (_division, _months);
+            var (entry, changed) = await KpiCache.RefreshAsync(KpiCache.Key("AutoApproval", division, months), () => LoadPayload(division, months));
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed && division == _division && months == _months)
+            {
+                _data = entry.Data;
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+}

@@ -50,6 +50,31 @@ public sealed class ExposureService(KpiDb db)
         db.Report<ExposureFundOptionResult>("Rpt.spExposureFilters", new { List = "Lenders" });
 }
 
+/// <summary>
+/// Auto Approval (26 Nov 2026, for Stuart): KPI-site only. A null division = every division; period = this | last | 3 | 6 | 12 (this month, last
+/// calendar month, or that many months to the report date) (Performance and Rules ignore it: since auto approval began).
+/// </summary>
+public sealed class AutoApprovalService(KpiDb db)
+{
+    public List<AutoApprovalFunnelRow> GetFunnel(int? divisionId, string period) =>
+        db.Report<AutoApprovalFunnelRow>("Rpt.spAutoApproval", new { Part = "Funnel", DivisionId = divisionId, Period = period });
+
+    public AutoApprovalOutcome GetOutcome(int? divisionId, string period) =>
+        db.Report<AutoApprovalOutcome>("Rpt.spAutoApproval", new { Part = "Outcome", DivisionId = divisionId, Period = period })
+          .FirstOrDefault() ?? new AutoApprovalOutcome();
+
+    /// <summary>"NotEligibleReasons" or "EligibleReasons": applications per reason, from the decisions recorded since 16 Oct 2026.</summary>
+    public List<AutoApprovalReasonRow> GetReasons(string part, int? divisionId, string period) =>
+        db.Report<AutoApprovalReasonRow>("Rpt.spAutoApproval", new { Part = part, DivisionId = divisionId, Period = period });
+
+    public List<AutoApprovalReasonDetailRow> GetReasonDetails(int? divisionId, string period) =>
+        db.Report<AutoApprovalReasonDetailRow>("Rpt.spAutoApproval", new { Part = "ReasonDetails", DivisionId = divisionId, Period = period });
+
+    public List<AutoApprovalPerformanceRow> GetPerformance(int? divisionId) =>
+        db.Report<AutoApprovalPerformanceRow>("Rpt.spAutoApproval", new { Part = "Performance", DivisionId = divisionId });
+
+}
+
 /// <summary>Fund Capacity (26 Nov 2026): KPI-site only (CMS's capacity screen is on the desktop, not CMS.Web).</summary>
 public sealed class FundCapacityService(KpiDb db)
 {

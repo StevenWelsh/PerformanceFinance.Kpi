@@ -10,8 +10,9 @@ public enum KpiMenuView { Favourites, All }
 
 /// <summary>
 /// The signed-in person's favourite KPI reports (by slug, in the order they were added) and the menu view they last
-/// picked. The reports menu opens on that view, or - when they have never picked one - on Favourites when there are
-/// any and All when there are none (KpiMobileMenu); the phone bar's star and My Account add or remove them.
+/// picked. Each sign-in's menu opens on Favourites when there are any and All when there are none (Steve, 26 Nov 2026 -
+/// it used to open on the view last picked, kept with the login); a view picked holds for the rest of that session
+/// (SessionView: this circuit). The phone bar's star and My Account add or remove them.
 /// Kept with the LOGIN (Auth.Users), so every device shows the same list - unlike CMS.Web's copy, which keeps them in
 /// the phone's browser. Scoped: one per circuit, loaded once.
 /// </summary>
@@ -28,6 +29,9 @@ public sealed class KpiFavourites(AuthenticationStateProvider auth, IDbContextFa
 
     /// <summary>The view the user last picked in the menu; null when they never have.</summary>
     public KpiMenuView? MenuView { get; private set; }
+
+    /// <summary>The view picked in THIS session (circuit); null until one is picked. The menus open on it.</summary>
+    public KpiMenuView? SessionView { get; private set; }
 
     public bool Contains(string slug) => _slugs.Contains(slug);
 
@@ -65,6 +69,7 @@ public sealed class KpiFavourites(AuthenticationStateProvider auth, IDbContextFa
     public async Task SetMenuViewAsync(KpiMenuView view)
     {
         MenuView = view;
+        SessionView = view;
         var value = view.ToString().ToLowerInvariant();
         await SaveAsync(u => u.SetProperty(x => x.FavouritesMenuView, value));
     }

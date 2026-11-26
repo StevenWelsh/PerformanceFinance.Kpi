@@ -43,7 +43,17 @@ public static class KpiCopier
         ("KpiCopy.SupplierYear", "Stage.SupplierYear"),
         ("KpiCopy.BookPosition", "Stage.BookPosition"),
         ("KpiCopy.FundingLine",  "Stage.FundingLine"),
+        ("KpiCopy.AutoApproval",     "Stage.AutoApproval"),
+        ("KpiCopy.AutoApprovalRule", "Stage.AutoApprovalRule"),
+        ("KpiCopy.AutoApprovalReason", "Stage.AutoApprovalReason"),
     ];
+
+    /// <summary>
+    /// Copied when the office has them: Auto Approval (26 Nov 2026) needs CMS views that reach CMS_Live in a CMS release,
+    /// which may come after this site's. Until then its tables publish empty.
+    /// </summary>
+    public static readonly IReadOnlySet<string> OptionalTables =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "KpiCopy.AutoApproval", "KpiCopy.AutoApprovalRule", "KpiCopy.AutoApprovalReason" };
 
     /// <summary>Added when Bad Debt and Exposure were prepared since the last copy (the nightly job).</summary>
     public static readonly IReadOnlyList<(string From, string To)> SnapshotTables =
@@ -163,6 +173,19 @@ public static class KpiCopier
                 {
                     clear.Parameters.Add("@Table", SqlDbType.NVarChar, 128).Value = to["Stage.".Length..];
                     await clear.ExecuteNonQueryAsync(ct);
+                }
+
+                // a table the office may not have YET (its CMS views come in a CMS release that can follow this site's):
+                // left empty, so its report shows nothing, instead of failing the whole copy
+                if (OptionalTables.Contains(from))
+                {
+                    await using var exists = new SqlCommand("SELECT OBJECT_ID(@t)", source) { CommandTimeout = StepTimeoutSeconds };
+                    exists.Parameters.Add("@t", SqlDbType.NVarChar, 256).Value = from;
+                    if (await exists.ExecuteScalarAsync(ct) is null or DBNull)
+                    {
+                        progress?.Invoke($"  {to,-20} not in the office's copy yet - left empty");
+                        continue;
+                    }
                 }
 
                 // the Stage table's own columns: a column the office's copy has and Stage hasn't YET (a CMS view widened

@@ -1,0 +1,545 @@
+using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Kpi.Data.Migrations
+{
+    /// <summary>
+    /// Auto Approval (26 Nov 2026, Steve): what lay behind each reason - the profession not on the rule, the facility not
+    /// covered, an amount or age band, a search's score - shown when a reason's bar or slice is hovered or tapped.
+    /// KpiExport.vAutoApprovalReason gains Detail; this carries it (Stage, Fact.AutoApprovalReason, Stage.spPublish) and
+    /// gives Rpt.spAutoApproval the 'ReasonDetails' list.
+    /// </summary>
+    public partial class AutoApprovalReasonDetail : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.Sql("ALTER TABLE Stage.AutoApprovalReason ADD Detail nvarchar(max) NULL; ALTER TABLE Fact.AutoApprovalReason ADD Detail nvarchar(200) NULL;");
+            migrationBuilder.Sql("""
+CREATE OR ALTER PROCEDURE Stage.spPublish
+(
+    @Scope              varchar(10),
+    @ReportDate         date,
+    @StartedUtc         datetime2(0) = NULL,   -- when the COPY began (the site), so Started / Took cover the whole copy
+    @SourceRefreshedUtc datetime2(0) = NULL,   -- when the office made the data this copy carries (KpiCopy.Refresh)
+    @SourceSnapshotsUtc datetime2(0) = NULL    -- a Nightly copy: when the office prepared Bad Debt & Exposure
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    -- a run left open for 15 minutes was cut off part-way: the publish itself rolled back, and the site couldn't say why
+    -- (it closes its own run when it gives up - Stage.spRecordFailure @CloseOpenRun - so this is a restart, or a
+    -- connection lost for good): close it as failed, so Data sync doesn't show it "running" for ever
+    UPDATE Ref.LoadRun
+    SET    Succeeded = 0, Error = 'Stopped part-way: the KPI site restarted, or lost its connection to its own database (CMS_KPI), while publishing. Nothing was published.'
+    WHERE  Succeeded IS NULL AND FinishedUtc IS NULL AND StartedUtc < DATEADD(MINUTE, -15, SYSUTCDATETIME());
+
+    DECLARE @RunId int;
+    INSERT Ref.LoadRun (Scope, StartedUtc, SourceRefreshedUtc, SourceSnapshotsUtc)
+    VALUES (@Scope, ISNULL(@StartedUtc, SYSUTCDATETIME()), @SourceRefreshedUtc, @SourceSnapshotsUtc);
+    SET @RunId = SCOPE_IDENTITY();
+
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Stage.Lead)
+            THROW 50002, 'Stage.Lead is empty: not publishing (the site keeps the last good figures).', 1;
+
+        BEGIN TRANSACTION;
+        DELETE Dim.SalesOffice;
+        INSERT Dim.SalesOffice (SalesOfficeId, OfficeName, OrderInt, IsActive)
+        SELECT SalesOfficeId, OfficeName, OrderInt, IsActive FROM Stage.SalesOffice;
+        DELETE Dim.Salesperson;
+        INSERT Dim.Salesperson (SalesId, Salesperson, SalesCode, DivisionId, SalesOfficeId, IsActive)
+        SELECT SalesId, Salesperson, SalesCode, DivisionId, SalesOfficeId, IsActive FROM Stage.Salesperson;
+        DELETE Dim.Period;
+        INSERT Dim.Period (PeriodId, PeriodNumber, PeriodName, PeriodStartDate, PeriodEndDate, QuarterId, QuarterNumber, QuarterName, YearId, YearNumber, YearName)
+        SELECT PeriodId, PeriodNumber, PeriodName, PeriodStartDate, PeriodEndDate, QuarterId, QuarterNumber, QuarterName, YearId, YearNumber, YearName FROM Stage.Period;
+        DELETE Dim.WorkingDay;
+        INSERT Dim.WorkingDay (WorkingDay)
+        SELECT WorkingDay FROM Stage.WorkingDay;
+        DELETE Dim.SalesTarget;
+        INSERT Dim.SalesTarget (SalesId, Year, AFTarget, TFITarget)
+        SELECT SalesId, Year, AFTarget, TFITarget FROM Stage.SalesTarget;
+        DELETE Dim.FundLender;
+        INSERT Dim.FundLender (FundLenderId, FundLenderName, CapitalLimit, IsActiveBlockLender)
+        SELECT FundLenderId, FundLenderName, CapitalLimit, ISNULL(IsActiveBlockLender, 0) FROM Stage.FundLender;
+        DELETE Dim.Fund;
+        INSERT Dim.Fund (FundId, FundName, FundLenderId, FundType, ExcludeFromCapacity, ExcludeFromCapacityPercent, LenderRef,
+                         StartDate, EndDate, BlockAmount, CapitalOS, FacilityLimit, CurrentRate, ServiceFeeRate)
+        SELECT FundId, FundName, FundLenderId, FundType, ISNULL(ExcludeFromCapacity, 0), ExcludeFromCapacityPercent, LenderRef,
+               StartDate, EndDate, BlockAmount, CapitalOS, FacilityLimit, CurrentRate, ServiceFeeRate FROM Stage.Fund;
+        DELETE Fact.Lead;
+        INSERT Fact.Lead (LeadId, dtPayReceived, IsUnwound, AF, GFI, TFI, SalesII, DivisionId, Division, SalesId, Salesperson, SalesCode, SalesOfficeId, LenderName, Profession, Facility, Arrangement, IsOB, IsOptical, IsNewCustomer, IRR, IRRInclFees, Term, MinIRR, PeriodId, PostcodeArea)
+        SELECT LeadId, dtPayReceived, IsUnwound, AF, GFI, TFI, SalesII, DivisionId, Division, SalesId, Salesperson, SalesCode, SalesOfficeId, LenderName, Profession, Facility, Arrangement, IsOB, IsOptical, IsNewCustomer, IRR, IRRInclFees, Term, MinIRR, PeriodId, PostcodeArea FROM Stage.Lead;
+        DELETE Fact.LeadPipeline;
+        INSERT Fact.LeadPipeline (LeadId, SalesId, dtLead, LeadStatus, AF, GFI, dtAppAccept, dtActivation, IntroducerId, IntroducerManagedByHQ, IntroducerAccountManagerId)
+        SELECT LeadId, SalesId, dtLead, LeadStatus, AF, GFI, dtAppAccept, dtActivation, IntroducerId, IntroducerManagedByHQ, IntroducerAccountManagerId FROM Stage.LeadPipeline;
+        DELETE Fact.SupplierYear;
+        INSERT Fact.SupplierYear (Year, IntroducerId, Supplier, Profession, AccountManagerId, ManagedByHQ, AmountFinanced)
+        SELECT Year, IntroducerId, Supplier, Profession, AccountManagerId, ManagedByHQ, AmountFinanced FROM Stage.SupplierYear;
+        DELETE Fact.BookPosition;
+        INSERT Fact.BookPosition (LeadId, IsOB, RemainingCapital, CustomerKey, PostcodeArea)
+        SELECT LeadId, IsOB, RemainingCapital, CustomerKey, PostcodeArea FROM Stage.BookPosition;
+        DELETE Fact.FundingLine;
+        INSERT Fact.FundingLine (Source, SourceId, LeadId, EventDate, DivisionId, Amount, Term, Rate, IsBulkMove)
+        SELECT Source, SourceId, LeadId, EventDate, DivisionId, Amount, Term, Rate, IsBulkMove FROM Stage.FundingLine;
+
+        DELETE Dim.AutoApprovalRule;
+        INSERT Dim.AutoApprovalRule (RuleId, RuleSetId, RuleSetStatus, RuleSetCreatedOn, RuleSetActivatedOn, RuleName, CreditLimitTo, FacilityLimitTo, AmountTo, TermTo)
+        SELECT RuleId, RuleSetId, RuleSetStatus, RuleSetCreatedOn, RuleSetActivatedOn, LEFT(RuleName, 200), CreditLimitTo, FacilityLimitTo, AmountTo, TermTo FROM Stage.AutoApprovalRule;
+        DELETE Fact.AutoApproval;
+        INSERT Fact.AutoApproval (ApplicationId, LeadId, DivisionId, Division, DecisionOn, IsEligible, ApprovalRuleId, ApprovalRuleSetId, Status, AF, dtPayReceived, IsUnwound, HasSeriousArrears, IsTerminated, IsBadDebt, AmountWrittenOff)
+        SELECT ApplicationId, LeadId, DivisionId, Division, DecisionOn, ISNULL(IsEligible, 0), ApprovalRuleId, ApprovalRuleSetId, Status, ISNULL(AF, 0), dtPayReceived, ISNULL(IsUnwound, 0),
+               ISNULL(HasSeriousArrears, 0), ISNULL(IsTerminated, 0), ISNULL(IsBadDebt, 0), ISNULL(AmountWrittenOff, 0) FROM Stage.AutoApproval;
+        DELETE Fact.AutoApprovalReason;
+        INSERT Fact.AutoApprovalReason (ApplicationId, DecisionOn, DecisionType, IsEligible, ComputedEligible, RuleId, Reason, SortOrder, Detail)
+        SELECT ApplicationId, DecisionOn, DecisionType, IsEligible, ComputedEligible, RuleId, LEFT(Reason, 100), SortOrder, LEFT(Detail, 200) FROM Stage.AutoApprovalReason;
+        IF @Scope = 'Nightly'
+        BEGIN
+            DELETE Fact.BadDebtYear;
+            INSERT Fact.BadDebtYear (IsAutoApproved, BadDebtYear, Id, YearStartDate, YearEndDate, AmountFinanced, RemainingCapital, ActiveLeadCount, WrittenOffAmount, WrittenOffLeadCount, RecoveredAmount, BadDebtCosts, TerminatedLeadCount, ArrearsLeadCount, ArrearsCompanyCount)
+            SELECT IsAutoApproved, BadDebtYear, Id, YearStartDate, YearEndDate, AmountFinanced, RemainingCapital, ActiveLeadCount, WrittenOffAmount, WrittenOffLeadCount, RecoveredAmount, BadDebtCosts, TerminatedLeadCount, ArrearsLeadCount, ArrearsCompanyCount FROM Stage.BadDebtYear;
+            DELETE Fact.Exposure;
+            INSERT Fact.Exposure (GroupingKey, FundLenderId, FundId, RowNumber, Id, Name, LeadCount, RemainingCapital, TotalRemainingCapital, PercentRemainingCapital, CustomerType)
+            SELECT GroupingKey, FundLenderId, FundId, RowNumber, Id, Name, LeadCount, RemainingCapital, TotalRemainingCapital, PercentRemainingCapital, CustomerType FROM Stage.Exposure;
+        END
+
+        UPDATE Ref.Setting
+        SET    ReportDate          = @ReportDate,
+               LastFrequentLoadUtc = SYSUTCDATETIME(),
+               LastNightlyLoadUtc  = CASE WHEN @Scope = 'Nightly' THEN SYSUTCDATETIME() ELSE LastNightlyLoadUtc END
+        WHERE  SettingId = 1;
+        COMMIT TRANSACTION;
+
+        UPDATE Ref.LoadRun SET FinishedUtc = SYSUTCDATETIME(), Succeeded = 1 WHERE LoadRunId = @RunId;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        UPDATE Ref.LoadRun
+        SET    FinishedUtc = SYSUTCDATETIME(), Succeeded = 0, Error = LEFT(ERROR_MESSAGE(), 2000)
+        WHERE  LoadRunId = @RunId;
+        THROW;
+    END CATCH
+END
+""");
+            migrationBuilder.Sql("""
+CREATE OR ALTER PROCEDURE Rpt.spAutoApproval
+(
+    @Part       varchar(20),        -- Funnel | Outcome | NotEligibleReasons | EligibleReasons | ReasonDetails | ByRule | Performance | Rules
+    @DivisionId int = NULL,         -- NULL = every division
+    @Period     varchar(5) = '3'    -- this | last | 3 | 6 | 12 (not Performance or Rules: since auto approval began)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @ReportDate date = (SELECT ReportDate FROM Ref.Setting WHERE SettingId = 1);
+    -- this = this month to date; last = last calendar month; 3 / 6 / 12 = that many months to the report date (Steve, 26 Nov 2026).
+    -- Decided AFTER @From and on or before @To.
+    DECLARE @From date, @To date = @ReportDate;
+    IF @Period = 'this'      SET @From = EOMONTH(@ReportDate, -1);
+    ELSE IF @Period = 'last' SELECT @From = EOMONTH(@ReportDate, -2), @To = EOMONTH(@ReportDate, -1);
+    ELSE                     SET @From = DATEADD(MONTH, -CAST(@Period AS int), @ReportDate);
+
+    -- the rule names in today's active set: any other name is an earlier rule (CMS copies rules with no link back, so a
+    -- rule's versions are grouped by name)
+    SELECT DISTINCT RuleName INTO #Current FROM Dim.AutoApprovalRule WHERE RuleSetStatus = 1;
+
+    IF @Part = 'Funnel'
+    BEGIN
+        -- Application to paid out: decided -> eligible -> auto approved -> paid out (auto approved, paid, not unwound)
+        SELECT A.DivisionId, MAX(A.Division) AS Division,
+               COUNT(*)                                                                                 AS Decided,
+               SUM(CASE WHEN A.IsEligible = 1 THEN 1 ELSE 0 END)                                        AS Eligible,
+               SUM(CASE WHEN A.ApprovalRuleId IS NOT NULL THEN 1 ELSE 0 END)                            AS AutoApproved,
+               SUM(CASE WHEN A.ApprovalRuleId IS NOT NULL AND A.dtPayReceived IS NOT NULL AND A.IsUnwound = 0
+                        THEN 1 ELSE 0 END)                                                              AS PaidOut,
+               CAST(SUM(A.AF) AS decimal(18,2))                                                         AS DecidedAF,
+               CAST(SUM(CASE WHEN A.IsEligible = 1 THEN A.AF ELSE 0 END) AS decimal(18,2))              AS EligibleAF,
+               CAST(SUM(CASE WHEN A.ApprovalRuleId IS NOT NULL THEN A.AF ELSE 0 END) AS decimal(18,2))  AS AutoApprovedAF,
+               CAST(SUM(CASE WHEN A.ApprovalRuleId IS NOT NULL AND A.dtPayReceived IS NOT NULL AND A.IsUnwound = 0
+                             THEN A.AF ELSE 0 END) AS decimal(18,2))                                    AS PaidOutAF
+        FROM   Fact.AutoApproval A
+        WHERE  A.DecisionOn > @From AND A.DecisionOn <= @To
+          AND  (@DivisionId IS NULL OR A.DivisionId = @DivisionId)
+        GROUP BY A.DivisionId
+        ORDER BY A.DivisionId;
+        RETURN;
+    END
+
+    IF @Part = 'Outcome'
+    BEGIN
+        -- Eligible but not auto approved: what a person decided instead (the application's status)
+        SELECT ISNULL(SUM(CASE WHEN A.Status = 'Accepted' THEN 1 ELSE 0 END), 0)                  AS ApprovedByHand,
+               ISNULL(SUM(CASE WHEN A.Status = 'Declined' THEN 1 ELSE 0 END), 0)                  AS DeclinedByHand,
+               ISNULL(SUM(CASE WHEN A.Status NOT IN ('Accepted', 'Declined') THEN 1 ELSE 0 END), 0) AS Other
+        FROM   Fact.AutoApproval A
+        WHERE  A.DecisionOn > @From AND A.DecisionOn <= @To
+          AND  (@DivisionId IS NULL OR A.DivisionId = @DivisionId)
+          AND  A.IsEligible = 1 AND A.ApprovalRuleId IS NULL;
+        RETURN;
+    END
+
+    IF @Part = 'ByRule'
+    BEGIN
+        -- Auto approved in the period, by the name of the rule that approved each deal
+        SELECT ISNULL(R.RuleName, '(rule not found)')                    AS RuleName,
+               CAST(CASE WHEN C.RuleName IS NULL THEN 0 ELSE 1 END AS bit) AS IsCurrent,
+               COUNT(*)                                                  AS Deals,
+               CAST(SUM(A.AF) AS decimal(18,2))                          AS AF
+        FROM   Fact.AutoApproval A
+               LEFT JOIN Dim.AutoApprovalRule R ON R.RuleId = A.ApprovalRuleId
+               LEFT JOIN #Current C             ON C.RuleName = R.RuleName
+        WHERE  A.DecisionOn > @From AND A.DecisionOn <= @To
+          AND  (@DivisionId IS NULL OR A.DivisionId = @DivisionId)
+          AND  A.ApprovalRuleId IS NOT NULL
+        GROUP BY R.RuleName, C.RuleName
+        ORDER BY COUNT(*) DESC;
+        RETURN;
+    END
+
+    IF @Part = 'Performance'
+    BEGIN
+        -- Every deal paid out (not unwound) since auto approval began, counted ONCE at its worst: bad debt, else
+        -- terminated, else serious arrears (CMS's own 60+ day flag). Auto approved: by rule name. Control: every other
+        -- deal decided in the same time (not auto approved). The period filter does not apply.
+        DECLARE @Began date = (SELECT MIN(DecisionOn) FROM Fact.AutoApproval WHERE ApprovalRuleId IS NOT NULL);
+
+        SELECT X.Kind, X.RuleName, X.IsCurrent,
+               COUNT(*)                                                                                       AS PaidOut,
+               SUM(CASE WHEN A.IsBadDebt = 0 AND A.IsTerminated = 0 AND A.HasSeriousArrears = 1 THEN 1 ELSE 0 END) AS SeriousArrears,
+               SUM(CASE WHEN A.IsBadDebt = 0 AND A.IsTerminated = 1 THEN 1 ELSE 0 END)                       AS Terminated,
+               SUM(CASE WHEN A.IsBadDebt = 1 THEN 1 ELSE 0 END)                                              AS BadDebt,
+               CAST(SUM(A.AmountWrittenOff) AS decimal(18,2))                                                AS WrittenOff
+        FROM   Fact.AutoApproval A
+               LEFT JOIN Dim.AutoApprovalRule R ON R.RuleId = A.ApprovalRuleId
+               LEFT JOIN #Current C             ON C.RuleName = R.RuleName
+               CROSS APPLY (SELECT CASE WHEN A.ApprovalRuleId IS NULL THEN 'Control' ELSE 'Rule' END AS Kind,
+                                   CASE WHEN A.ApprovalRuleId IS NULL THEN NULL
+                                        ELSE ISNULL(R.RuleName, '(rule not found)') END AS RuleName,
+                                   CAST(CASE WHEN A.ApprovalRuleId IS NULL OR C.RuleName IS NOT NULL THEN 1 ELSE 0 END AS bit) AS IsCurrent) X
+        WHERE  A.dtPayReceived IS NOT NULL AND A.IsUnwound = 0
+          AND  A.DecisionOn >= @Began
+          AND  (@DivisionId IS NULL OR A.DivisionId = @DivisionId)
+        GROUP BY X.Kind, X.RuleName, X.IsCurrent
+        ORDER BY X.Kind DESC, COUNT(*) DESC;
+        RETURN;
+    END
+
+    IF @Part IN ('NotEligibleReasons', 'EligibleReasons')
+    BEGIN
+        -- Why, from the decisions CMS records (since 16 Oct 2026; KpiExport.vAutoApprovalReason): not eligible = the
+        -- checks failed on the closest rule; eligible but not auto approved = the searches. Each application counted ONCE,
+        -- under its FIRST reason - the first check that failed, in the order CMS runs them (SortOrder; Steve, 26 Nov 2026).
+        DECLARE @Eligible bit = CASE WHEN @Part = 'EligibleReasons' THEN 1 ELSE 0 END;
+        WITH F AS
+        (
+            SELECT R.ApplicationId, R.Reason, R.SortOrder,
+                   ROW_NUMBER() OVER (PARTITION BY R.ApplicationId ORDER BY R.SortOrder, R.Reason) AS Rn
+            FROM   Fact.AutoApprovalReason R
+                   INNER JOIN Fact.AutoApproval A ON A.ApplicationId = R.ApplicationId
+            WHERE  A.DecisionOn > @From AND A.DecisionOn <= @To
+              AND  (@DivisionId IS NULL OR A.DivisionId = @DivisionId)
+              AND  A.IsEligible = @Eligible AND A.ApprovalRuleId IS NULL AND R.ComputedEligible = @Eligible
+        )
+        SELECT F.Reason, MIN(F.SortOrder) AS SortOrder, COUNT(*) AS Applications,
+               (SELECT COUNT(*) FROM F F2 WHERE F2.Rn = 1) AS Total
+        FROM   F
+        WHERE  F.Rn = 1
+        GROUP BY F.Reason
+        ORDER BY COUNT(*) DESC, MIN(F.SortOrder);
+        RETURN;
+    END
+
+    IF @Part = 'ReasonDetails'
+    BEGIN
+        -- What lay behind each reason (the professions, the facilities, an amount band ...), for its hover: the same
+        -- applications as the two reason lists (each once, under its first reason), both lists at once (Eligible 0 / 1).
+        WITH F AS
+        (
+            SELECT A.IsEligible AS Eligible, R.Reason, R.Detail,
+                   ROW_NUMBER() OVER (PARTITION BY R.ApplicationId ORDER BY R.SortOrder, R.Reason) AS Rn
+            FROM   Fact.AutoApprovalReason R
+                   INNER JOIN Fact.AutoApproval A ON A.ApplicationId = R.ApplicationId
+            WHERE  A.DecisionOn > @From AND A.DecisionOn <= @To
+              AND  (@DivisionId IS NULL OR A.DivisionId = @DivisionId)
+              AND  A.ApprovalRuleId IS NULL AND R.ComputedEligible = A.IsEligible
+        )
+        SELECT F.Eligible, F.Reason, F.Detail, COUNT(*) AS Applications
+        FROM   F
+        WHERE  F.Rn = 1 AND F.Detail IS NOT NULL
+        GROUP BY F.Eligible, F.Reason, F.Detail
+        ORDER BY F.Eligible, F.Reason, COUNT(*) DESC, F.Detail;
+        RETURN;
+    END
+
+    IF @Part = 'Rules'
+    BEGIN
+        -- every version of every rule, for each rule's history (the info button)
+        SELECT R.RuleName, R.RuleId, R.RuleSetId, R.RuleSetStatus, R.RuleSetCreatedOn, R.RuleSetActivatedOn,
+               R.CreditLimitTo, R.FacilityLimitTo, R.AmountTo, R.TermTo
+        FROM   Dim.AutoApprovalRule R
+        ORDER BY R.RuleName, R.RuleSetId;
+        RETURN;
+    END
+END
+""");
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.Sql("""
+CREATE OR ALTER PROCEDURE Rpt.spAutoApproval
+(
+    @Part       varchar(20),        -- Funnel | Outcome | NotEligibleReasons | EligibleReasons | ByRule | Performance | Rules
+    @DivisionId int = NULL,         -- NULL = every division
+    @Period     varchar(5) = '3'    -- this | last | 3 | 6 | 12 (not Performance or Rules: since auto approval began)
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @ReportDate date = (SELECT ReportDate FROM Ref.Setting WHERE SettingId = 1);
+    -- this = this month to date; last = last calendar month; 3 / 6 / 12 = that many months to the report date (Steve, 26 Nov 2026).
+    -- Decided AFTER @From and on or before @To.
+    DECLARE @From date, @To date = @ReportDate;
+    IF @Period = 'this'      SET @From = EOMONTH(@ReportDate, -1);
+    ELSE IF @Period = 'last' SELECT @From = EOMONTH(@ReportDate, -2), @To = EOMONTH(@ReportDate, -1);
+    ELSE                     SET @From = DATEADD(MONTH, -CAST(@Period AS int), @ReportDate);
+
+    -- the rule names in today's active set: any other name is an earlier rule (CMS copies rules with no link back, so a
+    -- rule's versions are grouped by name)
+    SELECT DISTINCT RuleName INTO #Current FROM Dim.AutoApprovalRule WHERE RuleSetStatus = 1;
+
+    IF @Part = 'Funnel'
+    BEGIN
+        -- Application to paid out: decided -> eligible -> auto approved -> paid out (auto approved, paid, not unwound)
+        SELECT A.DivisionId, MAX(A.Division) AS Division,
+               COUNT(*)                                                                                 AS Decided,
+               SUM(CASE WHEN A.IsEligible = 1 THEN 1 ELSE 0 END)                                        AS Eligible,
+               SUM(CASE WHEN A.ApprovalRuleId IS NOT NULL THEN 1 ELSE 0 END)                            AS AutoApproved,
+               SUM(CASE WHEN A.ApprovalRuleId IS NOT NULL AND A.dtPayReceived IS NOT NULL AND A.IsUnwound = 0
+                        THEN 1 ELSE 0 END)                                                              AS PaidOut,
+               CAST(SUM(A.AF) AS decimal(18,2))                                                         AS DecidedAF,
+               CAST(SUM(CASE WHEN A.IsEligible = 1 THEN A.AF ELSE 0 END) AS decimal(18,2))              AS EligibleAF,
+               CAST(SUM(CASE WHEN A.ApprovalRuleId IS NOT NULL THEN A.AF ELSE 0 END) AS decimal(18,2))  AS AutoApprovedAF,
+               CAST(SUM(CASE WHEN A.ApprovalRuleId IS NOT NULL AND A.dtPayReceived IS NOT NULL AND A.IsUnwound = 0
+                             THEN A.AF ELSE 0 END) AS decimal(18,2))                                    AS PaidOutAF
+        FROM   Fact.AutoApproval A
+        WHERE  A.DecisionOn > @From AND A.DecisionOn <= @To
+          AND  (@DivisionId IS NULL OR A.DivisionId = @DivisionId)
+        GROUP BY A.DivisionId
+        ORDER BY A.DivisionId;
+        RETURN;
+    END
+
+    IF @Part = 'Outcome'
+    BEGIN
+        -- Eligible but not auto approved: what a person decided instead (the application's status)
+        SELECT ISNULL(SUM(CASE WHEN A.Status = 'Accepted' THEN 1 ELSE 0 END), 0)                  AS ApprovedByHand,
+               ISNULL(SUM(CASE WHEN A.Status = 'Declined' THEN 1 ELSE 0 END), 0)                  AS DeclinedByHand,
+               ISNULL(SUM(CASE WHEN A.Status NOT IN ('Accepted', 'Declined') THEN 1 ELSE 0 END), 0) AS Other
+        FROM   Fact.AutoApproval A
+        WHERE  A.DecisionOn > @From AND A.DecisionOn <= @To
+          AND  (@DivisionId IS NULL OR A.DivisionId = @DivisionId)
+          AND  A.IsEligible = 1 AND A.ApprovalRuleId IS NULL;
+        RETURN;
+    END
+
+    IF @Part = 'ByRule'
+    BEGIN
+        -- Auto approved in the period, by the name of the rule that approved each deal
+        SELECT ISNULL(R.RuleName, '(rule not found)')                    AS RuleName,
+               CAST(CASE WHEN C.RuleName IS NULL THEN 0 ELSE 1 END AS bit) AS IsCurrent,
+               COUNT(*)                                                  AS Deals,
+               CAST(SUM(A.AF) AS decimal(18,2))                          AS AF
+        FROM   Fact.AutoApproval A
+               LEFT JOIN Dim.AutoApprovalRule R ON R.RuleId = A.ApprovalRuleId
+               LEFT JOIN #Current C             ON C.RuleName = R.RuleName
+        WHERE  A.DecisionOn > @From AND A.DecisionOn <= @To
+          AND  (@DivisionId IS NULL OR A.DivisionId = @DivisionId)
+          AND  A.ApprovalRuleId IS NOT NULL
+        GROUP BY R.RuleName, C.RuleName
+        ORDER BY COUNT(*) DESC;
+        RETURN;
+    END
+
+    IF @Part = 'Performance'
+    BEGIN
+        -- Every deal paid out (not unwound) since auto approval began, counted ONCE at its worst: bad debt, else
+        -- terminated, else serious arrears (CMS's own 60+ day flag). Auto approved: by rule name. Control: every other
+        -- deal decided in the same time (not auto approved). The period filter does not apply.
+        DECLARE @Began date = (SELECT MIN(DecisionOn) FROM Fact.AutoApproval WHERE ApprovalRuleId IS NOT NULL);
+
+        SELECT X.Kind, X.RuleName, X.IsCurrent,
+               COUNT(*)                                                                                       AS PaidOut,
+               SUM(CASE WHEN A.IsBadDebt = 0 AND A.IsTerminated = 0 AND A.HasSeriousArrears = 1 THEN 1 ELSE 0 END) AS SeriousArrears,
+               SUM(CASE WHEN A.IsBadDebt = 0 AND A.IsTerminated = 1 THEN 1 ELSE 0 END)                       AS Terminated,
+               SUM(CASE WHEN A.IsBadDebt = 1 THEN 1 ELSE 0 END)                                              AS BadDebt,
+               CAST(SUM(A.AmountWrittenOff) AS decimal(18,2))                                                AS WrittenOff
+        FROM   Fact.AutoApproval A
+               LEFT JOIN Dim.AutoApprovalRule R ON R.RuleId = A.ApprovalRuleId
+               LEFT JOIN #Current C             ON C.RuleName = R.RuleName
+               CROSS APPLY (SELECT CASE WHEN A.ApprovalRuleId IS NULL THEN 'Control' ELSE 'Rule' END AS Kind,
+                                   CASE WHEN A.ApprovalRuleId IS NULL THEN NULL
+                                        ELSE ISNULL(R.RuleName, '(rule not found)') END AS RuleName,
+                                   CAST(CASE WHEN A.ApprovalRuleId IS NULL OR C.RuleName IS NOT NULL THEN 1 ELSE 0 END AS bit) AS IsCurrent) X
+        WHERE  A.dtPayReceived IS NOT NULL AND A.IsUnwound = 0
+          AND  A.DecisionOn >= @Began
+          AND  (@DivisionId IS NULL OR A.DivisionId = @DivisionId)
+        GROUP BY X.Kind, X.RuleName, X.IsCurrent
+        ORDER BY X.Kind DESC, COUNT(*) DESC;
+        RETURN;
+    END
+
+    IF @Part IN ('NotEligibleReasons', 'EligibleReasons')
+    BEGIN
+        -- Why, from the decisions CMS records (since 16 Oct 2026; KpiExport.vAutoApprovalReason): not eligible = the
+        -- checks failed on the closest rule; eligible but not auto approved = the searches. Each application counted ONCE,
+        -- under its FIRST reason - the first check that failed, in the order CMS runs them (SortOrder; Steve, 26 Nov 2026).
+        DECLARE @Eligible bit = CASE WHEN @Part = 'EligibleReasons' THEN 1 ELSE 0 END;
+        WITH F AS
+        (
+            SELECT R.ApplicationId, R.Reason, R.SortOrder,
+                   ROW_NUMBER() OVER (PARTITION BY R.ApplicationId ORDER BY R.SortOrder, R.Reason) AS Rn
+            FROM   Fact.AutoApprovalReason R
+                   INNER JOIN Fact.AutoApproval A ON A.ApplicationId = R.ApplicationId
+            WHERE  A.DecisionOn > @From AND A.DecisionOn <= @To
+              AND  (@DivisionId IS NULL OR A.DivisionId = @DivisionId)
+              AND  A.IsEligible = @Eligible AND A.ApprovalRuleId IS NULL AND R.ComputedEligible = @Eligible
+        )
+        SELECT F.Reason, MIN(F.SortOrder) AS SortOrder, COUNT(*) AS Applications,
+               (SELECT COUNT(*) FROM F F2 WHERE F2.Rn = 1) AS Total
+        FROM   F
+        WHERE  F.Rn = 1
+        GROUP BY F.Reason
+        ORDER BY COUNT(*) DESC, MIN(F.SortOrder);
+        RETURN;
+    END
+
+    IF @Part = 'Rules'
+    BEGIN
+        -- every version of every rule, for each rule's history (the info button)
+        SELECT R.RuleName, R.RuleId, R.RuleSetId, R.RuleSetStatus, R.RuleSetCreatedOn, R.RuleSetActivatedOn,
+               R.CreditLimitTo, R.FacilityLimitTo, R.AmountTo, R.TermTo
+        FROM   Dim.AutoApprovalRule R
+        ORDER BY R.RuleName, R.RuleSetId;
+        RETURN;
+    END
+END
+""");
+            migrationBuilder.Sql("""
+CREATE OR ALTER PROCEDURE Stage.spPublish
+(
+    @Scope              varchar(10),
+    @ReportDate         date,
+    @StartedUtc         datetime2(0) = NULL,   -- when the COPY began (the site), so Started / Took cover the whole copy
+    @SourceRefreshedUtc datetime2(0) = NULL,   -- when the office made the data this copy carries (KpiCopy.Refresh)
+    @SourceSnapshotsUtc datetime2(0) = NULL    -- a Nightly copy: when the office prepared Bad Debt & Exposure
+)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    -- a run left open for 15 minutes was cut off part-way: the publish itself rolled back, and the site couldn't say why
+    -- (it closes its own run when it gives up - Stage.spRecordFailure @CloseOpenRun - so this is a restart, or a
+    -- connection lost for good): close it as failed, so Data sync doesn't show it "running" for ever
+    UPDATE Ref.LoadRun
+    SET    Succeeded = 0, Error = 'Stopped part-way: the KPI site restarted, or lost its connection to its own database (CMS_KPI), while publishing. Nothing was published.'
+    WHERE  Succeeded IS NULL AND FinishedUtc IS NULL AND StartedUtc < DATEADD(MINUTE, -15, SYSUTCDATETIME());
+
+    DECLARE @RunId int;
+    INSERT Ref.LoadRun (Scope, StartedUtc, SourceRefreshedUtc, SourceSnapshotsUtc)
+    VALUES (@Scope, ISNULL(@StartedUtc, SYSUTCDATETIME()), @SourceRefreshedUtc, @SourceSnapshotsUtc);
+    SET @RunId = SCOPE_IDENTITY();
+
+    BEGIN TRY
+        IF NOT EXISTS (SELECT 1 FROM Stage.Lead)
+            THROW 50002, 'Stage.Lead is empty: not publishing (the site keeps the last good figures).', 1;
+
+        BEGIN TRANSACTION;
+        DELETE Dim.SalesOffice;
+        INSERT Dim.SalesOffice (SalesOfficeId, OfficeName, OrderInt, IsActive)
+        SELECT SalesOfficeId, OfficeName, OrderInt, IsActive FROM Stage.SalesOffice;
+        DELETE Dim.Salesperson;
+        INSERT Dim.Salesperson (SalesId, Salesperson, SalesCode, DivisionId, SalesOfficeId, IsActive)
+        SELECT SalesId, Salesperson, SalesCode, DivisionId, SalesOfficeId, IsActive FROM Stage.Salesperson;
+        DELETE Dim.Period;
+        INSERT Dim.Period (PeriodId, PeriodNumber, PeriodName, PeriodStartDate, PeriodEndDate, QuarterId, QuarterNumber, QuarterName, YearId, YearNumber, YearName)
+        SELECT PeriodId, PeriodNumber, PeriodName, PeriodStartDate, PeriodEndDate, QuarterId, QuarterNumber, QuarterName, YearId, YearNumber, YearName FROM Stage.Period;
+        DELETE Dim.WorkingDay;
+        INSERT Dim.WorkingDay (WorkingDay)
+        SELECT WorkingDay FROM Stage.WorkingDay;
+        DELETE Dim.SalesTarget;
+        INSERT Dim.SalesTarget (SalesId, Year, AFTarget, TFITarget)
+        SELECT SalesId, Year, AFTarget, TFITarget FROM Stage.SalesTarget;
+        DELETE Dim.FundLender;
+        INSERT Dim.FundLender (FundLenderId, FundLenderName, CapitalLimit, IsActiveBlockLender)
+        SELECT FundLenderId, FundLenderName, CapitalLimit, ISNULL(IsActiveBlockLender, 0) FROM Stage.FundLender;
+        DELETE Dim.Fund;
+        INSERT Dim.Fund (FundId, FundName, FundLenderId, FundType, ExcludeFromCapacity, ExcludeFromCapacityPercent, LenderRef,
+                         StartDate, EndDate, BlockAmount, CapitalOS, FacilityLimit, CurrentRate, ServiceFeeRate)
+        SELECT FundId, FundName, FundLenderId, FundType, ISNULL(ExcludeFromCapacity, 0), ExcludeFromCapacityPercent, LenderRef,
+               StartDate, EndDate, BlockAmount, CapitalOS, FacilityLimit, CurrentRate, ServiceFeeRate FROM Stage.Fund;
+        DELETE Fact.Lead;
+        INSERT Fact.Lead (LeadId, dtPayReceived, IsUnwound, AF, GFI, TFI, SalesII, DivisionId, Division, SalesId, Salesperson, SalesCode, SalesOfficeId, LenderName, Profession, Facility, Arrangement, IsOB, IsOptical, IsNewCustomer, IRR, IRRInclFees, Term, MinIRR, PeriodId, PostcodeArea)
+        SELECT LeadId, dtPayReceived, IsUnwound, AF, GFI, TFI, SalesII, DivisionId, Division, SalesId, Salesperson, SalesCode, SalesOfficeId, LenderName, Profession, Facility, Arrangement, IsOB, IsOptical, IsNewCustomer, IRR, IRRInclFees, Term, MinIRR, PeriodId, PostcodeArea FROM Stage.Lead;
+        DELETE Fact.LeadPipeline;
+        INSERT Fact.LeadPipeline (LeadId, SalesId, dtLead, LeadStatus, AF, GFI, dtAppAccept, dtActivation, IntroducerId, IntroducerManagedByHQ, IntroducerAccountManagerId)
+        SELECT LeadId, SalesId, dtLead, LeadStatus, AF, GFI, dtAppAccept, dtActivation, IntroducerId, IntroducerManagedByHQ, IntroducerAccountManagerId FROM Stage.LeadPipeline;
+        DELETE Fact.SupplierYear;
+        INSERT Fact.SupplierYear (Year, IntroducerId, Supplier, Profession, AccountManagerId, ManagedByHQ, AmountFinanced)
+        SELECT Year, IntroducerId, Supplier, Profession, AccountManagerId, ManagedByHQ, AmountFinanced FROM Stage.SupplierYear;
+        DELETE Fact.BookPosition;
+        INSERT Fact.BookPosition (LeadId, IsOB, RemainingCapital, CustomerKey, PostcodeArea)
+        SELECT LeadId, IsOB, RemainingCapital, CustomerKey, PostcodeArea FROM Stage.BookPosition;
+        DELETE Fact.FundingLine;
+        INSERT Fact.FundingLine (Source, SourceId, LeadId, EventDate, DivisionId, Amount, Term, Rate, IsBulkMove)
+        SELECT Source, SourceId, LeadId, EventDate, DivisionId, Amount, Term, Rate, IsBulkMove FROM Stage.FundingLine;
+
+        DELETE Dim.AutoApprovalRule;
+        INSERT Dim.AutoApprovalRule (RuleId, RuleSetId, RuleSetStatus, RuleSetCreatedOn, RuleSetActivatedOn, RuleName, CreditLimitTo, FacilityLimitTo, AmountTo, TermTo)
+        SELECT RuleId, RuleSetId, RuleSetStatus, RuleSetCreatedOn, RuleSetActivatedOn, LEFT(RuleName, 200), CreditLimitTo, FacilityLimitTo, AmountTo, TermTo FROM Stage.AutoApprovalRule;
+        DELETE Fact.AutoApproval;
+        INSERT Fact.AutoApproval (ApplicationId, LeadId, DivisionId, Division, DecisionOn, IsEligible, ApprovalRuleId, ApprovalRuleSetId, Status, AF, dtPayReceived, IsUnwound, HasSeriousArrears, IsTerminated, IsBadDebt, AmountWrittenOff)
+        SELECT ApplicationId, LeadId, DivisionId, Division, DecisionOn, ISNULL(IsEligible, 0), ApprovalRuleId, ApprovalRuleSetId, Status, ISNULL(AF, 0), dtPayReceived, ISNULL(IsUnwound, 0),
+               ISNULL(HasSeriousArrears, 0), ISNULL(IsTerminated, 0), ISNULL(IsBadDebt, 0), ISNULL(AmountWrittenOff, 0) FROM Stage.AutoApproval;
+        DELETE Fact.AutoApprovalReason;
+        INSERT Fact.AutoApprovalReason (ApplicationId, DecisionOn, DecisionType, IsEligible, ComputedEligible, RuleId, Reason, SortOrder)
+        SELECT ApplicationId, DecisionOn, DecisionType, IsEligible, ComputedEligible, RuleId, LEFT(Reason, 100), SortOrder FROM Stage.AutoApprovalReason;
+        IF @Scope = 'Nightly'
+        BEGIN
+            DELETE Fact.BadDebtYear;
+            INSERT Fact.BadDebtYear (IsAutoApproved, BadDebtYear, Id, YearStartDate, YearEndDate, AmountFinanced, RemainingCapital, ActiveLeadCount, WrittenOffAmount, WrittenOffLeadCount, RecoveredAmount, BadDebtCosts, TerminatedLeadCount, ArrearsLeadCount, ArrearsCompanyCount)
+            SELECT IsAutoApproved, BadDebtYear, Id, YearStartDate, YearEndDate, AmountFinanced, RemainingCapital, ActiveLeadCount, WrittenOffAmount, WrittenOffLeadCount, RecoveredAmount, BadDebtCosts, TerminatedLeadCount, ArrearsLeadCount, ArrearsCompanyCount FROM Stage.BadDebtYear;
+            DELETE Fact.Exposure;
+            INSERT Fact.Exposure (GroupingKey, FundLenderId, FundId, RowNumber, Id, Name, LeadCount, RemainingCapital, TotalRemainingCapital, PercentRemainingCapital, CustomerType)
+            SELECT GroupingKey, FundLenderId, FundId, RowNumber, Id, Name, LeadCount, RemainingCapital, TotalRemainingCapital, PercentRemainingCapital, CustomerType FROM Stage.Exposure;
+        END
+
+        UPDATE Ref.Setting
+        SET    ReportDate          = @ReportDate,
+               LastFrequentLoadUtc = SYSUTCDATETIME(),
+               LastNightlyLoadUtc  = CASE WHEN @Scope = 'Nightly' THEN SYSUTCDATETIME() ELSE LastNightlyLoadUtc END
+        WHERE  SettingId = 1;
+        COMMIT TRANSACTION;
+
+        UPDATE Ref.LoadRun SET FinishedUtc = SYSUTCDATETIME(), Succeeded = 1 WHERE LoadRunId = @RunId;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        UPDATE Ref.LoadRun
+        SET    FinishedUtc = SYSUTCDATETIME(), Succeeded = 0, Error = LEFT(ERROR_MESSAGE(), 2000)
+        WHERE  LoadRunId = @RunId;
+        THROW;
+    END CATCH
+END
+""");
+            migrationBuilder.Sql("ALTER TABLE Fact.AutoApprovalReason DROP COLUMN Detail; ALTER TABLE Stage.AutoApprovalReason DROP COLUMN Detail;");
+        }
+    }
+}

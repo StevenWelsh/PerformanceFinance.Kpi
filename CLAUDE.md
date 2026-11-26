@@ -87,7 +87,9 @@ the tables in full (25k paid leads).
   - **WHAT leaves CMS = the `KpiExport` schema in the CMS database**, authored in the CMS REPO (migration `mgKpiExport`,
     readable copies + README in `CMS.Models/Scripts/KpiExport/`, a rule in CMS's CLAUDE.md): the 12 `v*` views (the
     only place CMS's tables and columns are named), `fnReportDate`, `spPrepareSnapshots` + `BadDebtSnapshot` /
-    `ExposureSnapshot` / `SnapshotRun`, and `Version`. Changed only by a new CMS migration.
+    `ExposureSnapshot` / `SnapshotRun`, and `Version`. **Since Nov 2026 new or widened views are applied BY HAND from the
+    CMS repo's scripts, NOT a CMS migration** (Steve: a migration clashes with Andy's line) - on CMS_Live with the KPI release,
+    and again on CMS_Dev after every restore of live (README in that folder lists them). Don't propose a CMS migration.
   - **HOW it travels = the `KPI_Export` database**, NO migrations (Steve): one rerunnable script,
     `Kpi.Copy/Export/KPI_Export.sql`, applied by `export-apply --cms <db>` (refuses to run until the CMS side is there at
     the expected version). `KpiCopy.Source` names the CMS database; `KpiCopy.spRefresh` rebuilds `KpiCopy.X` from
@@ -325,8 +327,32 @@ the tables in full (25k paid leads).
   `GetIWFARate` (latest confirmed base rate + RateAboveBase within min/max) + its service fee. Average = weighted by
   capacity remaining. DRAWN (3 months) = Fact.FundingLine to the report date (gross: repayments not netted - a run rate /
   net change was set aside). No filters, no drill-down (Steve). Data: CMS views `KpiExport.vFundLender` / `vFund` widened
-  (CMS repo scripts; migration still to add there), migrations `FundCapacity`, `FundCapacityDrawn`, `Rpt.spFundCapacity`.
+  (CMS repo scripts, applied by hand), migrations `FundCapacity`, `FundCapacityDrawn`, `Rpt.spFundCapacity`.
   **The copy now maps only columns its Stage table has** (`KpiCopier`): a CMS view can gain columns before the site's release.
+- **AUTO APPROVAL (26 Nov 2026, Steve - for Stuart: "monitor the leads that get auto approved ... ensure we are not making
+  any mistakes with our parameters"; mock-up `docs/auto-approval-mockup.html`; Own Book):** `Components/Pages/Kpis/AutoApproval`,
+  `Rpt.spAutoApproval` (@Part, @DivisionId NULL = all, @Period this | last | 3 | 6 | 12 = this month, last calendar month, that
+  many months to the report date). Filters Division (default All), Period (default Last 3 months), Show Count / Amount
+  financed - which drives EVERY box. Four equal boxes in process order, capped at 1200px, aspect ~1.6 (they grow taller, not
+  flatter): **Application to paid out** (funnel drawn to scale - only a sliver as a minimum; a figure goes inside its band if
+  IT fits, else name and figure to the right; black text; Medical cyan, Paper orange), **Not eligible: reason** and
+  **Eligible: not auto approved reason** (since 16 Oct 2026, ⓘ), **Eligible: not auto approved outcome** (donut; amounts
+  outside the ring above the %); below, **Performance by rule** (since auto approval began, June 2023; top 10 rules by amount
+  financed + "Other rules"; then All auto approved and All non-auto approved - a comparison, NOT a control). Hover / tap labels
+  on every chart part (`js/chartTips.js`, `data-tip`); a donut slice pops out with its number.
+  - **Data (CMS views applied by hand):** `KpiExport.vAutoApproval` (every decided application, chosen as CMS's
+    AutoApprovalStatistics INCLUDING its newer credit-line exclusion; outcome from OB.Lead: HasSeriousArrears = CMS's 60+ day
+    flag, Terminated, BadDebt, AmountWrittenOff), `vAutoApprovalRule` (every version of every rule), `vAutoApprovalReason`
+    (re-runs CMS's `UnderwritingRulesCanApprove` against each decision SNAPSHOT `Lead.FinanceApplicationDecision`, with the
+    set in force that day; agreed 100% with CMS's own eligibility on 26 Nov). Kpi.Copy copies them as OPTIONAL tables (left
+    empty until the office has them). Migrations `AutoApproval` ... `AutoApprovalReasonAmounts`.
+  - **Rules are grouped by NAME** (CMS copies a rule with no link back - Andy may add a lineage key later); a renamed rule is
+    its own row. Eligible = every non-search check passes on some rule, so the eligible reasons can only be the SEARCHES
+    (Creditsafe / TransUnion credit / Call Validate, searches not run) or "every check passed". **Each application counted
+    once, under its FIRST failed check in CMS's order** (SortOrder); the hover lists the details behind a reason (profession,
+    facility, amount band, score ...). Checked against CMS 26 Nov 2026: eligible / auto approved exact; amount financed,
+    written off, bad debt, terminated = CMS's Bad Debt report (auto approved); totals differ only by credit lines (CMS's live
+    proc still counts them).
 - **Data Protection key ring** encrypts cookies, emailed links and the Resend key: locally the user profile; **in Azure it
   must be a shared persisted ring (storage + Key Vault)** or every restart signs everyone out and the Resend key becomes
   unreadable. Pin `AllowedHosts` in Azure: emailed links are built from the request's host.

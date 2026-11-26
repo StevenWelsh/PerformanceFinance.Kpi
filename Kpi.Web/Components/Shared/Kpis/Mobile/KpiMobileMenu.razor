@@ -117,8 +117,7 @@
     private void PickView()
     {
         if (_view is not null || !Favourites.Loaded) return;
-        _view = Favourites.MenuView == KpiMenuView.All || FavouriteReports.Count == 0
-            ? KpiMenuView.All : KpiMenuView.Favourites;
+        _view = FavouriteReports.Count == 0 ? KpiMenuView.All : Favourites.SessionView ?? KpiMenuView.Favourites;   // each sign-in: Favourites when there are any
     }
 
     // a tap on the switch: shown now and remembered for next time

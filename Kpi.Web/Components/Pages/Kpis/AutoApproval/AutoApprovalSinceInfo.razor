@@ -1,0 +1,19 @@
+@* The ⓘ beside "since 16 Oct 2026" on the two reason boxes (Steve, 26 Nov 2026): why the reasons start then. Hover on a
+   desktop, tap on a phone (account.css "fc-info", as Fund Capacity's). *@
+
+<span class="fc-info aa-since @(Short ? "fc-info-short" : "")" tabindex="0" role="button" aria-label="Why since 16 Oct 2026"
+      @onclick="Toggle" @onclick:stopPropagation="true">
+    i
+    <span class="fc-tip aa-since-tip @(_open ? "fc-tip-on" : "")" role="tooltip">
+        <span>CMS only began stamping this information on applications on 16 October 2026, so it's missing for anything earlier.</span>
+        <span>Each application is counted once, under the first check it failed.</span>
+    </span>
+</span>
+
+@code {
+    /// <summary>The phone's version, opened by a tap.</summary>
+    [Parameter] public bool Short { get; set; }
+
+    private bool _open;
+    private void Toggle() { if (Short) _open = !_open; }
+}

@@ -109,7 +109,7 @@
         await Favourites.EnsureLoadedAsync();
         // the view last picked (Favourites only while there are any), else Favourites when there are any, else All -
         // the phone menu's rule
-        _view = Favourites.MenuView == KpiMenuView.All || FavouriteReports.Count == 0 ? KpiMenuView.All : KpiMenuView.Favourites;
+        _view = FavouriteReports.Count == 0 ? KpiMenuView.All : Favourites.SessionView ?? KpiMenuView.Favourites;   // each sign-in: Favourites when there are any
     }
 
     private Task Choose(KpiMenuView view)

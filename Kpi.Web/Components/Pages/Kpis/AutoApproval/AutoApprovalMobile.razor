@@ -1,0 +1,92 @@
+@using Kpi.Web.Reports
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* Auto Approval on a phone: the filters, the funnel, the two reason lists, the outcome donut, and performance by rule
+   (rule, amount financed, adverse rate). *@
+
+@* the filters as every phone report has them: the fields with a fold button, folding to a summary bar (KpiMobileFilters) *@
+<KpiMobileFilters>
+    <div class="kpim-filters" style="--kpim-cols:3">
+        <KpiField Caption="Division" Value="@Division" ValueChanged="DivisionChanged" Options="AutoApproval.DivisionOptions" />
+        <KpiField Caption="Period" Value="@Months" ValueChanged="MonthsChanged" Options="AutoApproval.PeriodOptions" />
+        <KpiField Caption="Show" Value="@Measure" ValueChanged="MeasureChanged" Options="AutoApproval.MeasureOptions" />
+    </div>
+</KpiMobileFilters>
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else
+{
+    <section class="kpim-card aa-pcard">
+        <h3 class="kpim-card-head aa-phead">Application to paid out</h3>
+        <div class="kpim-card-pad">
+            <div class="aa-funnel">@AutoApprovalCharts.Funnel(Data.Funnel, ByAmount, true)</div>
+        </div>
+    </section>
+
+    <section class="kpim-card aa-pcard">
+        <h3 class="kpim-card-head aa-phead">Not eligible: reason <small>· since 16 Oct 2026 <AutoApprovalSinceInfo Short="true" /></small></h3>
+        <div class="kpim-card-pad">
+            @AutoApproval.Reasons(Data.NotEligible, Data, ByAmount)
+        </div>
+    </section>
+
+    <section class="kpim-card aa-pcard">
+        <h3 class="kpim-card-head aa-phead">Eligible: not auto approved reason <small>· since 16 Oct 2026 <AutoApprovalSinceInfo Short="true" /></small></h3>
+        <div class="kpim-card-pad">
+            <div class="aa-qpie">@AutoApproval.ReasonPie(Data.EligibleNotAuto, Data, ByAmount)</div>
+        </div>
+    </section>
+
+    <section class="kpim-card aa-pcard">
+        <h3 class="kpim-card-head aa-phead">Eligible: not auto approved outcome</h3>
+        <div class="kpim-card-pad">
+            <div class="aa-key aa-pkey"><span><i style="background:@AutoApprovalCharts.ApprovedColour"></i>Approved</span><span><i style="background:@AutoApprovalCharts.DeclinedColour"></i>Declined</span></div>
+            <div class="aa-donut">@AutoApprovalCharts.Donut(Data.Outcome, ByAmount)</div>
+        </div>
+    </section>
+
+    <section class="kpim-card aa-pcard">
+        <h3 class="kpim-card-head aa-phead">Performance by rule <small>· since auto approval began <AutoApprovalPerfInfo Short="true" /></small></h3>
+        <div class="kpim-card-pad">
+            <table class="aa-table">
+                <thead><tr><th class="aa-l">Rule</th><th>Amount</th><th>Adverse rate</th></tr></thead>
+                <tbody>
+                    @{ var auto = Data.Performance.Where(r => r.Kind == "Rule").OrderByDescending(r => r.AF).ToList(); var non = Data.Performance.Where(r => r.Kind == "Control").ToList();
+                       var rest = auto.Skip(AutoApproval.TopRules).ToList(); }
+                    @foreach (var r in auto.Take(AutoApproval.TopRules))
+                    {
+                        <tr><td class="aa-l">@r.RuleName</td><td>@AutoApprovalCharts.Money(r.AF)</td><td class="aa-rate">@AutoApprovalCharts.Pct(r.Adverse, r.PaidOut)</td></tr>
+                    }
+                    @if (rest.Count > 0)
+                    {
+                        <tr><td class="aa-l">Other rules (@rest.Count)</td><td>@AutoApprovalCharts.Money(rest.Sum(r => r.AF))</td><td class="aa-rate">@AutoApprovalCharts.Pct(rest.Sum(r => r.Adverse), rest.Sum(r => r.PaidOut))</td></tr>
+                    }
+                    <tr class="aa-tot"><td class="aa-l">All auto approved</td><td>@AutoApprovalCharts.Money(auto.Sum(r => r.AF))</td><td class="aa-rate">@AutoApprovalCharts.Pct(auto.Sum(r => r.Adverse), auto.Sum(r => r.PaidOut))</td></tr>
+                    <tr><td class="aa-l">All non-auto approved</td><td>@AutoApprovalCharts.Money(non.Sum(r => r.AF))</td><td class="aa-rate">@AutoApprovalCharts.Pct(non.Sum(r => r.Adverse), non.Sum(r => r.PaidOut))</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public AutoApprovalData Data { get; set; } = new();
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public bool ByAmount { get; set; }
+    [Parameter] public string Division { get; set; } = "";
+    [Parameter] public EventCallback<string> DivisionChanged { get; set; }
+    [Parameter] public string Months { get; set; } = "";
+    [Parameter] public EventCallback<string> MonthsChanged { get; set; }
+    [Parameter] public string Measure { get; set; } = "";
+    [Parameter] public EventCallback<string> MeasureChanged { get; set; }
+
+}
