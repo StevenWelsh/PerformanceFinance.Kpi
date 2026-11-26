@@ -898,13 +898,13 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .fc-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .fc-key { display: flex; gap: 14px; font-size: 12px; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--kpim-text-2, #5c5c5c); }
 .fc-key i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-.fc-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+.fc-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
 .fc-table th { font-size: 12px; color: var(--kpim-text-2, #5c5c5c); font-weight: 600; text-align: right; padding: 8px 12px;
     border-bottom: 2px solid var(--kpim-yoy-rule, #cfcfcf); background: var(--kpim-yoy-head, #f5f5f5); }
 .fc-table td { padding: 9px 12px; border-bottom: 1px solid var(--kpim-yoy-line, #ececec); text-align: right; vertical-align: middle; }
 .fc-table .fc-l { text-align: left; }
 .fc-type { color: #444; white-space: nowrap; }
-.fc-barcell { width: 30%; }
+.fc-barcell { }
 .fc-bar { position: relative; height: 16px; border-radius: 8px; background: #ececec; overflow: hidden; }
 .fc-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 8px; }
 .fc-pct { font-size: 12px; color: var(--kpim-text-2, #5c5c5c); margin-top: 3px; text-align: left; }
