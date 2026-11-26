@@ -1097,3 +1097,23 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 /* the phone's long box titles ("Eligible: not auto approved reason · since 16 Oct 2026 ⓘ") on one line: a touch smaller */
 .kpim-card-head.aa-phead { font-size: 11.5px; letter-spacing: .04em; white-space: nowrap; }
 .kpim-card-head.aa-phead small { font-size: 10.5px; }
+/* Performance by rule on a phone: a turn-sideways button, and the full table turned a quarter on the screen (26 Nov 2026) */
+.aa-phead-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.aa-turn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; margin: -8px -8px -8px 0; padding: 0;
+    border: 0; border-radius: 8px; background: transparent; color: var(--kpim-text-strong, #1a1a1a); cursor: pointer; }
+.aa-turn:active { background: rgba(0, 0, 0, .06); }
+.aa-land { position: fixed; inset: 0; z-index: 3000; background: var(--kpim-bg, #f2f2f2); overflow: hidden; }
+.aa-land-inner { position: absolute; top: 0; left: 100vw; width: 100vh; height: 100vw; width: 100dvh; height: 100dvw;
+    transform-origin: top left; transform: rotate(90deg); overflow: auto; background: #fff; padding: 10px 14px 14px; box-sizing: border-box; }
+@media (orientation: landscape) { .aa-land-inner { left: 0; width: 100vw; height: 100vh; width: 100dvw; height: 100dvh; transform: none; } }
+.aa-land-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; font-size: 14px; }
+.aa-land-head small { color: var(--kpim-text-2, #6b6b6b); }
+.aa-land-head .aa-key { margin-left: auto; }
+.aa-land .aa-table { font-size: 12px; }
+.aa-land .aa-table th, .aa-land .aa-table td { padding: 6px 7px; }
+.aa-land .aa-table th { background: var(--kpim-yoy-head, #f5f5f5); }
+.aa-land .aa-stk { min-width: 60px; }
+/* the sideways view fits a phone's length: no bar (the adverse rate says it), headings on two lines, the rule names room */
+.aa-land .aa-table th { white-space: normal; vertical-align: bottom; line-height: 1.2; }
+.aa-land .aa-table th:last-child, .aa-land .aa-table td:last-child { display: none; }
+.aa-land .aa-table td.aa-l:first-child { min-width: 170px; }

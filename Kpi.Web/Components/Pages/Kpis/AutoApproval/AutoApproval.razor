@@ -69,24 +69,7 @@
                         <span class="aa-key"><span><i style="background:var(--kpim-aa-arrears, #898b8e)"></i>Serious arrears (60+ days)</span><span><i style="background:var(--kpim-aa-term, #ee7624)"></i>Terminated</span><span><i style="background:var(--kpim-aa-baddebt, #c20430)"></i>Bad debt</span></span>
                     </div>
                     <div class="aa-scroll">
-                        <table class="aa-table aa-perf">
-                            <thead><tr><th class="aa-l">Rule</th><th>Amount financed</th><th>Paid out</th><th>Last 12 months</th><th>Serious arrears</th><th>Terminated</th><th>Bad debt</th><th>Written off</th><th>Adverse rate</th><th class="aa-l aa-barh"></th></tr></thead>
-                            <tbody>
-                                @foreach (var r in Rules.Take(TopRules))
-                                {
-                                    <tr>
-                                        <td class="aa-l">@r.RuleName</td>
-                                        @PerfCells(r)
-                                    </tr>
-                                }
-                                @if (Rules.Count() > TopRules)
-                                {
-                                    <tr><td class="aa-l">Other rules (@(Rules.Count() - TopRules))</td>@PerfCells(Sum(Rules.Skip(TopRules)))</tr>
-                                }
-                                <tr class="aa-tot"><td class="aa-l">All auto approved</td>@PerfCells(AllAuto)</tr>
-                                <tr><td class="aa-l">All non-auto approved</td>@PerfCells(NonAuto)</tr>
-                            </tbody>
-                        </table>
+                        @PerfTable(_data)
                     </div>
                 </div>
             }
@@ -175,10 +158,32 @@
     public static string BarWidth(decimal v, decimal max) =>
         (max > 0 ? Math.Clamp(v / max, 0m, 1m) * 100m : 0m).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";
 
+    // Performance by rule in full (every column): the PC card, and the phone's sideways view (Steve, 26 Nov 2026)
+    public static RenderFragment PerfTable(AutoApprovalData data) => __builder =>
+    {
+        var rules = data.Performance.Where(r => r.Kind == "Rule").OrderByDescending(r => r.AF).ToList();
+        var rest = rules.Skip(TopRules).ToList();
+        <table class="aa-table aa-perf">
+            <thead><tr><th class="aa-l">Rule</th><th>Amount financed</th><th>Paid out</th><th>Last 12 months</th><th>Serious arrears</th><th>Terminated</th><th>Bad debt</th><th>Written off</th><th>Adverse rate</th><th class="aa-l aa-barh"></th></tr></thead>
+            <tbody>
+                @foreach (var r in rules.Take(TopRules))
+                {
+                    <tr><td class="aa-l">@r.RuleName</td>@PerfCells(r)</tr>
+                }
+                @if (rest.Count > 0)
+                {
+                    <tr><td class="aa-l">Other rules (@rest.Count)</td>@PerfCells(Sum(rest))</tr>
+                }
+                <tr class="aa-tot"><td class="aa-l">All auto approved</td>@PerfCells(Sum(rules))</tr>
+                <tr><td class="aa-l">All non-auto approved</td>@PerfCells(Sum(data.Performance.Where(r => r.Kind == "Control")))</tr>
+            </tbody>
+        </table>
+    };
+
     private static string Zero(int n) => n == 0 ? "aa-z" : "";
 
     // the outcome columns and the stacked bar (each adverse kind as a share of paid out, the bar full at 8%)
-    private RenderFragment PerfCells(AutoApprovalPerformanceRow r) => @<text>
+    private static RenderFragment PerfCells(AutoApprovalPerformanceRow r) => @<text>
         <td>@AutoApprovalCharts.Money(r.AF)</td>
         <td>@r.PaidOut.ToString("N0")</td>
         <td class="@(r.AF12m == 0 ? "aa-z" : "")">@(r.AF12m == 0 ? "–" : AutoApprovalCharts.Money(r.AF12m))</td>

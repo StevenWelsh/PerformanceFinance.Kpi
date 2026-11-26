@@ -339,7 +339,9 @@ the tables in full (25k paid leads).
   **Eligible: not auto approved reason** (since 16 Oct 2026, ⓘ), **Eligible: not auto approved outcome** (donut; amounts
   outside the ring above the %); below, **Performance by rule** (since auto approval began, June 2023; top 10 rules by amount
   financed + "Other rules"; then All auto approved and All non-auto approved - a comparison, NOT a control). Hover / tap labels
-  on every chart part (`js/chartTips.js`, `data-tip`); a donut slice pops out with its number.
+  on every chart part (`js/chartTips.js`, `data-tip`); a donut slice pops out with its number. On a phone, Performance by
+  rule's title band has the other reports' turn-the-phone icon (exactly theirs, animated): it opens the FULL table turned a
+  quarter on screen even held upright (a page can't turn an iPhone), the same icon turning back closes it.
   - **Data (CMS views applied by hand):** `KpiExport.vAutoApproval` (every decided application, chosen as CMS's
     AutoApprovalStatistics INCLUDING its newer credit-line exclusion; outcome from OB.Lead: HasSeriousArrears = CMS's 60+ day
     flag, Terminated, BadDebt, AmountWrittenOff), `vAutoApprovalRule` (every version of every rule), `vAutoApprovalReason`
