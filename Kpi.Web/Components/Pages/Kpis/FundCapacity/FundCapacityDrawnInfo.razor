@@ -1,0 +1,17 @@
+@* The Drawn (3 months) ⓘ (Steve, 26 Nov 2026): hover on a desktop, tap on a phone (Short), as the buy rate's. *@
+
+<span class="fc-info @(Short ? "fc-info-short" : "")" tabindex="0" role="button" aria-label="What drawn in 3 months means"
+      @onclick="Toggle" @onclick:stopPropagation="true">
+    i
+    <span class="fc-tip @(_open ? "fc-tip-on" : "")" role="tooltip">
+        <b class="fc-tip-lead">Funding drawn from this lender in the last 3 months.</b>
+        <span>Not all of it comes off the capacity: existing funding is being repaid every month as well.</span>
+    </span>
+</span>
+
+@code {
+    [Parameter] public bool Short { get; set; }
+
+    private bool _open;
+    private void Toggle() { if (Short) _open = !_open; }
+}

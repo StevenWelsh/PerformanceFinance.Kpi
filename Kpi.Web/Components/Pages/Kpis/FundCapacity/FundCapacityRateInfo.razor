@@ -1,0 +1,37 @@
+@* The Buy rate's ⓘ: on a desktop a narrow, tall panel on hover (a section per type, the notes underneath); on a phone
+   (Short) a few lines, opened and closed by a tap. Plain HTML and CSS (account.css "fc-info"), no script. *@
+
+<span class="fc-info @(Short ? "fc-info-short" : "")" tabindex="0" role="button" aria-label="How the buy rate is worked out"
+      @onclick="Toggle" @onclick:stopPropagation="true">
+    i
+    <span class="fc-tip @(_open ? "fc-tip-on" : "")" role="tooltip">
+        @if (Short)
+        {
+            <b class="fc-tip-lead">The rate for new funding - not necessarily what's already drawn.</b>
+            <span><b>Block</b> - the latest block's rate.</span>
+            <span><b>RCF</b> - today's rate, on the whole balance.</span>
+            <span><b>IWFA</b> - a new cohort's rate, plus the service fee.</span>
+            <span class="fc-tip-foot">Facility fees aren't included.</span>
+        }
+        else
+        {
+            <b class="fc-tip-lead">The rate for any new funding from this lender - not necessarily the rate on funding already drawn.</b>
+            <span class="fc-tip-h">Block</span>
+            <span>The latest block's rate (its schedule IRR, or its IRR where there is none).</span>
+            <span class="fc-tip-h">RCF</span>
+            <span>The RCF's rate in force today.</span>
+            <span class="fc-tip-h">IWFA</span>
+            <span>A new cohort's rate as CMS works it out: today's base rate plus the lender's margin, within its minimum and maximum, plus the service fee.</span>
+            <span class="fc-tip-foot">Not included: the IWFA's non-utilisation fee and other facility fees.</span>
+            <span class="fc-tip-foot">Total: the average, weighted by capacity remaining.</span>
+        }
+    </span>
+</span>
+
+@code {
+    /// <summary>The phone's short version, opened by a tap.</summary>
+    [Parameter] public bool Short { get; set; }
+
+    private bool _open;
+    private void Toggle() { if (Short) _open = !_open; }
+}

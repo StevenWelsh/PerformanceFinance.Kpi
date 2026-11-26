@@ -1,0 +1,19 @@
+@using Kpi.Web.Reports
+
+@* Fund Capacity's four figures (desktop in a row, phone 2 x 2): limit, exposure, remaining - lenders with a limit only -
+   and the average rate for new funding, weighted by capacity remaining. *@
+
+@{
+    var withLimit = Lenders.Where(l => l.Limit is > 0).ToList();
+    var limit = withLimit.Sum(l => l.Limit ?? 0);
+    var exposure = withLimit.Sum(l => l.Exposure);
+    var remain = limit - exposure;
+}
+<div class="fc-tile"><small>Capital limit</small><b>@FundCapacity.Short(limit)</b><span>Across @withLimit.Count lender@(withLimit.Count == 1 ? "" : "s")</span></div>
+<div class="fc-tile"><small>Capital exposure</small><b>@FundCapacity.Short(exposure)</b><span>@(limit > 0 ? FundCapacity.Pct0(exposure / limit) : "–") of the limit used</span></div>
+<div class="fc-tile"><small>Capacity remaining</small><b>@FundCapacity.Short(remain)</b><span>@(limit > 0 ? FundCapacity.Pct0(remain / limit) : "–") still available</span></div>
+<div class="fc-tile"><small>Average buy rate</small><b>@FundCapacity.Rate(FundCapacity.AverageBuyRate(Lenders))</b><span>Weighted by capacity remaining</span></div>
+
+@code {
+    [Parameter] public List<FundCapacityLender> Lenders { get; set; } = new();
+}

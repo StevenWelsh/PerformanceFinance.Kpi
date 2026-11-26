@@ -1,0 +1,219 @@
+<title>Fund Capacity Mock-up</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Mock-up of a Fund Capacity report for the KPI site (26 Nov 2026). Light only, as the site is; colours are the site's
+   saved Kettering set (PF red, cyan, orange, cool greys). Figures are CMS_Dev's, so not prod's. */
+:root{color-scheme:light;--red:#c20430;--cyan:#6bc2b9;--cyan-part:#c4e7e3;--orange:#ee7624;--dark:#54585a;--grey:#898b8e;
+  --bg:#f2f2f2;--card:#fff;--line:#e3e3e3;--band:#e7e8e8;--band2:#f3f3f4;--text:#1a1a1a;--sub:#6b6b6b;--amber:#b35c00;--amber-bg:#fdf0e1}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);font-family:"Segoe UI",system-ui,sans-serif;color:var(--text);font-size:14px;font-variant-numeric:tabular-nums}
+.note,.wrap{max-width:1320px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.note{padding-block:14px 0;color:var(--sub);font-size:12.5px}
+.wrap{padding-block:10px 40px}
+.views{display:inline-flex;background:#e6e6e6;border-radius:10px;padding:3px;gap:2px;margin:6px 0 14px}
+.views button{border:none;background:none;padding:6px 16px;border-radius:8px;color:#555;font:inherit;cursor:pointer}
+.views button.on{background:#fff;color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+/* desktop frame */
+.desk{display:grid;grid-template-columns:210px minmax(0,1fr);border:1px solid var(--line);border-radius:12px;overflow:visible;background:var(--bg)}
+.side{border-radius:12px 0 0 12px}
+.side{background:var(--red);color:#fff;padding:12px 0;font-size:13px}
+.side .h{font-size:10.5px;letter-spacing:.06em;opacity:.8;padding:10px 16px 4px}
+.side div{padding:6px 16px}.side .on{background:rgba(255,255,255,.2);font-weight:600}
+.main{padding:0 18px 18px;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:center;padding:14px 0}
+.top h1{margin:0;font-size:22px;font-weight:600}
+.asat{text-align:right;font-size:12px;color:var(--sub)}
+.filters{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.field{background:#fff;border:1px solid #cfcfcf;border-radius:10px;padding:5px 12px;min-width:170px}
+.field small{display:block;color:var(--sub);font-size:11px}.field b{color:#8f0323;font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.tile small{display:block;color:var(--sub);font-size:12px;margin-bottom:4px}
+.tile b{font-size:24px;font-weight:700}
+.tile span{display:block;color:var(--sub);font-size:12px;margin-top:2px}
+.tile.warn b{color:var(--amber)}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:visible}
+.card-head{border-radius:12px 12px 0 0}
+.card-head{background:var(--band);padding:9px 14px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:#444;display:flex;justify-content:space-between;gap:10px}
+.card-head .key{display:flex;gap:14px;text-transform:none;letter-spacing:0;color:var(--sub)}
+.key i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;color:var(--sub);font-weight:600;text-align:right;padding:8px 12px;border-bottom:2px solid #d0d1d2;background:var(--band2)}
+th:first-child,td:first-child{text-align:left}
+.info{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid #9a9a9a;color:#6b6b6b;font-size:10px;font-weight:700;font-style:normal;cursor:help;margin-left:3px;vertical-align:1px}
+th.rh{white-space:nowrap}
+.info{position:relative}
+.tip{display:none;position:absolute;z-index:40;top:calc(100% + 8px);right:0;width:290px;background:#fff;color:var(--text);border:1px solid #d0d0d0;border-radius:10px;
+  box-shadow:0 8px 24px rgba(0,0,0,.16);padding:12px 14px;text-align:left;font-size:12.5px;font-weight:400;line-height:1.45;white-space:normal;cursor:default}
+.info:hover .tip,.info:focus .tip,.info:focus-within .tip,.info.open .tip{display:flex;flex-direction:column;gap:2px}
+.pcard .info:hover:not(.open) .tip,.pcard .info:focus:not(.open) .tip{display:none}
+.pcard .tip{gap:4px}
+.pcard .tip{right:auto;left:-60px;width:270px}
+.tip-lead{font-weight:600;margin-bottom:6px}
+.tip-h{font-weight:700;margin-top:8px;color:#1a1a1a}
+.tip-n{color:var(--sub)}
+.tip-foot{color:var(--sub);border-top:1px solid #eee;margin-top:8px;padding-top:6px}
+.tip-foot + .tip-foot{border-top:none;margin-top:0;padding-top:0}
+
+td.type{text-align:left;color:#444;white-space:nowrap}
+td{padding:9px 12px;border-bottom:1px solid var(--band);text-align:right;vertical-align:middle}
+tr.lender{cursor:pointer}tr.lender:hover td{background:#f9e6ea}
+tr.lender td:first-child b{font-weight:600}
+.chev{display:inline-block;width:14px;color:var(--grey);transition:transform .15s}
+tr.open .chev{transform:rotate(90deg)}
+.barcell{width:34%}
+.bar{position:relative;height:16px;border-radius:8px;background:#ececec;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;border-radius:8px}
+.pct{font-size:12px;color:var(--sub);margin-top:3px;text-align:left}
+.chip{display:inline-block;font-size:11.5px;padding:1px 8px;border-radius:10px;background:#f0f0f0;color:#555;white-space:nowrap}
+.chip.due{background:var(--amber-bg);color:var(--amber)}
+.mix{color:var(--sub);font-size:12.5px;white-space:nowrap}
+tr.funds td{background:#fafafa;padding:0 12px 10px 38px}
+.funds table th{background:none;border-bottom:1px solid #d0d1d2;font-size:11.5px}
+.funds table td{padding:6px 12px;font-size:13px;border-bottom:1px solid #eee}
+.more{color:var(--sub);font-size:12px;padding-top:6px}
+tr.total td{background:var(--band2);font-weight:700;border-top:2px solid #d0d1d2}
+tr.nolimit td{color:var(--sub)}
+.sect td{background:#fff;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);padding-top:14px}
+/* phone frame */
+.phone{width:390px;max-width:100%;margin:0 auto;border:10px solid #1d1d1b;border-radius:36px;overflow:hidden;background:var(--bg)}
+.pbar{background:var(--red);color:#fff;display:flex;align-items:center;gap:10px;padding:12px 14px}
+.pbar b{font-size:17px;flex:1}.pbar small{font-size:10.5px;text-align:right;opacity:.9}
+.pbody{padding:10px;display:grid;gap:10px;max-height:760px;overflow:auto}
+.ptiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ptiles .tile{padding:10px}.ptiles .tile b{font-size:19px}
+.pcard{background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.pcard .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.pcard .name{font-weight:600}
+.pcard .bar{margin:8px 0 4px}
+.pcard .figs{display:flex;justify-content:space-between;font-size:12.5px;color:var(--sub)}
+.pcard .figs b{color:var(--text)}
+.pfunds{margin-top:10px;border-top:1px solid #eee;padding-top:6px;font-size:12.5px}
+.pfunds div{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f3f3f3}
+.hidden{display:none}
+@media (max-width:900px){.desk{grid-template-columns:1fr}.side{display:none}.tiles{grid-template-columns:1fr 1fr}.barcell{width:auto}}
+</style>
+
+<p class="note">Mock-up only (26 Nov 2026), for the look. Lender totals are live CMS's (Own Book &gt; Fund Lender Capacity); the funds under a lender are examples. Conister's limit is its IWFA's facility amount, as proposed. Buy rates are examples (CMS_Dev; Conister's and Shawbrook's are live CMS's current rates). Click a lender to see its funds.</p>
+<div class="wrap">
+  <div class="views" role="group" aria-label="View"><button id="vDesk" class="on">Desktop</button><button id="vPhone">Phone</button></div>
+
+  <div id="desk" class="desk">
+    <nav class="side" aria-hidden="true"><div class="h">SALES</div><div>Sales Summary</div><div>Year on Year</div><div class="h">OWN BOOK</div><div>Bad Debt</div><div>Exposure Top 10</div><div class="on">Fund Capacity</div></nav>
+    <div class="main">
+      <div class="top"><h1>Fund Capacity</h1><div class="asat">As at 26 Nov 2026 09:40<br>Refreshed 09:41</div></div>
+      <div class="tiles" id="tiles"></div>
+      <div class="card">
+        <div class="card-head"><span>Capacity by lender</span>
+          <span class="key"><span><i style="background:var(--cyan)"></i>Under 80%</span><span><i style="background:var(--orange)"></i>80–95%</span><span><i style="background:var(--red)"></i>Over 95%</span></span></div>
+        <table id="tbl"></table>
+      </div>
+    </div>
+  </div>
+
+  <div id="phone" class="phone hidden">
+    <div class="pbar"><span>☰</span><b>Fund Capacity</b><small>As at 26 Nov 09:40<br>Refreshed 09:41</small></div>
+    <div class="pbody" id="pbody"></div>
+  </div>
+</div>
+
+<script>
+const TODAY = "2026-11-26";
+// LIVE CMS, 26 Nov 2026 (Own Book > Fund Lender Capacity, Steve's screenshot). Conister's lender limit is £0 in live;
+// its limit here is its IWFA's facility amount (the proposed rule), so capacity remaining = the IWFA's Availability.
+const LENDERS = [
+  {name:"British Business Investments Ltd", rate:7.5, limit:30000000, review:"2027-04-18", blocks:1, rcf:0, iwfa:0, capital:10062217.51, exposure:10062217.51},
+  {name:"Conister Bank Limited", rate:9.35, limit:31750000, limitFrom:"IWFA", review:"2026-08-13", blocks:0, rcf:0, iwfa:1, capital:15303254.65, exposure:15303254.65},
+  {name:"Novuna Business Finance", rate:7.8, limit:20000000, review:"2026-09-30", blocks:1, rcf:0, iwfa:0, capital:13265828.27, exposure:13265828.27},
+  {name:"Renaissance Asset Finance", rate:7.35, limit:5000000, review:"2027-04-01", blocks:1, rcf:0, iwfa:0, capital:3521905.35, exposure:3521905.35},
+  {name:"Shawbrook Bank Ltd", rate:8.00, limit:35000000, review:"2026-09-01", blocks:0, rcf:1, iwfa:0, capital:28178927.48, exposure:28178927.48},
+  {name:"Hampshire Trust Bank Plc", rate:9.64, limit:0, review:"2023-04-30", blocks:1, rcf:0, iwfa:0, capital:306534.89, exposure:306534.89},
+];
+const FUNDS = {
+  "Novuna Business Finance": [["NOV226","Block","PF","2032-09-23",227060,203119],["NOV205","Block","PF","2031-12-10",130701,105820],["NOV186","Block","PF","2031-10-19",151055,116877],["NOV251","Block","PF","2031-10-02",100800,100800],["NOV196","Block","PF","2031-09-28",161912,128841]],
+  "Shawbrook Bank Ltd": [["SHA_RCF","RCF","PF","",null,26338927]],
+  "Conister Bank Limited": [["CON_IWFA","IWFA","PF","",null,16939187]],
+};
+// the Buy rate's hover panel: narrow and tall, a section per type, the notes underneath
+const RATE_INFO = `<span class="tip" role="tooltip">
+  <b class="tip-lead">The rate for any new funding from this lender - not necessarily the rate on funding already drawn.</b>
+  <span class="tip-h">Block</span>
+  <span>The latest block's rate (its schedule IRR, or its IRR where there is none).</span>
+  <span class="tip-h">RCF</span>
+  <span>The RCF's rate in force today.</span>
+  <span class="tip-h">IWFA</span>
+  <span>A new cohort's rate as CMS works it out: today's base rate plus the lender's margin, within its minimum and maximum, plus the 0.1% service fee.</span>
+  <span class="tip-foot">Not included: the IWFA's non-utilisation fee and other facility fees.</span>
+  <span class="tip-foot">Total: the average, weighted by capacity remaining.</span>
+</span>`;
+const RATE_INFO_SHORT = `<span class="tip" role="tooltip">
+  <b class="tip-lead">The rate for new funding - not necessarily what's already drawn.</b>
+  <span><b>Block</b> - the latest block's rate.</span>
+  <span><b>RCF</b> - today's rate, on the whole balance.</span>
+  <span><b>IWFA</b> - a new cohort's rate, plus the 0.1% fee.</span>
+  <span class="tip-foot">Facility fees aren't included.</span>
+</span>`;
+const pc = v => v == null ? "–" : v.toFixed(2) + "%";
+const money = v => "£" + Math.round(v).toLocaleString("en-GB");
+const short = v => v >= 1e6 ? "£" + (v/1e6).toFixed(1) + "m" : v >= 1e3 ? "£" + Math.round(v/1e3) + "k" : "£" + Math.round(v);
+const date = s => s ? new Date(s).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "–";
+const colour = p => p >= .95 ? "var(--red)" : p >= .8 ? "var(--orange)" : "var(--cyan)";
+// the lender's kind of funding: Block, IWFA or RCF (more than one if they have more than one kind)
+const type = l => [l.blocks && "Block", l.iwfa && "IWFA", l.rcf && "RCF"].filter(Boolean).join(", ") || "–";
+const review = l => l.review < TODAY ? `<span class="chip due" title="Review date has passed">Review due · ${date(l.review)}</span>` : `<span class="chip">${date(l.review)}</span>`;
+
+const withLimit = LENDERS.filter(l => l.limit > 0), noLimit = LENDERS.filter(l => !(l.limit > 0));
+const T = { limit: withLimit.reduce((a,l)=>a+l.limit,0), expo: withLimit.reduce((a,l)=>a+l.exposure,0) };
+T.remain = T.limit - T.expo;
+const due = withLimit.filter(l => l.review < TODAY).length;
+
+const tiles = [
+  ["Capital limit", short(T.limit), `Across ${withLimit.length} lenders`, ""],
+  ["Capital exposure", short(T.expo), `${Math.round(T.expo/T.limit*100)}% of the limit used`, ""],
+  ["Capacity remaining", short(T.remain), `${Math.round(T.remain/T.limit*100)}% still available`, ""],
+  ["Average buy rate", pc(withLimit.reduce((a,l)=>a+l.rate*(l.limit-l.exposure),0)/T.remain), "Weighted by capacity remaining", ""],
+];
+document.getElementById("tiles").innerHTML = tiles.map(([s,b,sp,c]) => `<div class="tile ${c}"><small>${s}</small><b>${b}</b><span>${sp}</span></div>`).join("");
+
+function fundsRows(name){
+  const f = FUNDS[name]; if (!f) return `<div class="more">Funds would list here, as in CMS.</div>`;
+  return `<table><tr><th>Fund</th><th>Type</th><th>End date</th><th>Block amount</th><th>Capital</th></tr>${
+    f.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[3] ? date(r[3]) : "–"}</td><td>${r[4] ? money(r[4]) : "–"}</td><td>${money(r[5])}</td></tr>`).join("")}</table>
+    ${name.startsWith("Novuna") ? `<div class="more">…and 132 more blocks</div>` : ""}`;
+}
+
+function table(){
+  const rows = withLimit.map((l,i) => { const p = l.exposure / l.limit;
+    return `<tr class="lender" data-i="${i}"><td><span class="chev">›</span> <b>${l.name}</b></td><td class="type">${type(l)}</td>
+      <td>${money(l.limit)}</td><td>${money(l.exposure)}</td>
+      <td class="barcell"><div class="bar"><i style="width:${Math.min(100,p*100)}%;background:${colour(p)}"></i></div><div class="pct">${Math.round(p*100)}% used</div></td>
+      <td><b>${money(l.limit - l.exposure)}</b></td><td>${pc(l.rate)}</td></tr>
+      <tr class="funds hidden" data-f="${i}"><td colspan="7">${fundsRows(l.name)}</td></tr>`; }).join("");
+  const nl = noLimit.map(l => `<tr class="nolimit"><td><span class="chev"></span> ${l.name}</td><td class="type">${type(l)}</td><td>No limit</td><td>${money(l.exposure)}</td><td></td><td>–</td><td>${pc(l.rate)}</td></tr>`).join("");
+  document.getElementById("tbl").innerHTML = `<tr><th>Lender</th><th style="text-align:left">Type</th><th>Capital limit</th><th>Capital exposure</th><th style="text-align:left">Used</th><th>Capacity remaining</th><th class="rh">Buy rate <span class="info" tabindex="0" aria-label="How the buy rate is worked out">i${RATE_INFO}</span></th></tr>
+    ${rows}<tr class="total"><td>Total</td><td></td><td>${money(T.limit)}</td><td>${money(T.expo)}</td><td class="barcell"><div class="bar"><i style="width:${T.expo/T.limit*100}%;background:${colour(T.expo/T.limit)}"></i></div></td><td>${money(T.remain)}</td><td>${pc(withLimit.reduce((a,l)=>a+l.rate*(l.limit-l.exposure),0)/T.remain)}</td></tr>
+    <tr class="sect"><td colspan="7">No capital limit set</td></tr>${nl}`;
+  document.querySelectorAll("tr.lender").forEach(r => r.onclick = () => {
+    r.classList.toggle("open"); document.querySelector(`tr[data-f="${r.dataset.i}"]`).classList.toggle("hidden"); });
+}
+table();
+
+function phone(){
+  const t = tiles.map(([s,b,sp,c]) => `<div class="tile ${c}"><small>${s}</small><b>${b}</b><span>${sp}</span></div>`).join("");
+  const cards = withLimit.map((l,i) => { const p = l.exposure / l.limit, f = FUNDS[l.name];
+    return `<div class="pcard" data-p="${i}"><div class="row"><span class="name">${l.name}</span><span class="chip">${type(l)}</span></div>
+      <div class="bar"><i style="width:${Math.min(100,p*100)}%;background:${colour(p)}"></i></div>
+      <div class="figs"><span><b>${short(l.exposure)}</b> of ${short(l.limit)} · ${Math.round(p*100)}%</span><span><b>${short(l.limit-l.exposure)}</b> left</span></div>
+      <div class="figs" style="margin-top:4px"><span>Buy rate <span class="info" tabindex="0" role="button" aria-label="How the buy rate is worked out" onclick="event.stopPropagation(); this.classList.toggle('open')">i${RATE_INFO_SHORT}</span></span><span><b>${pc(l.rate)}</b></span></div>
+      <div class="pfunds hidden">${f ? f.map(r => `<div><span>${r[0]} · ${r[1]}</span><b>${short(r[5])}</b></div>`).join("") : `<div><span>${type(l)}</span></div>`}</div></div>`; }).join("");
+  const nl = noLimit.map(l => `<div class="pcard"><div class="row"><span class="name">${l.name}</span><span class="chip">${type(l)}</span></div><div class="figs" style="margin-top:6px"><span>No limit</span><span><b>${short(l.exposure)}</b></span></div></div>`).join("");
+  document.getElementById("pbody").innerHTML = `<div class="ptiles">${t}</div>${cards}<div class="mix" style="padding:4px 4px 0">NO CAPITAL LIMIT SET</div>${nl}`;
+  document.querySelectorAll(".pcard[data-p]").forEach(c => c.onclick = () => c.querySelector(".pfunds").classList.toggle("hidden"));
+}
+phone();
+
+const show = p => { document.getElementById("desk").classList.toggle("hidden", p); document.getElementById("phone").classList.toggle("hidden", !p);
+  document.getElementById("vDesk").classList.toggle("on", !p); document.getElementById("vPhone").classList.toggle("on", p); };
+document.getElementById("vDesk").onclick = () => show(false);
+document.getElementById("vPhone").onclick = () => show(true);
+</script>

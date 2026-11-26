@@ -37,6 +37,7 @@ public static class KpiReports
         new("minimum-irr", "Minimum IRR", "bi-shield-check", "Analysis"),
         new("bad-debt", "Bad Debt", "bi-graph-down-arrow", "Own Book"),
         new("exposure", "Exposure Top 10", "bi-pie-chart", "Own Book"),
+        new("fund-capacity", "Fund Capacity", "bi-bank", "Own Book"),   // 26 Nov 2026 (Steve, for Stuart)
         // the menu says "Year on Year" under the Shire heading; the report itself says Shire (Steve, 3 Nov 2026)
         new("shire-year-on-year", "Year on Year", "bi-calendar3", Shire, TickOnly: true),
         new("shire-sales-performance", "Sales Performance", "bi-bullseye", Shire, TickOnly: true),

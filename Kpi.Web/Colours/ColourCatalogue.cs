@@ -139,6 +139,12 @@ public static class ColourCatalogue
         {
             new("base", "Colour (the scale runs pale to dark)", ColourWhere.Both, null, "#d20d43", Array.Empty<string>()),
         }),
+        new("fc", "Only on one report", "Fund Capacity", new ColourItem[]
+        {
+            new("ok", "Used: under 80%", ColourWhere.Both, null, "#6bc2b9", new[] { "--kpim-fc-ok" }),
+            new("warn", "Used: 80% to 95%", ColourWhere.Both, null, "#ee7624", new[] { "--kpim-fc-warn" }),
+            new("over", "Used: over 95%", ColourWhere.Both, null, "#c20430", new[] { "--kpim-fc-over" }),
+        }),
         new("ma", "Only on one report", "Margin Analysis", new ColourItem[]
         {
             new("margin", "Margin bars", ColourWhere.Both, null, "#f59e0b", new[] { "--kpim-ma-margin" }),
@@ -207,6 +213,7 @@ public static class ColourCatalogue
         ["--kpim-spr-approved"] = "#e86a8b", ["--kpim-rp-current"] = "#fdf6dc", ["--kpim-rp-trophy-fill"] = "#f2c94c",
         ["--kpim-sd-bar-cur"] = "#f9dce4", ["--kpim-ma-margin"] = "#f59e0b", ["--kpim-ma-buy"] = "#06b6d4",
         ["--kpim-ma-sell"] = "#10b981", ["--kpim-ma-band"] = "#f4b6c6",
+        ["--kpim-fc-ok"] = "#6bc2b9", ["--kpim-fc-warn"] = "#ee7624", ["--kpim-fc-over"] = "#c20430",
     };
 
     /// <summary>...and inside a Shire page, where kpi.css's .kpi-shire turns some of them purple.</summary>

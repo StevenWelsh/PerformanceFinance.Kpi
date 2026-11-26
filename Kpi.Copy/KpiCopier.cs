@@ -165,11 +165,22 @@ public static class KpiCopier
                     await clear.ExecuteNonQueryAsync(ct);
                 }
 
+                // the Stage table's own columns: a column the office's copy has and Stage hasn't YET (a CMS view widened
+                // before this site's release, 26 Nov 2026) is left behind instead of failing the whole copy
+                var stageColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                await using (var cols = new SqlCommand("SELECT name FROM sys.columns WHERE object_id = OBJECT_ID(@t)", kpi) { CommandTimeout = StepTimeoutSeconds })
+                {
+                    cols.Parameters.Add("@t", SqlDbType.NVarChar, 256).Value = to;
+                    await using var r = await cols.ExecuteReaderAsync(ct);
+                    while (await r.ReadAsync(ct)) stageColumns.Add(r.GetString(0));
+                }
+
                 await using var cmd = new SqlCommand($"SELECT * FROM {from}", source) { CommandTimeout = StepTimeoutSeconds };
                 await using var reader = await cmd.ExecuteReaderAsync(ct);
                 using var bulk = new SqlBulkCopy(kpi, SqlBulkCopyOptions.TableLock, null) { DestinationTableName = to, BulkCopyTimeout = StepTimeoutSeconds };
                 for (var i = 0; i < reader.FieldCount; i++)
-                    bulk.ColumnMappings.Add(reader.GetName(i), reader.GetName(i));   // by name, never by position
+                    if (stageColumns.Contains(reader.GetName(i)))
+                        bulk.ColumnMappings.Add(reader.GetName(i), reader.GetName(i));   // by name, never by position
                 await bulk.WriteToServerAsync(reader, ct);
                 rows += bulk.RowsCopied;
                 progress?.Invoke($"  {to,-20} {bulk.RowsCopied,8:N0} rows");

@@ -317,6 +317,16 @@ the tables in full (25k paid leads).
   added to a page needs a catalogue entry. Export / Import (a JSON file) move a set between sites; staging and live
   share the row. Open to System Admins and anyone ticked "Can change colours" in Users (Identity user claim
   `kpi:colours` in `Auth.UserClaims`, policy `KpiPolicies.Colours`: they see Settings with the Colours section alone).
+- **FUND CAPACITY (26 Nov 2026, Steve - for Stuart; mock-up `docs/fund-capacity-mockup.html`; Own Book, seen as other
+  reports):** CMS's desktop Own Book > Fund Lender Capacity on the KPI site (no CMS.Web copy). Lenders = CMS's "active block
+  lender" tick. Limit = the lender's capital limit, else its live RCF's / IWFA's own limit (Conister: IWFA facility amount);
+  neither = the "No capital limit set" card. Exposure as CMS (a block at its capacity %). BUY RATE = the rate for NEW
+  funding, not what's drawn: latest block's schedule IRR (else IRR); RCF's rate in force today; IWFA = CMS's
+  `GetIWFARate` (latest confirmed base rate + RateAboveBase within min/max) + its service fee. Average = weighted by
+  capacity remaining. DRAWN (3 months) = Fact.FundingLine to the report date (gross: repayments not netted - a run rate /
+  net change was set aside). No filters, no drill-down (Steve). Data: CMS views `KpiExport.vFundLender` / `vFund` widened
+  (CMS repo scripts; migration still to add there), migrations `FundCapacity`, `FundCapacityDrawn`, `Rpt.spFundCapacity`.
+  **The copy now maps only columns its Stage table has** (`KpiCopier`): a CMS view can gain columns before the site's release.
 - **Data Protection key ring** encrypts cookies, emailed links and the Resend key: locally the user profile; **in Azure it
   must be a shared persisted ring (storage + Key Vault)** or every restart signs everyone out and the Resend key becomes
   unreadable. Pin `AllowedHosts` in Azure: emailed links are built from the request's host.

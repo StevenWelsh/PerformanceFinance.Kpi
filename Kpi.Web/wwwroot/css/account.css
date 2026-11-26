@@ -881,3 +881,68 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .cp-pal-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #444; }
 .cp-pal-chip { height: 26px; border-radius: 5px; border: 1px solid rgba(0, 0, 0, .1); }
 .cp-pal-tints span { font-size: 10.5px; color: #888; text-align: center; }
+
+/* ---- Fund Capacity (26 Nov 2026, Steve - for Stuart; mock-up docs/fund-capacity-mockup.html). KPI-site only, so its styles
+   live here rather than in kpi.css (CMS.Web's copy). The bar bands are Settings > Colours > Fund Capacity. ---- */
+:root { --kpim-fc-ok: #6bc2b9; --kpim-fc-warn: #ee7624; --kpim-fc-over: #c20430; }
+.fc-ok { background: var(--kpim-fc-ok); }
+.fc-warn { background: var(--kpim-fc-warn); }
+.fc-over { background: var(--kpim-fc-over); }
+.fc-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.fc-tile { background: var(--kpim-card, #fff); border: 1px solid var(--kpim-card-line, #e3e3e3); border-radius: 12px; padding: 12px 14px;
+    display: flex; flex-direction: column; min-width: 0; }
+.fc-tile small { color: var(--kpim-text-2, #5c5c5c); font-size: 12px; margin-bottom: 4px; }
+.fc-tile b { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.fc-tile span { color: var(--kpim-text-2, #5c5c5c); font-size: 12px; margin-top: 2px; }
+.fc-card { overflow: visible; }
+.fc-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.fc-key { display: flex; gap: 14px; font-size: 12px; text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--kpim-text-2, #5c5c5c); }
+.fc-key i { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.fc-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+.fc-table th { font-size: 12px; color: var(--kpim-text-2, #5c5c5c); font-weight: 600; text-align: right; padding: 8px 12px;
+    border-bottom: 2px solid var(--kpim-yoy-rule, #cfcfcf); background: var(--kpim-yoy-head, #f5f5f5); }
+.fc-table td { padding: 9px 12px; border-bottom: 1px solid var(--kpim-yoy-line, #ececec); text-align: right; vertical-align: middle; }
+.fc-table .fc-l { text-align: left; }
+.fc-type { color: #444; white-space: nowrap; }
+.fc-barcell { width: 30%; }
+.fc-bar { position: relative; height: 16px; border-radius: 8px; background: #ececec; overflow: hidden; }
+.fc-bar i { position: absolute; inset: 0 auto 0 0; border-radius: 8px; }
+.fc-pct { font-size: 12px; color: var(--kpim-text-2, #5c5c5c); margin-top: 3px; text-align: left; }
+.fc-table tfoot td { font-weight: 700; background: var(--kpim-card-head, #fafafa); border-top: 2px solid var(--kpim-yoy-rule, #cfcfcf); }
+.fc-funds > td { background: #fafafa; padding: 0 12px 10px 34px; }
+.fc-fundtable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fc-fundtable th { font-size: 11.5px; color: var(--kpim-text-2, #5c5c5c); font-weight: 600; text-align: right; padding: 6px 12px; border-bottom: 1px solid #d0d1d2; }
+.fc-fundtable td { padding: 6px 12px; border-bottom: 1px solid #eee; text-align: right; }
+.fc-fundtable .fc-l { text-align: left; }
+.fc-card-nolimit { margin-top: 16px; }
+.fc-nolimit td { color: var(--kpim-text-2, #5c5c5c); }
+.fc-rate-h { white-space: nowrap; }
+/* the Buy rate's ⓘ and its panel: narrow and tall on a desktop (hover), short on a phone (tap) */
+.fc-info { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; border-radius: 50%;
+    border: 1px solid #9a9a9a; color: #6b6b6b; font-size: 10px; font-weight: 700; font-style: normal; cursor: help; margin-left: 3px; vertical-align: 1px; }
+.fc-tip { display: none; position: absolute; z-index: 40; top: calc(100% + 8px); right: 0; width: 290px; background: #fff; color: var(--kpim-text, #1a1a1a);
+    border: 1px solid #d0d0d0; border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .16); padding: 12px 14px; text-align: left; font-size: 12.5px;
+    font-weight: 400; line-height: 1.45; white-space: normal; cursor: default; text-transform: none; letter-spacing: 0; }
+.fc-info:not(.fc-info-short):hover .fc-tip, .fc-info:not(.fc-info-short):focus .fc-tip, .fc-tip.fc-tip-on { display: flex; flex-direction: column; gap: 2px; }
+.fc-tip-lead { font-weight: 600; margin-bottom: 6px; }
+.fc-tip-h { font-weight: 700; margin-top: 8px; }
+.fc-tip-foot { color: var(--kpim-text-2, #5c5c5c); border-top: 1px solid #eee; margin-top: 8px; padding-top: 6px; }
+.fc-tip-foot + .fc-tip-foot { border-top: none; margin-top: 0; padding-top: 0; }
+.fc-info-short .fc-tip { right: auto; left: -60px; width: 260px; gap: 4px; }
+/* headings left of the last column open their panel under the icon, not off its right edge */
+.fc-table th:not(:last-child) .fc-tip { right: auto; left: -140px; }
+/* the phone view */
+.fc-ptiles { grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.fc-ptiles .fc-tile { padding: 10px; }
+.fc-ptiles .fc-tile b { font-size: 19px; }
+.fc-pcard { padding: 12px 14px; margin-bottom: 10px; }
+.fc-prow { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.fc-pname { font-weight: 600; }
+.fc-chip { font-size: 11.5px; padding: 1px 8px; border-radius: 10px; background: #f0f0f0; color: #555; white-space: nowrap; }
+.fc-pcard .fc-bar { margin: 8px 0 4px; }
+.fc-pfigs { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--kpim-text-2, #5c5c5c); margin-top: 4px; }
+.fc-pfigs b { color: var(--kpim-text, #1a1a1a); }
+.fc-pfunds { margin-top: 10px; border-top: 1px solid #eee; padding-top: 6px; font-size: 12.5px; }
+.fc-pfunds div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid #f3f3f3; }
+.fc-psect { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--kpim-text-2, #5c5c5c); padding: 4px 4px 8px; }
+@media (max-width: 900px) { .fc-tiles { grid-template-columns: 1fr 1fr; } .fc-barcell { width: auto; } }

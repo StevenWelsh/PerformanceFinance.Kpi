@@ -92,6 +92,9 @@ export function render(host, office, section, colours, palette) {
       <div class="cp-scale-ends"><span>Least</span><span>Most</span></div>
       <svg viewBox="0 0 200 120" class="cp-map">${[[20, 20, 3], [60, 10, 5], [100, 25, 1], [140, 15, 6], [40, 60, 2], [90, 65, 4], [140, 60, 0], [60, 95, 5], [120, 95, 3]]
         .map(([x, y, i]) => `<rect x="${x}" y="${y}" width="38" height="24" rx="4" fill="${steps[i]}" stroke="#fff"/>`).join("")}</svg>`;
+  } else if (section === "fc") {
+    html = [["British Business Investments", 34, v("ok")], ["Novuna Business Finance", 66, v("ok")], ["Shawbrook Bank", 81, v("warn")], ["Renaissance Asset Finance", 97, v("over")]]
+      .map(([n, p, c]) => `<div class="cp-funnel">${n} · ${p}% used<div><div style="width:${p}%;background:${c}"></div></div></div>`).join("");
   } else if (section === "ma") {
     html = `<div class="cp-rel">${bars([62, 48, 70, 55, 80, 66], v("margin"), -1, "")}
       <svg viewBox="0 0 100 110" preserveAspectRatio="none" class="cp-over">

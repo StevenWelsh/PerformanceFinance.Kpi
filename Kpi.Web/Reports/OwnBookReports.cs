@@ -49,3 +49,9 @@ public sealed class ExposureService(KpiDb db)
     public List<ExposureFundOptionResult> GetFundLenders() =>
         db.Report<ExposureFundOptionResult>("Rpt.spExposureFilters", new { List = "Lenders" });
 }
+
+/// <summary>Fund Capacity (26 Nov 2026): KPI-site only (CMS's capacity screen is on the desktop, not CMS.Web).</summary>
+public sealed class FundCapacityService(KpiDb db)
+{
+    public List<FundCapacityLender> GetLenders() => db.Report<FundCapacityLender>("Rpt.spFundCapacity", new { List = "Lenders" });
+}

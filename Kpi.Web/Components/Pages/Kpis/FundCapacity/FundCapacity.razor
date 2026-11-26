@@ -1,0 +1,219 @@
+@page "/kpis/fund-capacity"
+@layout EmptyLayout
+@attribute [Authorize(Policy = "Dashboard.View")]
+@inject KpiSessionFactory SessionFactory
+@inject Kpi.Web.Data.Kpis.KpiCache KpiCache
+@using Kpi.Web.Reports
+@using Kpi.Web.Components.Shared.Kpis
+@using Kpi.Web.Components.Shared.Kpis.Mobile
+
+@* FUND CAPACITY (26 Nov 2026, Steve - for Stuart; the agreed mock-up is docs/fund-capacity-mockup.html). CMS's Own Book >
+   Fund Lender Capacity on the KPI site: the lenders CMS ticks as active block lenders, each one's capital limit, exposure,
+   how much is used and the capacity remaining - plus the rate for NEW funding. A lender with no limit of its own takes
+   its live RCF's / IWFA's own limit (Conister); one with neither sits under "No capital limit set". No drill-down to
+   the funds (Steve: too detailed for a dashboard). No filters: every lender is on one screen, and capacity is the lender's whatever the source.
+   KPI-site only: there is no CMS.Web copy of this page. Figures: Rpt.spFundCapacity. *@
+
+<PageTitle>Fund Capacity — KPIs</PageTitle>
+
+<div class="kpi-shell">
+    <KpiSidebar Active="fund-capacity" />
+
+    <main class="kpi-main">
+        <KpiPanel @ref="_panel" Title="Fund Capacity" AsAt="_asOf" RefreshedOn="_refreshedOn" RefreshRequested="OnRefreshRequested">
+            @if (_loading)
+            {
+                <div class="ss-loading"><span class="ss-spinner"></span> Loading…</div>
+            }
+            else if (_error is not null)
+            {
+                <div class="ss-card-error"><i class="bi bi-exclamation-triangle-fill"></i> @_error</div>
+            }
+            else
+            {
+                <div class="fc-tiles">
+                    <FundCapacityTiles Lenders="_lenders" />
+                </div>
+
+                <div class="ss-card fc-card">
+                    <div class="ss-card-head fc-head">
+                        <span>Capacity by lender</span>
+                        <span class="fc-key"><span><i class="fc-ok"></i>Under 80%</span><span><i class="fc-warn"></i>80–95%</span><span><i class="fc-over"></i>Over 95%</span></span>
+                    </div>
+                    <table class="fc-table">
+                        <thead>
+                            <tr>
+                                <th class="fc-l">Lender</th>
+                                <th class="fc-l">Type</th>
+                                <th>Capital limit</th>
+                                <th>Capital exposure</th>
+                                <th class="fc-rate-h">Drawn (3 months) <FundCapacityDrawnInfo /></th>
+                                <th class="fc-l">Used</th>
+                                <th>Capacity remaining</th>
+                                <th class="fc-rate-h">Buy rate <FundCapacityRateInfo /></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var l in WithLimit)
+                            {
+                                <tr class="fc-lender">
+                                    <td class="fc-l"><b>@l.LenderName</b></td>
+                                    <td class="fc-l fc-type">@Type(l)</td>
+                                    <td>@Cur(l.Limit ?? 0)</td>
+                                    <td>@Cur(l.Exposure)</td>
+                                    <td>@Cur(l.Drawn3m)</td>
+                                    <td class="fc-barcell">
+                                        <div class="fc-bar"><i class="@Band(l.Used)" style="width:@Width(l.Used)"></i></div>
+                                        <div class="fc-pct">@Pct0(l.Used) used</div>
+                                    </td>
+                                    <td><b>@Cur(l.Remaining ?? 0)</b></td>
+                                    <td>@Rate(l.BuyRate)</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td class="fc-l">Total</td>
+                                <td></td>
+                                <td>@Cur(TotalLimit)</td>
+                                <td>@Cur(TotalExposure)</td>
+                                <td>@Cur(WithLimit.Sum(l => l.Drawn3m))</td>
+                                <td class="fc-barcell"><div class="fc-bar"><i class="@Band(TotalUsed)" style="width:@Width(TotalUsed)"></i></div></td>
+                                <td>@Cur(TotalLimit - TotalExposure)</td>
+                                <td>@Rate(AverageBuyRate(_lenders))</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                @* lenders with no limit at all: their own card below, with the same heading band (Steve, 26 Nov 2026) *@
+                @if (NoLimit.Any())
+                {
+                    <div class="ss-card fc-card fc-card-nolimit">
+                        <div class="ss-card-head fc-head"><span>No capital limit set</span></div>
+                        <table class="fc-table fc-nolimit">
+                            <thead>
+                                <tr>
+                                    <th class="fc-l">Lender</th>
+                                    <th class="fc-l">Type</th>
+                                    <th>Capital limit</th>
+                                    <th>Capital exposure</th>
+                                    <th>Drawn (3 months)</th>
+                                    <th class="fc-l"></th>
+                                    <th>Capacity remaining</th>
+                                    <th class="fc-rate-h">Buy rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var l in NoLimit)
+                                {
+                                    <tr>
+                                        <td class="fc-l">@l.LenderName</td>
+                                        <td class="fc-l fc-type">@Type(l)</td>
+                                        <td>No limit</td>
+                                        <td>@Cur(l.Exposure)</td>
+                                        <td>@Cur(l.Drawn3m)</td>
+                                        <td class="fc-barcell"></td>
+                                        <td>–</td>
+                                        <td>@Rate(l.BuyRate)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        </KpiPanel>
+    </main>
+</div>
+
+<KpiMobile Title="Fund Capacity" Active="fund-capacity" AsAt="_asOf">
+    <ChildContent>
+        <FundCapacityMobile Lenders="_lenders" Loading="_loading" Error="@_error" />
+    </ChildContent>
+</KpiMobile>
+
+@code {
+    private DateTime? _asOf;
+    private DateTime? _refreshedOn;
+    private bool _loading = true;
+    private string? _error;
+    private KpiPanel? _panel;
+
+    private List<FundCapacityLender> _lenders = new();
+
+    private sealed record Payload(List<FundCapacityLender> Lenders);
+
+    private IEnumerable<FundCapacityLender> WithLimit => _lenders.Where(l => l.Limit is > 0);
+    private IEnumerable<FundCapacityLender> NoLimit => _lenders.Where(l => l.Limit is not > 0);
+    private decimal TotalLimit => WithLimit.Sum(l => l.Limit ?? 0);
+    private decimal TotalExposure => WithLimit.Sum(l => l.Exposure);
+    private decimal? TotalUsed => TotalLimit > 0 ? TotalExposure / TotalLimit : null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true; _error = null; StateHasChanged();
+        await Task.Yield();
+        try
+        {
+            var entry = await KpiCache.GetOrLoad(CacheKey, LoadPayload);
+            Apply(entry.Data);
+            _asOf = entry.AsAt;
+            _refreshedOn = entry.LoadedAtUtc;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally { _loading = false; StateHasChanged(); }
+    }
+
+    private string CacheKey => KpiCache.Key("FundCapacity");
+
+    private async Task<(Payload, DateTime)> LoadPayload()
+    {
+        using var cms = await SessionFactory.BeginAsync();
+        var asAt = cms.Db.ReportDate();
+        return (new Payload(new FundCapacityService(cms.Db).GetLenders()), asAt);
+    }
+
+    private void Apply(Payload p) => _lenders = p.Lenders;
+
+    private async Task OnRefreshRequested()
+    {
+        try
+        {
+            var (entry, changed) = await KpiCache.RefreshAsync(CacheKey, LoadPayload);
+            _refreshedOn = entry.LoadedAtUtc;
+            if (changed)
+            {
+                Apply(entry.Data);
+                StateHasChanged();
+                if (_panel is not null) await _panel.FlashChanged();
+            }
+        }
+        catch (Exception ex) { _error = ex.Message; }
+    }
+
+    // ---- shared with the phone view and the tiles ----
+
+    /// <summary>The average rate for new funding, weighted by capacity remaining: the rate on the money still there to draw.</summary>
+    public static decimal? AverageBuyRate(IEnumerable<FundCapacityLender> lenders)
+    {
+        var rated = lenders.Where(l => l.Limit is > 0 && l.BuyRate is not null && l.Remaining > 0).ToList();
+        var weight = rated.Sum(l => l.Remaining!.Value);
+        return weight > 0 ? rated.Sum(l => l.BuyRate!.Value * l.Remaining!.Value) / weight : null;
+    }
+
+    public static string Type(FundCapacityLender l) => l.FundType.Length > 0 ? l.FundType : "–";
+    public static string Band(decimal? used) => used >= 0.95m ? "fc-over" : used >= 0.80m ? "fc-warn" : "fc-ok";
+    public static string Width(decimal? used) =>
+        (Math.Clamp(used ?? 0m, 0m, 1m) * 100m).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";
+    public static string Cur(decimal v) => "£" + v.ToString("N0");
+    public static string Short(decimal v) =>
+        Math.Abs(v) >= 1_000_000m ? "£" + (v / 1_000_000m).ToString("0.0") + "m" : Math.Abs(v) >= 1_000m ? "£" + (v / 1_000m).ToString("0") + "k" : "£" + v.ToString("0");
+    public static string Pct0(decimal? f) => f is null ? "–" : (f.Value * 100m).ToString("0") + "%";
+    public static string Rate(decimal? f) => f is null ? "–" : (f.Value * 100m).ToString("0.00") + "%";
+}

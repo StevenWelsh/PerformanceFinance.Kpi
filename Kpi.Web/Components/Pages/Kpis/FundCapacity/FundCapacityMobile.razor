@@ -1,0 +1,47 @@
+@using Kpi.Web.Reports
+
+@* Fund Capacity on a phone: the four figures 2 x 2, then a card per lender (its bar, exposure of limit, what's left, the
+   buy rate with a tap-to-open ⓘ). Lenders with no limit last. *@
+
+@if (Loading)
+{
+    <div class="kpim-loading"><span class="kpim-spinner"></span> Loading…</div>
+}
+else if (Error is not null)
+{
+    <div class="kpim-error"><i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i> @Error</div>
+}
+else
+{
+    <div class="fc-tiles fc-ptiles"><FundCapacityTiles Lenders="Lenders" /></div>
+
+    @foreach (var l in Lenders.Where(l => l.Limit is > 0))
+    {
+        <section class="kpim-card fc-pcard">
+            <div class="fc-prow"><span class="fc-pname">@l.LenderName</span><span class="fc-chip">@FundCapacity.Type(l)</span></div>
+            <div class="fc-bar"><i class="@FundCapacity.Band(l.Used)" style="width:@FundCapacity.Width(l.Used)"></i></div>
+            <div class="fc-pfigs"><span><b>@FundCapacity.Short(l.Exposure)</b> of @FundCapacity.Short(l.Limit ?? 0) · @FundCapacity.Pct0(l.Used)</span><span><b>@FundCapacity.Short(l.Remaining ?? 0)</b> left</span></div>
+            <div class="fc-pfigs"><span>Drawn in 3 months <FundCapacityDrawnInfo Short="true" /></span><span><b>@FundCapacity.Short(l.Drawn3m)</b></span></div>
+            <div class="fc-pfigs"><span>Buy rate <FundCapacityRateInfo Short="true" /></span><span><b>@FundCapacity.Rate(l.BuyRate)</b></span></div>
+        </section>
+    }
+
+    @if (Lenders.Any(l => l.Limit is not > 0))
+    {
+        <div class="fc-psect">No capital limit set</div>
+        @foreach (var l in Lenders.Where(l => l.Limit is not > 0))
+        {
+            <section class="kpim-card fc-pcard">
+                <div class="fc-prow"><span class="fc-pname">@l.LenderName</span><span class="fc-chip">@FundCapacity.Type(l)</span></div>
+                <div class="fc-pfigs"><span>No limit</span><span><b>@FundCapacity.Short(l.Exposure)</b></span></div>
+            </section>
+        }
+    }
+}
+
+@code {
+    [Parameter] public List<FundCapacityLender> Lenders { get; set; } = new();
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public string? Error { get; set; }
+
+}
