@@ -1033,13 +1033,10 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .aa-quad .aa-rs { font-size: clamp(13px, 2.4cqw, 17px); gap: clamp(7px, 1.6cqw, 13px) 12px; grid-template-columns: minmax(0, 1fr) 30% 3.6em; }
 .aa-quad .aa-rb { height: clamp(11px, 2.1cqw, 16px); }
 /* a long reason stays on one line, cut short with ... (the whole reason on hover), so the rows are evenly spaced */
+.aa-rrow { display: contents; }   /* a reason's name, bar and figure: one row that opens its pop-up */
 .aa-rr { position: relative; min-width: 0; }
 .aa-rt { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aa-rtip { display: none; position: absolute; z-index: 40; left: -8px; top: calc(100% + 4px); width: max-content; max-width: 340px; white-space: normal;
-    background: #fff; color: var(--kpim-text, #1a1a1a); border: 1px solid #d0d0d0; border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .16); padding: 7px 10px; font-size: 13px; }
-.aa-rr:hover .aa-rtip { display: block; }
 .aa-qlist { overflow: visible; }
-.aa-quad > .aa-card:has(.aa-rr:hover) { z-index: 5; position: relative; }
 /* the eligible reasons' pie, its key underneath */
 .aa-qpie { justify-content: center; align-items: center; gap: 12px; }
 .aa-pie { flex: 1 1 0; min-height: 0; width: 100%; position: relative; }
@@ -1054,8 +1051,9 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .fc-info.aa-since .fc-tip.aa-since-tip { gap: 9px; line-height: 1.45; }   /* one point per line, spaced out */
 /* chart labels (js/chartTips.js): hover with a mouse, tap on a phone */
 .chart-tip { position: fixed; z-index: 2000; pointer-events: none; background: #fff; color: #1a1a1a; border: 1px solid #d0d0d0; border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, .16); padding: 7px 10px; font-size: 13px; line-height: 1.4; max-width: 280px; }
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .16); padding: 7px 10px; font-size: 13px; line-height: 1.4; max-width: 300px; }
 .chart-tip b { display: block; font-weight: 600; }
+.chart-tip .tip-gap { height: 7px; }
 [data-tip] { cursor: pointer; }
 /* a donut slice pops out while its label shows (hover, or tap on a phone) */
 .aa-slice { transition: transform .15s ease; }
@@ -1080,7 +1078,6 @@ html .kpim-menu-list { padding-left: max(10px, env(safe-area-inset-left)); paddi
 .aa-pcard .aa-rs { grid-template-columns: minmax(0, 1fr) 3.6em; gap: 3px 10px; font-size: 13px; }
 .aa-pcard .aa-rr { grid-column: 1 / -1; margin-top: 6px; }
 .aa-pcard .aa-rt { white-space: normal; }
-.aa-pcard .aa-rtip { display: none !important; }
 /* the reasons donut's key: one column, inside the card */
 .aa-pcard .aa-pkey { grid-template-columns: minmax(0, 1fr); justify-content: start; }
 /* an info panel on a phone card opens across the card, never off the screen (Auto Approval and Fund Capacity) */

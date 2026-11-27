@@ -1,6 +1,6 @@
 // Chart labels (Auto Approval, 26 Nov 2026): any element with data-tip shows its words in a small panel - beside the
 // mouse while it is over it, or where a finger tapped (a tap elsewhere closes it). Listens on the document, so the
-// parts Blazor redraws keep working. A new line in data-tip starts a new line; the first line is bold.
+// parts Blazor redraws keep working. A new line in data-tip starts a new line; the first line is bold; an empty line is a space.
 (function () {
     let tip = null, pinned = false, on = null;   // on = the part shown (a donut slice pops out while shown)
     function panel() {
@@ -9,7 +9,7 @@
     }
     function show(el, x, y) {
         const t = panel(), lines = el.getAttribute("data-tip").split("\n");
-        t.replaceChildren(...lines.map((l, i) => { const d = document.createElement(i ? "div" : "b"); d.textContent = l; return d; }));
+        t.replaceChildren(...lines.map((l, i) => { const d = document.createElement(i ? "div" : "b"); if (l) d.textContent = l; else d.className = "tip-gap"; return d; }));
         t.hidden = false;
         if (on && on !== el) on.classList.remove("tip-on");
         on = el; el.classList.add("tip-on");

@@ -153,7 +153,7 @@
         <div class="aa-rs">
             @foreach (var r in rows.OrderByDescending(Val))
             {
-                <span class="aa-rr"><span class="aa-rt">@r.Reason</span>@if (r.Reason.Length > 50) { <span class="aa-rtip">@r.Reason</span> }</span><span class="aa-rb" data-tip="@data.ReasonTip(r, byAmount)"><i style="width:@BarWidth(Val(r), max)"></i></span><span class="aa-rn" data-tip="@data.ReasonTip(r, byAmount)">@(byAmount ? AutoApprovalCharts.Money(r.AF) : r.Applications.ToString("N0"))</span>
+                <span class="aa-rrow" data-tip="@data.ReasonTip(r, byAmount)"><span class="aa-rr"><span class="aa-rt">@r.Reason</span></span><span class="aa-rb"><i style="width:@BarWidth(Val(r), max)"></i></span><span class="aa-rn">@(byAmount ? AutoApprovalCharts.Money(r.AF) : r.Applications.ToString("N0"))</span></span>
             }
         </div>
     };
@@ -170,7 +170,7 @@
         <div class="aa-pkey">
             @for (var i = 0; i < rows.Count; i++)
             {
-                <span><i style="background:@AutoApprovalCharts.PieColour(i)"></i>@rows[i].Reason</span>
+                <span data-tip="@data.ReasonTip(rows[i], byAmount)"><i style="background:@AutoApprovalCharts.PieColour(i)"></i>@rows[i].Reason</span>
             }
         </div>
     };
